@@ -19,19 +19,18 @@ describe('App', () => {
     expect(topbar?.contains(palette)).toBe(true)
   })
 
+  it('places undo and redo in the menubar', () => {
+    const { container } = render(<App />)
+    const menubar = container.querySelector('.menubar')
+    expect(menubar?.contains(screen.getByRole('button', { name: 'Undo' }))).toBe(true)
+    expect(menubar?.contains(screen.getByRole('button', { name: 'Redo' }))).toBe(true)
+  })
+
   it('switches the active tool on click', () => {
     render(<App />)
     const pencil = screen.getByRole('button', { name: 'Pencil' })
     fireEvent.click(pencil)
     expect(pencil.getAttribute('aria-pressed')).toBe('true')
-  })
-
-  it('opens the keyboard shortcuts dialog', () => {
-    render(<App />)
-    fireEvent.click(screen.getByText('Help'))
-    fireEvent.click(screen.getByText('Keyboard shortcuts'))
-    expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(screen.getByText('Ctrl+Z')).toBeTruthy()
   })
 
   it('changes zoom with the status bar slider and resets it', () => {

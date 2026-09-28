@@ -1,10 +1,9 @@
 import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
-import { MoonIcon, SunIcon } from './icons'
+import { MoonIcon, RedoIcon, SunIcon, UndoIcon } from './icons'
 
 export interface MenuBarProps {
   canUndo: boolean
   canRedo: boolean
-  showGrid: boolean
   theme: 'light' | 'dark'
   onNew: () => void
   onOpen: () => void
@@ -12,18 +11,12 @@ export interface MenuBarProps {
   onUndo: () => void
   onRedo: () => void
   onClear: () => void
-  onToggleGrid: () => void
-  onZoomIn: () => void
-  onZoomOut: () => void
-  onZoomReset: () => void
   onToggleTheme: () => void
-  onShowHelp: () => void
 }
 
 export function MenuBar({
   canUndo,
   canRedo,
-  showGrid,
   theme,
   onNew,
   onOpen,
@@ -31,12 +24,7 @@ export function MenuBar({
   onUndo,
   onRedo,
   onClear,
-  onToggleGrid,
-  onZoomIn,
-  onZoomOut,
-  onZoomReset,
   onToggleTheme,
-  onShowHelp,
 }: MenuBarProps) {
   return (
     <header className="menubar">
@@ -111,61 +99,31 @@ export function MenuBar({
           )}
         </Dropdown>
 
-        <Dropdown trigger="View" showChevron={false} triggerClassName="menubar-button">
-          {(close) => (
-            <>
-              <MenuItem
-                checked={showGrid}
-                onClick={() => {
-                  onToggleGrid()
-                }}
-              >
-                Pixel grid
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem
-                shortcut="+"
-                onClick={() => {
-                  onZoomIn()
-                }}
-              >
-                Zoom in
-              </MenuItem>
-              <MenuItem
-                shortcut="-"
-                onClick={() => {
-                  onZoomOut()
-                }}
-              >
-                Zoom out
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  onZoomReset()
-                  close()
-                }}
-              >
-                Actual size
-              </MenuItem>
-            </>
-          )}
-        </Dropdown>
-
-        <Dropdown trigger="Help" showChevron={false} triggerClassName="menubar-button">
-          {(close) => (
-            <MenuItem
-              onClick={() => {
-                onShowHelp()
-                close()
-              }}
-            >
-              Keyboard shortcuts
-            </MenuItem>
-          )}
-        </Dropdown>
+        <div className="menubar-actions">
+          <button
+            type="button"
+            className="icon-button"
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+            disabled={!canUndo}
+            onClick={onUndo}
+          >
+            <UndoIcon size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Redo (Ctrl+Y)"
+            aria-label="Redo"
+            disabled={!canRedo}
+            onClick={onRedo}
+          >
+            <RedoIcon size={18} />
+          </button>
+        </div>
       </div>
 
-      <div className="menubar-title">Farbtopf</div>
+      <div className="menubar-spacer" />
 
       <button
         type="button"

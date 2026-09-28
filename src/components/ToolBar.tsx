@@ -14,10 +14,8 @@ import {
   PencilIcon,
   PickerIcon,
   RectangleIcon,
-  RedoIcon,
   TextIcon,
   TrashIcon,
-  UndoIcon,
 } from './icons'
 
 const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
@@ -48,10 +46,6 @@ export interface ToolBarProps {
   onShapeFillChange: (fill: ShapeFill) => void
   showGrid: boolean
   onToggleGrid: () => void
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
   onClear: () => void
 }
 
@@ -64,35 +58,11 @@ export function ToolBar({
   onShapeFillChange,
   showGrid,
   onToggleGrid,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
   onClear,
 }: ToolBarProps) {
   return (
     <div className="toolbar">
       <div className="tool-group">
-        <button
-          type="button"
-          className="icon-button"
-          title="Undo (Ctrl+Z)"
-          aria-label="Undo"
-          disabled={!canUndo}
-          onClick={onUndo}
-        >
-          <UndoIcon size={18} />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          title="Redo (Ctrl+Y)"
-          aria-label="Redo"
-          disabled={!canRedo}
-          onClick={onRedo}
-        >
-          <RedoIcon size={18} />
-        </button>
         <button
           type="button"
           className="icon-button"

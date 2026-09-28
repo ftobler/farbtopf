@@ -83,13 +83,14 @@ textarea {
   gap: 2px;
 }
 
-.menubar-title {
+.menubar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.menubar-spacer {
   flex: 1;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  user-select: none;
 }
 
 .menubar-button {

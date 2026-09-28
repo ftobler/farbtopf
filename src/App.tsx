@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ColorPalette } from './components/ColorPalette'
-import { HelpDialog } from './components/HelpDialog'
 import { MenuBar } from './components/MenuBar'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
@@ -53,7 +52,6 @@ function App() {
   const [cursor, setCursor] = useState<Point | null>(null)
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -246,7 +244,6 @@ function App() {
       <MenuBar
         canUndo={canUndo}
         canRedo={canRedo}
-        showGrid={showGrid}
         theme={theme}
         onNew={() => setNewDialogOpen(true)}
         onOpen={handleOpenClick}
@@ -254,12 +251,7 @@ function App() {
         onUndo={handleUndo}
         onRedo={handleRedo}
         onClear={handleClear}
-        onToggleGrid={() => setShowGrid((value) => !value)}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onZoomReset={() => setZoom(1)}
         onToggleTheme={toggleTheme}
-        onShowHelp={() => setHelpOpen(true)}
       />
 
       <div className="topbar">
@@ -272,10 +264,6 @@ function App() {
           onShapeFillChange={setShapeFill}
           showGrid={showGrid}
           onToggleGrid={() => setShowGrid((value) => !value)}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
           onClear={handleClear}
         />
 
@@ -341,8 +329,6 @@ function App() {
           onCreate={handleNewDocument}
         />
       ) : null}
-
-      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       {message ? <div className="toast">{message}</div> : null}
     </div>
