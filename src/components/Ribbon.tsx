@@ -8,6 +8,8 @@ import type { IconProps } from './icons'
 import {
   AirbrushIcon,
   BrushIcon,
+  CopyIcon,
+  CutIcon,
   EllipseIcon,
   EraserIcon,
   FillIcon,
@@ -51,6 +53,8 @@ export interface RibbonProps {
   onToggleGrid: () => void
   onClear: () => void
   onPaste: () => void
+  onCut: () => void
+  onCopy: () => void
   primary: Rgba
   secondary: Rgba
   palette: readonly string[]
@@ -70,6 +74,8 @@ export function Ribbon({
   onToggleGrid,
   onClear,
   onPaste,
+  onCut,
+  onCopy,
   primary,
   secondary,
   palette,
@@ -101,6 +107,24 @@ export function Ribbon({
     <div className="ribbon">
       <section className="ribbon-group">
         <div className="ribbon-group-items">
+          <button
+            type="button"
+            className="icon-button"
+            title="Cut"
+            aria-label="Cut"
+            onClick={onCut}
+          >
+            <CutIcon size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Copy"
+            aria-label="Copy"
+            onClick={onCopy}
+          >
+            <CopyIcon size={18} />
+          </button>
           <button
             type="button"
             className="icon-button"

@@ -30,6 +30,12 @@ describe('App', () => {
 
     const paste = screen.getByRole('button', { name: 'Paste' })
     expect(topbar?.contains(paste)).toBe(true)
+
+    const cut = screen.getByRole('button', { name: 'Cut' })
+    expect(topbar?.contains(cut)).toBe(true)
+
+    const copy = screen.getByRole('button', { name: 'Copy' })
+    expect(topbar?.contains(copy)).toBe(true)
   })
 
   it('places save, undo and redo in the menubar', () => {
