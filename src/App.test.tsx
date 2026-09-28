@@ -1,0 +1,35 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import App from './App'
+
+describe('App', () => {
+  it('renders the tool palette and status bar', () => {
+    render(<App />)
+    expect(screen.getByRole('button', { name: 'Pencil' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Fill with color' })).toBeTruthy()
+    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+  })
+
+  it('switches the active tool on click', () => {
+    render(<App />)
+    const pencil = screen.getByRole('button', { name: 'Pencil' })
+    fireEvent.click(pencil)
+    expect(pencil.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('opens the keyboard shortcuts dialog', () => {
+    render(<App />)
+    fireEvent.click(screen.getByText('Help'))
+    fireEvent.click(screen.getByText('Keyboard shortcuts'))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('Ctrl+Z')).toBeTruthy()
+  })
+
+  it('shows the new image dialog with presets', () => {
+    render(<App />)
+    fireEvent.click(screen.getByText('File'))
+    fireEvent.click(screen.getByText('New'))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('640 x 480')).toBeTruthy()
+  })
+})
