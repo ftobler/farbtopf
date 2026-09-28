@@ -264,7 +264,6 @@ function App() {
           onShapeFillChange={setShapeFill}
           showGrid={showGrid}
           onToggleGrid={() => setShowGrid((value) => !value)}
-          onClear={handleClear}
         />
 
         <ColorPalette

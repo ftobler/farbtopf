@@ -59,6 +59,15 @@ export function MenuBar({
               >
                 Save as PNG
               </MenuItem>
+              <MenuDivider />
+              <MenuItem
+                onClick={() => {
+                  onClear()
+                  close()
+                }}
+              >
+                Clear canvas
+              </MenuItem>
             </>
           )}
         </Dropdown>
@@ -85,15 +94,6 @@ export function MenuBar({
                 }}
               >
                 Redo
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem
-                onClick={() => {
-                  onClear()
-                  close()
-                }}
-              >
-                Clear canvas
               </MenuItem>
             </>
           )}

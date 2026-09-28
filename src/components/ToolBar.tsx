@@ -15,7 +15,6 @@ import {
   PickerIcon,
   RectangleIcon,
   TextIcon,
-  TrashIcon,
 } from './icons'
 
 const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
@@ -46,7 +45,6 @@ export interface ToolBarProps {
   onShapeFillChange: (fill: ShapeFill) => void
   showGrid: boolean
   onToggleGrid: () => void
-  onClear: () => void
 }
 
 export function ToolBar({
@@ -58,24 +56,9 @@ export function ToolBar({
   onShapeFillChange,
   showGrid,
   onToggleGrid,
-  onClear,
 }: ToolBarProps) {
   return (
     <div className="toolbar">
-      <div className="tool-group">
-        <button
-          type="button"
-          className="icon-button"
-          title="Clear canvas"
-          aria-label="Clear canvas"
-          onClick={onClear}
-        >
-          <TrashIcon size={18} />
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
       <div className="tool-group">
         {TOOLS.map((definition) => {
           const Icon = TOOL_ICONS[definition.id]
