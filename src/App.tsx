@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ColorPalette } from './components/ColorPalette'
 import { MenuBar } from './components/MenuBar'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
+import { Ribbon } from './components/Ribbon'
 import { StatusBar } from './components/StatusBar'
-import { ToolBar } from './components/ToolBar'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
@@ -98,6 +97,27 @@ function App() {
     },
     [notify],
   )
+
+  const handlePasteFromClipboard = useCallback(async () => {
+    if (!navigator.clipboard?.read) {
+      notify('Clipboard paste is not supported here')
+      return
+    }
+    try {
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const type = item.types.find((entry) => entry.startsWith('image/'))
+        if (!type) continue
+        const blob = await item.getType(type)
+        const extension = type.split('/')[1] ?? 'png'
+        await openFile(new File([blob], `pasted.${extension}`, { type }))
+        return
+      }
+      notify('No image in the clipboard')
+    } catch {
+      notify('Could not paste from the clipboard')
+    }
+  }, [notify, openFile])
 
   const handleSave = useCallback(() => {
     const dataUrl = canvasRef.current?.toDataUrl()
@@ -255,7 +275,7 @@ function App() {
       />
 
       <div className="topbar">
-        <ToolBar
+        <Ribbon
           tool={tool}
           onToolChange={setTool}
           brushSize={brushSize}
@@ -264,9 +284,8 @@ function App() {
           onShapeFillChange={setShapeFill}
           showGrid={showGrid}
           onToggleGrid={() => setShowGrid((value) => !value)}
-        />
-
-        <ColorPalette
+          onClear={handleClear}
+          onPaste={handlePasteFromClipboard}
           primary={primary}
           secondary={secondary}
           palette={DEFAULT_PALETTE}

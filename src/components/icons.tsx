@@ -93,6 +93,16 @@ export function TextIcon(props: IconProps) {
   )
 }
 
+export function PasteIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V3h6v1" />
+      <path d="M12 10v5M9.5 12.5 12 15l2.5-2.5" />
+    </Svg>
+  )
+}
+
 export function LineIcon(props: IconProps) {
   return (
     <Svg {...props}>

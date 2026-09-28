@@ -1,0 +1,254 @@
+import type { ComponentType } from 'react'
+import type { Rgba } from '../core/color'
+import { BRUSH_SIZES, TOOLS, isShapeTool } from '../core/tools'
+import type { ShapeFill, ToolId } from '../core/tools'
+import { ColorPalette } from './ColorPalette'
+import { Dropdown, MenuItem } from './Dropdown'
+import type { IconProps } from './icons'
+import {
+  AirbrushIcon,
+  BrushIcon,
+  EllipseIcon,
+  EraserIcon,
+  FillIcon,
+  GridIcon,
+  LineIcon,
+  PasteIcon,
+  PencilIcon,
+  PickerIcon,
+  RectangleIcon,
+  TextIcon,
+  TrashIcon,
+} from './icons'
+
+const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
+  pencil: PencilIcon,
+  brush: BrushIcon,
+  airbrush: AirbrushIcon,
+  eraser: EraserIcon,
+  fill: FillIcon,
+  picker: PickerIcon,
+  text: TextIcon,
+  line: LineIcon,
+  rectangle: RectangleIcon,
+  ellipse: EllipseIcon,
+}
+
+const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
+  outline: 'Outline',
+  filled: 'Filled',
+  'outline-filled': 'Outline + fill',
+}
+
+export interface RibbonProps {
+  tool: ToolId
+  onToolChange: (tool: ToolId) => void
+  brushSize: number
+  onBrushSizeChange: (size: number) => void
+  shapeFill: ShapeFill
+  onShapeFillChange: (fill: ShapeFill) => void
+  showGrid: boolean
+  onToggleGrid: () => void
+  onClear: () => void
+  onPaste: () => void
+  primary: Rgba
+  secondary: Rgba
+  palette: readonly string[]
+  onPrimaryChange: (color: Rgba) => void
+  onSecondaryChange: (color: Rgba) => void
+  onSwap: () => void
+}
+
+export function Ribbon({
+  tool,
+  onToolChange,
+  brushSize,
+  onBrushSizeChange,
+  shapeFill,
+  onShapeFillChange,
+  showGrid,
+  onToggleGrid,
+  onClear,
+  onPaste,
+  primary,
+  secondary,
+  palette,
+  onPrimaryChange,
+  onSecondaryChange,
+  onSwap,
+}: RibbonProps) {
+  const freehandTools = TOOLS.filter((definition) => !isShapeTool(definition.id))
+  const shapeTools = TOOLS.filter((definition) => isShapeTool(definition.id))
+
+  const renderTool = (definition: (typeof TOOLS)[number]) => {
+    const Icon = TOOL_ICONS[definition.id]
+    return (
+      <button
+        key={definition.id}
+        type="button"
+        className="icon-button"
+        title={`${definition.label} (${definition.shortcut})`}
+        aria-label={definition.label}
+        aria-pressed={tool === definition.id}
+        onClick={() => onToolChange(definition.id)}
+      >
+        <Icon size={18} />
+      </button>
+    )
+  }
+
+  return (
+    <div className="ribbon">
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          <button
+            type="button"
+            className="icon-button"
+            title="Paste from clipboard"
+            aria-label="Paste"
+            onClick={onPaste}
+          >
+            <PasteIcon size={18} />
+          </button>
+        </div>
+        <div className="ribbon-group-label">Clipboard</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          <button
+            type="button"
+            className="icon-button"
+            title="Clear canvas"
+            aria-label="Clear canvas"
+            onClick={onClear}
+          >
+            <TrashIcon size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Pixel grid (G)"
+            aria-label="Toggle pixel grid"
+            aria-pressed={showGrid}
+            onClick={onToggleGrid}
+          >
+            <GridIcon size={18} />
+          </button>
+        </div>
+        <div className="ribbon-group-label">Image</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">{freehandTools.map(renderTool)}</div>
+        <div className="ribbon-group-label">Tools</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          <Dropdown
+            title="Brush size"
+            ariaLabel="Brush size"
+            trigger={
+              <span className="size-preview" aria-hidden="true">
+                <span
+                  className="size-dot"
+                  style={{ width: Math.min(brushSize, 24), height: Math.min(brushSize, 24) }}
+                />
+              </span>
+            }
+          >
+            {(close) => (
+              <div className="size-menu">
+                {BRUSH_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className="size-option"
+                    aria-pressed={size === brushSize}
+                    onClick={() => {
+                      onBrushSizeChange(size)
+                      close()
+                    }}
+                  >
+                    <span className="size-line" style={{ height: Math.max(1, size) }} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </Dropdown>
+        </div>
+        <div className="ribbon-group-label">Brushes</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          {shapeTools.map(renderTool)}
+          <Dropdown title="Shape style" trigger={<span>{SHAPE_FILL_LABELS[shapeFill]}</span>}>
+            {(close) => (
+              <>
+                {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => (
+                  <MenuItem
+                    key={fill}
+                    checked={fill === shapeFill}
+                    onClick={() => {
+                      onShapeFillChange(fill)
+                      close()
+                    }}
+                  >
+                    {SHAPE_FILL_LABELS[fill]}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          </Dropdown>
+        </div>
+        <div className="ribbon-group-label">Shapes</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          {BRUSH_SIZES.map((size) => (
+            <button
+              key={size}
+              type="button"
+              className="ribbon-size-button"
+              aria-label={`Size ${size}`}
+              aria-pressed={size === brushSize}
+              onClick={() => onBrushSizeChange(size)}
+            >
+              <span className="size-line" style={{ height: Math.max(1, size) }} />
+            </button>
+          ))}
+        </div>
+        <div className="ribbon-group-label">Size</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          <ColorPalette
+            primary={primary}
+            secondary={secondary}
+            palette={palette}
+            onPrimaryChange={onPrimaryChange}
+            onSecondaryChange={onSecondaryChange}
+            onSwap={onSwap}
+          />
+        </div>
+        <div className="ribbon-group-label">Colors</div>
+      </section>
+    </div>
+  )
+}

@@ -6,6 +6,7 @@ export interface DropdownProps {
   trigger: ReactNode
   children: (close: () => void) => ReactNode
   title?: string
+  ariaLabel?: string
   align?: 'start' | 'end'
   showChevron?: boolean
   triggerClassName?: string
@@ -15,6 +16,7 @@ export function Dropdown({
   trigger,
   children,
   title,
+  ariaLabel,
   align = 'start',
   showChevron = true,
   triggerClassName,
@@ -44,6 +46,7 @@ export function Dropdown({
         type="button"
         className={triggerClassName ?? 'dropdown-trigger'}
         title={title}
+        aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}

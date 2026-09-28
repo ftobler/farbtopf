@@ -19,6 +19,19 @@ describe('App', () => {
     expect(topbar?.contains(palette)).toBe(true)
   })
 
+  it('renders the ribbon groups and paste button inside the topbar', () => {
+    const { container } = render(<App />)
+    const topbar = container.querySelector('.topbar')
+    expect(topbar).toBeTruthy()
+
+    for (const label of ['Clipboard', 'Image', 'Tools', 'Brushes', 'Shapes', 'Size', 'Colors']) {
+      expect(screen.getByText(label)).toBeTruthy()
+    }
+
+    const paste = screen.getByRole('button', { name: 'Paste' })
+    expect(topbar?.contains(paste)).toBe(true)
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')

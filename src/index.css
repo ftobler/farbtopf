@@ -117,32 +117,71 @@ textarea {
   padding: 10px 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
   flex: none;
 }
 
-.toolbar {
+.ribbon {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.ribbon-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
   flex: none;
 }
 
-.tool-group {
+.ribbon-group-items {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border);
-  margin: 0 4px;
+.ribbon-group-label {
+  text-align: center;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-muted);
+  user-select: none;
 }
 
-.toolbar-spacer {
-  flex: 1;
+.ribbon-separator {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+}
+
+.ribbon-size-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ribbon-size-button:hover {
+  background: var(--hover);
+}
+
+.ribbon-size-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.ribbon-size-button .size-line {
+  width: 20px;
+}
+
+.ribbon-group .color-palette {
+  gap: 10px;
 }
 
 .icon-button {
