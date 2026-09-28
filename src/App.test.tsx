@@ -24,7 +24,7 @@ describe('App', () => {
     const topbar = container.querySelector('.topbar')
     expect(topbar).toBeTruthy()
 
-    for (const label of ['Clipboard', 'Image', 'Tools', 'Brushes', 'Shapes', 'Size', 'Colors']) {
+    for (const label of ['Clipboard', 'Image', 'Tools', 'Shapes', 'Size', 'Colors']) {
       expect(screen.getByText(label)).toBeTruthy()
     }
 

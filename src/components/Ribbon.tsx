@@ -248,9 +248,36 @@ export function Ribbon({
 
       <section className="ribbon-group">
         <div className="ribbon-group-items">
+          {shapeTools.map(renderTool)}
+          <Dropdown title="Shape style" trigger={<span>{SHAPE_FILL_LABELS[shapeFill]}</span>}>
+            {(close) => (
+              <>
+                {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => (
+                  <MenuItem
+                    key={fill}
+                    checked={fill === shapeFill}
+                    onClick={() => {
+                      onShapeFillChange(fill)
+                      close()
+                    }}
+                  >
+                    {SHAPE_FILL_LABELS[fill]}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          </Dropdown>
+        </div>
+        <div className="ribbon-group-label">Shapes</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
           <Dropdown
-            title="Brush size"
-            ariaLabel="Brush size"
+            title="Size"
+            ariaLabel="Size"
             trigger={
               <span className="size-preview" aria-hidden="true">
                 <span
@@ -279,53 +306,6 @@ export function Ribbon({
               </div>
             )}
           </Dropdown>
-        </div>
-        <div className="ribbon-group-label">Brushes</div>
-      </section>
-
-      <div className="ribbon-separator" />
-
-      <section className="ribbon-group">
-        <div className="ribbon-group-items">
-          {shapeTools.map(renderTool)}
-          <Dropdown title="Shape style" trigger={<span>{SHAPE_FILL_LABELS[shapeFill]}</span>}>
-            {(close) => (
-              <>
-                {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => (
-                  <MenuItem
-                    key={fill}
-                    checked={fill === shapeFill}
-                    onClick={() => {
-                      onShapeFillChange(fill)
-                      close()
-                    }}
-                  >
-                    {SHAPE_FILL_LABELS[fill]}
-                  </MenuItem>
-                ))}
-              </>
-            )}
-          </Dropdown>
-        </div>
-        <div className="ribbon-group-label">Shapes</div>
-      </section>
-
-      <div className="ribbon-separator" />
-
-      <section className="ribbon-group">
-        <div className="ribbon-group-items">
-          {BRUSH_SIZES.map((size) => (
-            <button
-              key={size}
-              type="button"
-              className="ribbon-size-button"
-              aria-label={`Size ${size}`}
-              aria-pressed={size === brushSize}
-              onClick={() => onBrushSizeChange(size)}
-            >
-              <span className="size-line" style={{ height: Math.max(1, size) }} />
-            </button>
-          ))}
         </div>
         <div className="ribbon-group-label">Size</div>
       </section>

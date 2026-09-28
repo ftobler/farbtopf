@@ -157,31 +157,6 @@ textarea {
   background: var(--border);
 }
 
-.ribbon-size-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 32px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.ribbon-size-button:hover {
-  background: var(--hover);
-}
-
-.ribbon-size-button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.ribbon-size-button .size-line {
-  width: 20px;
-}
-
 .ribbon-group .color-palette {
   gap: 10px;
 }
