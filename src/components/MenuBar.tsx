@@ -1,5 +1,5 @@
 import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
-import { MoonIcon, RedoIcon, SunIcon, UndoIcon } from './icons'
+import { MoonIcon, RedoIcon, SaveIcon, SunIcon, UndoIcon } from './icons'
 
 export interface MenuBarProps {
   canUndo: boolean
@@ -100,6 +100,15 @@ export function MenuBar({
         </Dropdown>
 
         <div className="menubar-actions">
+          <button
+            type="button"
+            className="icon-button"
+            title="Save as PNG (Ctrl+S)"
+            aria-label="Save"
+            onClick={onSave}
+          >
+            <SaveIcon size={18} />
+          </button>
           <button
             type="button"
             className="icon-button"

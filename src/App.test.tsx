@@ -19,9 +19,10 @@ describe('App', () => {
     expect(topbar?.contains(palette)).toBe(true)
   })
 
-  it('places undo and redo in the menubar', () => {
+  it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')
+    expect(menubar?.contains(screen.getByRole('button', { name: 'Save' }))).toBe(true)
     expect(menubar?.contains(screen.getByRole('button', { name: 'Undo' }))).toBe(true)
     expect(menubar?.contains(screen.getByRole('button', { name: 'Redo' }))).toBe(true)
   })
