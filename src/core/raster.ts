@@ -300,3 +300,58 @@ export function scale(source: Bitmap, width: number, height: number): Bitmap {
   }
   return result
 }
+
+/** Mirrors a bitmap left-to-right, keeping the same dimensions. */
+export function flipHorizontal(source: Bitmap): Bitmap {
+  const result = new Bitmap(source.width, source.height)
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      result.set(x, y, source.get(source.width - 1 - x, y))
+    }
+  }
+  return result
+}
+
+/** Mirrors a bitmap top-to-bottom, keeping the same dimensions. */
+export function flipVertical(source: Bitmap): Bitmap {
+  const result = new Bitmap(source.width, source.height)
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      result.set(x, y, source.get(x, source.height - 1 - y))
+    }
+  }
+  return result
+}
+
+/** Rotates a bitmap 90 degrees clockwise, swapping its dimensions. */
+export function rotate90(source: Bitmap): Bitmap {
+  const result = new Bitmap(source.height, source.width)
+  for (let y = 0; y < result.height; y += 1) {
+    for (let x = 0; x < result.width; x += 1) {
+      result.set(x, y, source.get(y, source.height - 1 - x))
+    }
+  }
+  return result
+}
+
+/** Rotates a bitmap 180 degrees, keeping the same dimensions. */
+export function rotate180(source: Bitmap): Bitmap {
+  const result = new Bitmap(source.width, source.height)
+  for (let y = 0; y < result.height; y += 1) {
+    for (let x = 0; x < result.width; x += 1) {
+      result.set(x, y, source.get(source.width - 1 - x, source.height - 1 - y))
+    }
+  }
+  return result
+}
+
+/** Rotates a bitmap 90 degrees counter-clockwise, swapping its dimensions. */
+export function rotate270(source: Bitmap): Bitmap {
+  const result = new Bitmap(source.height, source.width)
+  for (let y = 0; y < result.height; y += 1) {
+    for (let x = 0; x < result.width; x += 1) {
+      result.set(x, y, source.get(source.width - 1 - y, x))
+    }
+  }
+  return result
+}

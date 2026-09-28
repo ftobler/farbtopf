@@ -9,21 +9,25 @@ import {
   AirbrushIcon,
   BrushIcon,
   CopyIcon,
+  CropIcon,
   CutIcon,
   EllipseIcon,
   EraserIcon,
   FillIcon,
-  GridIcon,
+  FlipIcon,
   LineIcon,
   PasteIcon,
   PencilIcon,
   PickerIcon,
   RectangleIcon,
+  RotateIcon,
+  ScaleIcon,
+  SelectIcon,
   TextIcon,
-  TrashIcon,
 } from './icons'
 
 const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
+  select: SelectIcon,
   pencil: PencilIcon,
   brush: BrushIcon,
   airbrush: AirbrushIcon,
@@ -49,9 +53,11 @@ export interface RibbonProps {
   onBrushSizeChange: (size: number) => void
   shapeFill: ShapeFill
   onShapeFillChange: (fill: ShapeFill) => void
-  showGrid: boolean
-  onToggleGrid: () => void
-  onClear: () => void
+  hasSelection: boolean
+  onCrop: () => void
+  onScale: () => void
+  onFlip: (axis: 'horizontal' | 'vertical') => void
+  onRotate: (degrees: 90 | 180 | 270) => void
   onPaste: () => void
   onCut: () => void
   onCopy: () => void
@@ -70,9 +76,11 @@ export function Ribbon({
   onBrushSizeChange,
   shapeFill,
   onShapeFillChange,
-  showGrid,
-  onToggleGrid,
-  onClear,
+  hasSelection,
+  onCrop,
+  onScale,
+  onFlip,
+  onRotate,
   onPaste,
   onCut,
   onCopy,
@@ -83,7 +91,9 @@ export function Ribbon({
   onSecondaryChange,
   onSwap,
 }: RibbonProps) {
-  const freehandTools = TOOLS.filter((definition) => !isShapeTool(definition.id))
+  const freehandTools = TOOLS.filter(
+    (definition) => !isShapeTool(definition.id) && definition.id !== 'select',
+  )
   const shapeTools = TOOLS.filter((definition) => isShapeTool(definition.id))
 
   const renderTool = (definition: (typeof TOOLS)[number]) => {
@@ -145,22 +155,84 @@ export function Ribbon({
           <button
             type="button"
             className="icon-button"
-            title="Clear canvas"
-            aria-label="Clear canvas"
-            onClick={onClear}
+            title="Select (S)"
+            aria-label="Select"
+            aria-pressed={tool === 'select'}
+            onClick={() => onToolChange('select')}
           >
-            <TrashIcon size={18} />
+            <SelectIcon size={18} />
           </button>
           <button
             type="button"
             className="icon-button"
-            title="Pixel grid (G)"
-            aria-label="Toggle pixel grid"
-            aria-pressed={showGrid}
-            onClick={onToggleGrid}
+            title="Crop to selection"
+            aria-label="Crop"
+            disabled={!hasSelection}
+            onClick={onCrop}
           >
-            <GridIcon size={18} />
+            <CropIcon size={18} />
           </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Scale image"
+            aria-label="Scale"
+            onClick={onScale}
+          >
+            <ScaleIcon size={18} />
+          </button>
+          <Dropdown title="Flip" ariaLabel="Flip" trigger={<FlipIcon size={18} />}>
+            {(close) => (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    onFlip('horizontal')
+                    close()
+                  }}
+                >
+                  Flip horizontal
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onFlip('vertical')
+                    close()
+                  }}
+                >
+                  Flip vertical
+                </MenuItem>
+              </>
+            )}
+          </Dropdown>
+          <Dropdown title="Rotate" ariaLabel="Rotate" trigger={<RotateIcon size={18} />}>
+            {(close) => (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    onRotate(90)
+                    close()
+                  }}
+                >
+                  Rotate right 90°
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onRotate(270)
+                    close()
+                  }}
+                >
+                  Rotate left 90°
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onRotate(180)
+                    close()
+                  }}
+                >
+                  Rotate 180°
+                </MenuItem>
+              </>
+            )}
+          </Dropdown>
         </div>
         <div className="ribbon-group-label">Image</div>
       </section>

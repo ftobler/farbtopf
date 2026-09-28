@@ -1,4 +1,5 @@
 export type ToolId =
+  | 'select'
   | 'pencil'
   | 'brush'
   | 'airbrush'
@@ -22,6 +23,7 @@ export interface ToolDef {
 }
 
 export const TOOLS: readonly ToolDef[] = [
+  { id: 'select', label: 'Select', shortcut: 'S', group: 'utility' },
   { id: 'pencil', label: 'Pencil', shortcut: 'P', group: 'freehand' },
   { id: 'brush', label: 'Brush', shortcut: 'B', group: 'freehand' },
   { id: 'airbrush', label: 'Airbrush', shortcut: 'A', group: 'freehand' },

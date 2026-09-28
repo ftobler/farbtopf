@@ -4,6 +4,7 @@ import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
 import { Ribbon } from './components/Ribbon'
+import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { StatusBar } from './components/StatusBar'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
@@ -51,6 +52,8 @@ function App() {
   const [cursor, setCursor] = useState<Point | null>(null)
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
+  const [showScaleDialog, setShowScaleDialog] = useState(false)
+  const [hasSelection, setHasSelection] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -120,7 +123,7 @@ function App() {
   }, [notify, openFile])
 
   const handleCopyFromCanvas = useCallback(async () => {
-    const dataUrl = canvasRef.current?.toDataUrl()
+    const dataUrl = canvasRef.current?.getSelectionDataUrl() ?? canvasRef.current?.toDataUrl()
     if (!dataUrl) return
     if (!navigator.clipboard?.write) {
       notify('Clipboard copy is not supported here')
@@ -136,7 +139,9 @@ function App() {
   }, [notify])
 
   const handleCutFromCanvas = useCallback(async () => {
-    const dataUrl = canvasRef.current?.toDataUrl()
+    const handle = canvasRef.current
+    const hasSelection = handle?.getSelection() != null
+    const dataUrl = handle?.getSelectionDataUrl() ?? handle?.toDataUrl()
     if (!dataUrl) return
     if (!navigator.clipboard?.write) {
       notify('Clipboard copy is not supported here')
@@ -145,7 +150,8 @@ function App() {
     try {
       const blob = await (await fetch(dataUrl)).blob()
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-      canvasRef.current?.clear()
+      if (hasSelection) handle?.cutSelection()
+      else handle?.clear()
       notify('Cut to the clipboard')
     } catch {
       notify('Could not cut to the clipboard')
@@ -164,6 +170,27 @@ function App() {
   const handleUndo = useCallback(() => canvasRef.current?.undo(), [])
   const handleRedo = useCallback(() => canvasRef.current?.redo(), [])
   const handleClear = useCallback(() => canvasRef.current?.clear(), [])
+
+  const handleCrop = useCallback(() => {
+    canvasRef.current?.cropToSelection()
+  }, [])
+
+  const handleScaleApply = useCallback(
+    (width: number, height: number) => {
+      canvasRef.current?.resize(width, height)
+      setShowScaleDialog(false)
+      notify(`Scaled to ${width} × ${height}`)
+    },
+    [notify],
+  )
+
+  const handleFlip = useCallback((axis: 'horizontal' | 'vertical') => {
+    canvasRef.current?.flip(axis)
+  }, [])
+
+  const handleRotate = useCallback((degrees: 90 | 180 | 270) => {
+    canvasRef.current?.rotate(degrees)
+  }, [])
 
   const handlePickColor = useCallback(
     (color: Rgba, slot: 'primary' | 'secondary') => {
@@ -245,6 +272,11 @@ function App() {
         return
       }
 
+      if (event.key === 'Escape') {
+        canvasRef.current?.clearSelection()
+        return
+      }
+
       const lower = event.key.toLowerCase()
       if (lower === 'x') {
         handleSwapColors()
@@ -315,9 +347,11 @@ function App() {
           onBrushSizeChange={setBrushSize}
           shapeFill={shapeFill}
           onShapeFillChange={setShapeFill}
-          showGrid={showGrid}
-          onToggleGrid={() => setShowGrid((value) => !value)}
-          onClear={handleClear}
+          hasSelection={hasSelection}
+          onCrop={handleCrop}
+          onScale={() => setShowScaleDialog(true)}
+          onFlip={handleFlip}
+          onRotate={handleRotate}
           onPaste={handlePasteFromClipboard}
           onCut={handleCutFromCanvas}
           onCopy={handleCopyFromCanvas}
@@ -349,6 +383,7 @@ function App() {
           onCursorMove={setCursor}
           onPickColor={handlePickColor}
           onSizeChange={onSizeChange}
+          onSelectionChange={setHasSelection}
         />
       </div>
 
@@ -358,6 +393,8 @@ function App() {
         height={canvasSize.height}
         zoom={zoom}
         toolLabel={toolLabel}
+        showGrid={showGrid}
+        onToggleGrid={() => setShowGrid((value) => !value)}
         onZoomChange={setZoom}
       />
 
@@ -380,6 +417,16 @@ function App() {
           initialHeight={canvasSize.height}
           onCancel={() => setNewDialogOpen(false)}
           onCreate={handleNewDocument}
+        />
+      ) : null}
+
+      {showScaleDialog ? (
+        <ScaleImageDialog
+          open={showScaleDialog}
+          initialWidth={canvasSize.width}
+          initialHeight={canvasSize.height}
+          onCancel={() => setShowScaleDialog(false)}
+          onApply={handleScaleApply}
         />
       ) : null}
 

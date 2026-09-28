@@ -69,4 +69,28 @@ describe('App', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.getByText('640 x 480')).toBeTruthy()
   })
+
+  it('exposes the image group actions', () => {
+    render(<App />)
+    expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Crop' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Scale' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Flip' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Rotate' })).toBeTruthy()
+  })
+
+  it('lists the flip modes', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Flip' }))
+    expect(screen.getByText('Flip horizontal')).toBeTruthy()
+    expect(screen.getByText('Flip vertical')).toBeTruthy()
+  })
+
+  it('keeps the pixel grid toggle in the status bar', () => {
+    const { container } = render(<App />)
+    const statusbar = container.querySelector('.statusbar')
+    expect(statusbar?.contains(screen.getByRole('button', { name: 'Toggle pixel grid' }))).toBe(
+      true,
+    )
+  })
 })

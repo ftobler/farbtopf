@@ -6,18 +6,19 @@ import { BLACK, WHITE } from '../core/color'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
 
-function setup(tool: 'brush' | 'rectangle') {
+function setup(tool: 'brush' | 'rectangle' | 'select', width = 20, height = 20) {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
   const onCursorMove = vi.fn()
   const onPickColor = vi.fn()
   const onSizeChange = vi.fn()
+  const onSelectionChange = vi.fn()
 
   const { container } = render(
     <PaintCanvas
       ref={ref}
-      initialWidth={20}
-      initialHeight={20}
+      initialWidth={width}
+      initialHeight={height}
       tool={tool}
       primary={BLACK}
       secondary={WHITE}
@@ -29,16 +30,17 @@ function setup(tool: 'brush' | 'rectangle') {
       onCursorMove={onCursorMove}
       onPickColor={onPickColor}
       onSizeChange={onSizeChange}
+      onSelectionChange={onSelectionChange}
     />,
   )
 
   const canvas = container.querySelector('canvas')
   if (!canvas) throw new Error('canvas not rendered')
   canvas.getBoundingClientRect = () =>
-    ({ x: 0, y: 0, left: 0, top: 0, right: 20, bottom: 20, width: 20, height: 20, toJSON: () => ({}) }) as DOMRect
+    ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, onHistoryChange }
+  return { ref, canvas, onHistoryChange, onSizeChange, onSelectionChange }
 }
 
 describe('PaintCanvas', () => {
@@ -78,5 +80,50 @@ describe('PaintCanvas', () => {
   it('reports the document size', () => {
     const { ref } = setup('brush')
     expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
+  })
+
+  it('resizes the document and notifies the size change', () => {
+    const { ref, onSizeChange } = setup('brush')
+    act(() => ref.current?.resize(10, 30))
+    expect(ref.current?.getSize()).toEqual({ width: 10, height: 30 })
+    expect(onSizeChange).toHaveBeenLastCalledWith(10, 30)
+  })
+
+  it('rotates a non-square document, swapping its dimensions', () => {
+    const { ref } = setup('brush', 20, 10)
+    act(() => ref.current?.rotate(90))
+    expect(ref.current?.getSize()).toEqual({ width: 10, height: 20 })
+  })
+
+  it('flips horizontally without changing the size and records history', () => {
+    const { ref, onHistoryChange } = setup('brush')
+    act(() => ref.current?.flip('horizontal'))
+    expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('tracks a rectangular selection drag', () => {
+    const { ref, canvas, onSelectionChange } = setup('select')
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 8, clientY: 7 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 8, clientY: 7 })
+    expect(ref.current?.getSelection()).toEqual({ x: 2, y: 2, width: 7, height: 6 })
+    expect(onSelectionChange).toHaveBeenCalledWith(true)
+  })
+
+  it('crops to the selection', () => {
+    const { ref, canvas } = setup('select')
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 8, clientY: 7 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 8, clientY: 7 })
+    act(() => ref.current?.cropToSelection())
+    expect(ref.current?.getSize()).toEqual({ width: 7, height: 6 })
+  })
+
+  it('clears the selection on a bare click', () => {
+    const { ref, canvas } = setup('select')
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 4, clientY: 4 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 4, clientY: 4 })
+    expect(ref.current?.getSelection()).toBeNull()
   })
 })

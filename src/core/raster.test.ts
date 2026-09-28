@@ -9,8 +9,13 @@ import {
   drawPolyline,
   drawRect,
   ellipseSpans,
+  flipHorizontal,
+  flipVertical,
   floodFill,
   linePoints,
+  rotate90,
+  rotate180,
+  rotate270,
   scale,
   stamp,
 } from './raster'
@@ -199,5 +204,107 @@ describe('blit / crop / scale', () => {
     expect(out.width).toBe(4)
     expect(out.get(0, 0)).toEqual(rgba(255, 0, 0))
     expect(out.get(3, 3)).toEqual(BLACK)
+  })
+})
+
+describe('flip and rotate', () => {
+  const A = rgba(255, 0, 0)
+  const B = rgba(0, 255, 0)
+  const C = rgba(0, 0, 255)
+  const D = rgba(255, 255, 0)
+
+  function source(): Bitmap {
+    const bitmap = new Bitmap(2, 2)
+    bitmap.set(0, 0, A)
+    bitmap.set(1, 0, B)
+    bitmap.set(0, 1, C)
+    bitmap.set(1, 1, D)
+    return bitmap
+  }
+
+  function assertUnchanged(bitmap: Bitmap): void {
+    expect(bitmap.width).toBe(2)
+    expect(bitmap.height).toBe(2)
+    expect(bitmap.get(0, 0)).toEqual(A)
+    expect(bitmap.get(1, 0)).toEqual(B)
+    expect(bitmap.get(0, 1)).toEqual(C)
+    expect(bitmap.get(1, 1)).toEqual(D)
+  }
+
+  it('flips horizontally', () => {
+    const src = source()
+    const out = flipHorizontal(src)
+    expect(out.width).toBe(2)
+    expect(out.height).toBe(2)
+    expect(out.get(0, 0)).toEqual(B)
+    expect(out.get(1, 0)).toEqual(A)
+    expect(out.get(0, 1)).toEqual(D)
+    expect(out.get(1, 1)).toEqual(C)
+    assertUnchanged(src)
+  })
+
+  it('flips vertically', () => {
+    const src = source()
+    const out = flipVertical(src)
+    expect(out.get(0, 0)).toEqual(C)
+    expect(out.get(1, 0)).toEqual(D)
+    expect(out.get(0, 1)).toEqual(A)
+    expect(out.get(1, 1)).toEqual(B)
+    assertUnchanged(src)
+  })
+
+  it('rotates 90 degrees clockwise', () => {
+    const src = source()
+    const out = rotate90(src)
+    expect(out.width).toBe(2)
+    expect(out.height).toBe(2)
+    expect(out.get(0, 0)).toEqual(C)
+    expect(out.get(1, 0)).toEqual(A)
+    expect(out.get(0, 1)).toEqual(D)
+    expect(out.get(1, 1)).toEqual(B)
+    assertUnchanged(src)
+  })
+
+  it('rotates 180 degrees', () => {
+    const src = source()
+    const out = rotate180(src)
+    expect(out.width).toBe(2)
+    expect(out.height).toBe(2)
+    expect(out.get(0, 0)).toEqual(D)
+    expect(out.get(1, 0)).toEqual(C)
+    expect(out.get(0, 1)).toEqual(B)
+    expect(out.get(1, 1)).toEqual(A)
+    assertUnchanged(src)
+  })
+
+  it('rotates 270 degrees clockwise', () => {
+    const src = source()
+    const out = rotate270(src)
+    expect(out.width).toBe(2)
+    expect(out.height).toBe(2)
+    expect(out.get(0, 0)).toEqual(B)
+    expect(out.get(1, 0)).toEqual(D)
+    expect(out.get(0, 1)).toEqual(A)
+    expect(out.get(1, 1)).toEqual(C)
+    assertUnchanged(src)
+  })
+
+  it('swaps dimensions for quarter turns on a non-square bitmap', () => {
+    const src = new Bitmap(3, 1)
+    src.set(0, 0, A)
+    src.set(1, 0, B)
+    src.set(2, 0, C)
+    const cw = rotate90(src)
+    expect(cw.width).toBe(1)
+    expect(cw.height).toBe(3)
+    expect(cw.get(0, 0)).toEqual(A)
+    expect(cw.get(0, 1)).toEqual(B)
+    expect(cw.get(0, 2)).toEqual(C)
+    const ccw = rotate270(src)
+    expect(ccw.width).toBe(1)
+    expect(ccw.height).toBe(3)
+    expect(ccw.get(0, 0)).toEqual(C)
+    expect(ccw.get(0, 1)).toEqual(B)
+    expect(ccw.get(0, 2)).toEqual(A)
   })
 })

@@ -272,3 +272,50 @@ export function CheckIcon(props: IconProps) {
     </Svg>
   )
 }
+
+export function SelectIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
+    </Svg>
+  )
+}
+
+export function CropIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7 2v15a2 2 0 0 0 2 2h15" />
+      <path d="M2 7h15a2 2 0 0 1 2 2v15" />
+    </Svg>
+  )
+}
+
+export function ScaleIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 3.5H3.5V9" />
+      <path d="M6 18 18 6" />
+      <path d="M13 6h5v5" />
+      <path d="M11 18H6v-5" />
+    </Svg>
+  )
+}
+
+export function FlipIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3v18" strokeDasharray="2 2" />
+      <path d="M9 5 3 12l6 7z" />
+      <path d="M15 5l6 7-6 7z" />
+    </Svg>
+  )
+}
+
+export function RotateIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3.5 12a8.5 8.5 0 1 1 2.5 6" />
+      <path d="M3 7v5h5" />
+    </Svg>
+  )
+}

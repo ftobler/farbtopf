@@ -1,6 +1,6 @@
 import type { Point } from '../core/geometry'
 import { ZOOM_LEVELS, nearestZoomIndex, nextZoom } from '../core/zoom'
-import { ZoomInIcon, ZoomOutIcon } from './icons'
+import { GridIcon, ZoomInIcon, ZoomOutIcon } from './icons'
 
 export interface StatusBarProps {
   cursor: Point | null
@@ -8,10 +8,21 @@ export interface StatusBarProps {
   height: number
   zoom: number
   toolLabel: string
+  showGrid: boolean
+  onToggleGrid: () => void
   onZoomChange: (zoom: number) => void
 }
 
-export function StatusBar({ cursor, width, height, zoom, toolLabel, onZoomChange }: StatusBarProps) {
+export function StatusBar({
+  cursor,
+  width,
+  height,
+  zoom,
+  toolLabel,
+  showGrid,
+  onToggleGrid,
+  onZoomChange,
+}: StatusBarProps) {
   return (
     <footer className="statusbar">
       <span className="status-item status-coords">
@@ -20,6 +31,16 @@ export function StatusBar({ cursor, width, height, zoom, toolLabel, onZoomChange
       <span className="status-item">
         {width} × {height} px
       </span>
+      <button
+        type="button"
+        className="icon-button"
+        title="Pixel grid (G)"
+        aria-label="Toggle pixel grid"
+        aria-pressed={showGrid}
+        onClick={onToggleGrid}
+      >
+        <GridIcon size={16} />
+      </button>
       <span className="status-spacer" />
       <span className="status-item">{toolLabel}</span>
       <div className="zoom-control">
