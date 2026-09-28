@@ -115,7 +115,7 @@ textarea {
   gap: 16px;
   flex-wrap: wrap;
   min-height: 96px;
-  padding: 20px 22px;
+  padding: 0 22px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
@@ -133,6 +133,7 @@ textarea {
   flex-direction: column;
   justify-content: space-between;
   gap: 4px;
+  padding: 16px 0;
   flex: none;
 }
 
