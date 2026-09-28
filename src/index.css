@@ -118,13 +118,13 @@ textarea {
   padding: 0 22px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
   flex: none;
 }
 
 .ribbon {
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
