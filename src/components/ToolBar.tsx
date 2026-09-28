@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react'
 import { BRUSH_SIZES, TOOLS, isShapeTool } from '../core/tools'
 import type { ShapeFill, ToolId } from '../core/tools'
-import { ZOOM_LEVELS, nextZoom } from '../core/zoom'
 import { Dropdown, MenuItem } from './Dropdown'
 import type { IconProps } from './icons'
 import {
@@ -19,8 +18,6 @@ import {
   TextIcon,
   TrashIcon,
   UndoIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
 } from './icons'
 
 const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
@@ -49,8 +46,6 @@ export interface ToolBarProps {
   onBrushSizeChange: (size: number) => void
   shapeFill: ShapeFill
   onShapeFillChange: (fill: ShapeFill) => void
-  zoom: number
-  onZoomChange: (zoom: number) => void
   showGrid: boolean
   onToggleGrid: () => void
   canUndo: boolean
@@ -67,8 +62,6 @@ export function ToolBar({
   onBrushSizeChange,
   shapeFill,
   onShapeFillChange,
-  zoom,
-  onZoomChange,
   showGrid,
   onToggleGrid,
   canUndo,
@@ -191,36 +184,6 @@ export function ToolBar({
       <div className="toolbar-spacer" />
 
       <div className="tool-group">
-        <button
-          type="button"
-          className="icon-button"
-          title="Zoom out (-)"
-          aria-label="Zoom out"
-          onClick={() => onZoomChange(nextZoom(zoom, -1))}
-        >
-          <ZoomOutIcon size={18} />
-        </button>
-        <select
-          className="zoom-select"
-          aria-label="Zoom level"
-          value={String(zoom)}
-          onChange={(event) => onZoomChange(Number(event.target.value))}
-        >
-          {ZOOM_LEVELS.map((level) => (
-            <option key={level} value={String(level)}>
-              {Math.round(level * 100)}%
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="icon-button"
-          title="Zoom in (+)"
-          aria-label="Zoom in"
-          onClick={() => onZoomChange(nextZoom(zoom, 1))}
-        >
-          <ZoomInIcon size={18} />
-        </button>
         <button
           type="button"
           className="icon-button"

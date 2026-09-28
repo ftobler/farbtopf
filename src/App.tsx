@@ -262,23 +262,32 @@ function App() {
         onShowHelp={() => setHelpOpen(true)}
       />
 
-      <ToolBar
-        tool={tool}
-        onToolChange={setTool}
-        brushSize={brushSize}
-        onBrushSizeChange={setBrushSize}
-        shapeFill={shapeFill}
-        onShapeFillChange={setShapeFill}
-        zoom={zoom}
-        onZoomChange={setZoom}
-        showGrid={showGrid}
-        onToggleGrid={() => setShowGrid((value) => !value)}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        onClear={handleClear}
-      />
+      <div className="topbar">
+        <ToolBar
+          tool={tool}
+          onToolChange={setTool}
+          brushSize={brushSize}
+          onBrushSizeChange={setBrushSize}
+          shapeFill={shapeFill}
+          onShapeFillChange={setShapeFill}
+          showGrid={showGrid}
+          onToggleGrid={() => setShowGrid((value) => !value)}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onClear={handleClear}
+        />
+
+        <ColorPalette
+          primary={primary}
+          secondary={secondary}
+          palette={DEFAULT_PALETTE}
+          onPrimaryChange={setPrimary}
+          onSecondaryChange={setSecondary}
+          onSwap={handleSwapColors}
+        />
+      </div>
 
       <div className="workspace">
         <PaintCanvas
@@ -302,21 +311,13 @@ function App() {
         />
       </div>
 
-      <ColorPalette
-        primary={primary}
-        secondary={secondary}
-        palette={DEFAULT_PALETTE}
-        onPrimaryChange={setPrimary}
-        onSecondaryChange={setSecondary}
-        onSwap={handleSwapColors}
-      />
-
       <StatusBar
         cursor={cursor}
         width={canvasSize.width}
         height={canvasSize.height}
         zoom={zoom}
         toolLabel={toolLabel}
+        onZoomChange={setZoom}
       />
 
       <input
