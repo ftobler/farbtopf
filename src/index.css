@@ -590,7 +590,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 4px 12px;
+  min-height: 46px;
+  padding: 8px 14px;
   background: var(--surface);
   border-top: 1px solid var(--border);
   color: var(--text-muted);
