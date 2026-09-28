@@ -114,8 +114,8 @@ textarea {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  min-height: 74px;
-  padding: 14px 16px;
+  min-height: 96px;
+  padding: 20px 22px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
