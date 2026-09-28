@@ -40,6 +40,11 @@ export function isShapeTool(id: ToolId): boolean {
   return id === 'line' || id === 'rectangle' || id === 'ellipse'
 }
 
+/** Pencil is always a single pixel wide; every other tool honours the brush size. */
+export function strokeWidthFor(id: ToolId, brushSize: number): number {
+  return id === 'pencil' ? 1 : brushSize
+}
+
 export function toolById(id: ToolId): ToolDef {
   const found = TOOLS.find((tool) => tool.id === id)
   if (!found) throw new Error(`Unknown tool: ${id}`)

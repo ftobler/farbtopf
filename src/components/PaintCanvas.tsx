@@ -30,7 +30,7 @@ import {
 } from '../core/raster'
 import type { BrushShape } from '../core/raster'
 import type { ShapeFill, ToolId } from '../core/tools'
-import { isShapeTool } from '../core/tools'
+import { isShapeTool, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
 import { fontSizeForBrush, renderText } from '../render/text'
 
@@ -436,7 +436,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         stroke.recorded = true
         const color = colorFor(slot)
         if (tool === 'airbrush') spray(doc(), point, brushSize, color)
-        else stamp(doc(), point.x, point.y, brushSize, color, strokeShape(tool))
+        else stamp(doc(), point.x, point.y, strokeWidthFor(tool, brushSize), color, strokeShape(tool))
         paint(doc())
         syncHistory()
       }
@@ -473,7 +473,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             doc(),
             stroke.last,
             point,
-            brushSize,
+            strokeWidthFor(stroke.tool, brushSize),
             color,
             strokeShape(stroke.tool),
           )
