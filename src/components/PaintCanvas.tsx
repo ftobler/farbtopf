@@ -11,7 +11,7 @@ import { Bitmap } from '../core/bitmap'
 import type { Rgba } from '../core/color'
 import { WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
-import { clampPoint, normalizeRect } from '../core/geometry'
+import { clamp, clampPoint, distance, normalizeRect, pointInRect } from '../core/geometry'
 import { History } from '../core/history'
 import {
   blitAlpha,
@@ -19,6 +19,7 @@ import {
   drawEllipse,
   drawLine,
   drawRect,
+  extractRegion,
   flipHorizontal,
   flipVertical,
   floodFill,
@@ -68,6 +69,7 @@ export interface PaintCanvasProps {
   onPickColor: (color: Rgba, slot: 'primary' | 'secondary') => void
   onSizeChange: (width: number, height: number) => void
   onSelectionChange?: (hasSelection: boolean) => void
+  transparentSelection: boolean
 }
 
 interface StrokeState {
@@ -87,7 +89,28 @@ interface TextEditorState {
   slot: 'primary' | 'secondary'
 }
 
+type SelectionHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
+
+interface FloatingSelection {
+  source: Bitmap
+  bitmap: Bitmap
+  x: number
+  y: number
+  base: Bitmap
+}
+
+interface SelectDrag {
+  pointerId: number
+  mode: 'marquee' | 'move' | 'resize'
+  start: Point
+  handle?: SelectionHandle
+  origin?: Rect
+}
+
 const HISTORY_LIMIT = 80
+
+const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+const HANDLE_HIT = 4
 
 function strokeShape(tool: ToolId): BrushShape {
   return tool === 'pencil' || tool === 'eraser' ? 'square' : 'round'
@@ -118,6 +141,79 @@ function clampRect(rect: Rect, width: number, height: number): Rect {
   }
 }
 
+function handlePoint(rect: Rect, handle: SelectionHandle): Point {
+  const left = rect.x
+  const top = rect.y
+  const right = rect.x + rect.width
+  const bottom = rect.y + rect.height
+  const midX = rect.x + rect.width / 2
+  const midY = rect.y + rect.height / 2
+  switch (handle) {
+    case 'nw': return { x: left, y: top }
+    case 'n': return { x: midX, y: top }
+    case 'ne': return { x: right, y: top }
+    case 'e': return { x: right, y: midY }
+    case 'se': return { x: right, y: bottom }
+    case 's': return { x: midX, y: bottom }
+    case 'sw': return { x: left, y: bottom }
+    case 'w': return { x: left, y: midY }
+  }
+}
+
+function hitHandle(rect: Rect, point: Point, tolerance: number): SelectionHandle | null {
+  let best: SelectionHandle | null = null
+  let bestDistance = Infinity
+  for (const handle of SELECTION_HANDLES) {
+    const candidate = distance(point, handlePoint(rect, handle))
+    if (candidate < bestDistance) {
+      bestDistance = candidate
+      best = handle
+    }
+  }
+  return bestDistance <= tolerance ? best : null
+}
+
+function handleCursor(handle: SelectionHandle): string {
+  if (handle === 'n' || handle === 's') return 'ns-resize'
+  if (handle === 'e' || handle === 'w') return 'ew-resize'
+  if (handle === 'nw' || handle === 'se') return 'nwse-resize'
+  return 'nesw-resize'
+}
+
+function resizeRect(origin: Rect, handle: SelectionHandle, point: Point, width: number, height: number): Rect {
+  let left = origin.x
+  let top = origin.y
+  let right = origin.x + origin.width
+  let bottom = origin.y + origin.height
+  if (handle.includes('w')) left = Math.round(point.x)
+  if (handle.includes('e')) right = Math.round(point.x)
+  if (handle.includes('n')) top = Math.round(point.y)
+  if (handle.includes('s')) bottom = Math.round(point.y)
+  left = clamp(left, 0, width - 1)
+  top = clamp(top, 0, height - 1)
+  right = clamp(right, 1, width)
+  bottom = clamp(bottom, 1, height)
+  if (right <= left) {
+    if (handle.includes('w')) left = right - 1
+    else right = left + 1
+  }
+  if (bottom <= top) {
+    if (handle.includes('n')) top = bottom - 1
+    else bottom = top + 1
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+function bitmapToDataUrl(bitmap: Bitmap): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = bitmap.width
+  canvas.height = bitmap.height
+  const context = canvas.getContext('2d')
+  if (!context) return ''
+  context.putImageData(bitmap.toImageData(), 0, 0)
+  return canvas.toDataURL('image/png')
+}
+
 export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(function PaintCanvas(
   {
     initialWidth,
@@ -134,6 +230,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onPickColor,
     onSizeChange,
     onSelectionChange = () => {},
+    transparentSelection,
   },
   ref,
 ) {
@@ -143,10 +240,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const strokeRef = useRef<StrokeState | null>(null)
   const editorRef = useRef<TextEditorState | null>(null)
   const selectionRef = useRef<Rect | null>(null)
-  const selectRef = useRef<{ pointerId: number; start: Point } | null>(null)
+  const selectRef = useRef<SelectDrag | null>(null)
+  const floatingRef = useRef<FloatingSelection | null>(null)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [editor, setEditor] = useState<TextEditorState | null>(null)
   const [selection, setSelection] = useState<Rect | null>(null)
+  const [hoverCursor, setHoverCursor] = useState<string | null>(null)
 
   const doc = useCallback((): Bitmap => {
     if (!bitmapRef.current) {
@@ -177,6 +276,56 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [onSelectionChange],
   )
 
+  const currentRect = useCallback((): Rect | null => {
+    const floating = floatingRef.current
+    if (floating) {
+      return { x: floating.x, y: floating.y, width: floating.bitmap.width, height: floating.bitmap.height }
+    }
+    return selectionRef.current
+  }, [])
+
+  const renderPreview = useCallback(() => {
+    const floating = floatingRef.current
+    if (!floating) return
+    const preview = floating.base.clone()
+    blitAlpha(preview, floating.bitmap, floating.x, floating.y)
+    paint(preview)
+  }, [paint])
+
+  const ensureFloating = useCallback(
+    (rect: Rect): FloatingSelection => {
+      if (floatingRef.current) return floatingRef.current
+      const original = doc()
+      const base = original.clone()
+      const bitmap = extractRegion(original, rect, transparentSelection ? secondary : null)
+      historyRef.current.record(original.clone())
+      drawRect(base, rect, 1, secondary, true)
+      bitmapRef.current = base
+      const floating: FloatingSelection = { source: bitmap, bitmap, x: rect.x, y: rect.y, base }
+      floatingRef.current = floating
+      syncHistory()
+      return floating
+    },
+    [doc, secondary, syncHistory, transparentSelection],
+  )
+
+  const commitFloating = useCallback(() => {
+    const floating = floatingRef.current
+    if (!floating) return
+    const result = floating.base.clone()
+    blitAlpha(result, floating.bitmap, floating.x, floating.y)
+    bitmapRef.current = result
+    floatingRef.current = null
+    paint(result)
+    syncHistory()
+  }, [paint, syncHistory])
+
+  useEffect(() => {
+    if (tool === 'select') return
+    if (floatingRef.current) commitFloating()
+    if (selectionRef.current) updateSelection(null)
+  }, [tool, commitFloating, updateSelection])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -190,6 +339,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       bitmapRef.current = bitmap
       historyRef.current = new History<Bitmap>(HISTORY_LIMIT)
       editorRef.current = null
+      floatingRef.current = null
       setEditor(null)
       setSize({ width: bitmap.width, height: bitmap.height })
       onSizeChange(bitmap.width, bitmap.height)
@@ -224,6 +374,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         resetDocument(await bitmapFromDataUrl(src))
       },
       clear() {
+        commitFloating()
         const history = historyRef.current
         history.record(doc().clone())
         doc().fill(WHITE)
@@ -231,6 +382,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       undo() {
+        if (floatingRef.current) {
+          commitFloating()
+          updateSelection(null)
+        }
         const previous = historyRef.current.undo(doc())
         if (!previous) return
         bitmapRef.current = previous
@@ -240,6 +395,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       redo() {
+        if (floatingRef.current) {
+          commitFloating()
+          updateSelection(null)
+        }
         const next = historyRef.current.redo(doc())
         if (!next) return
         bitmapRef.current = next
@@ -255,17 +414,21 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return { width: size.width, height: size.height }
       },
       flip(axis) {
+        commitFloating()
         applyBitmap(axis === 'horizontal' ? flipHorizontal(doc()) : flipVertical(doc()))
       },
       rotate(degrees) {
+        commitFloating()
         applyBitmap(
           degrees === 90 ? rotate90(doc()) : degrees === 180 ? rotate180(doc()) : rotate270(doc()),
         )
       },
       resize(width, height) {
+        commitFloating()
         applyBitmap(scale(doc(), width, height))
       },
       cropToSelection() {
+        commitFloating()
         const rect = selectionRef.current
         if (!rect) return
         applyBitmap(crop(doc(), rect))
@@ -275,21 +438,28 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return selectionRef.current
       },
       clearSelection() {
+        commitFloating()
         updateSelection(null)
       },
       getSelectionDataUrl() {
+        const floating = floatingRef.current
+        if (floating) {
+          const composite = floating.base.clone()
+          blitAlpha(composite, floating.bitmap, floating.x, floating.y)
+          const region = crop(composite, {
+            x: floating.x,
+            y: floating.y,
+            width: floating.bitmap.width,
+            height: floating.bitmap.height,
+          })
+          return bitmapToDataUrl(region)
+        }
         const rect = selectionRef.current
         if (!rect) return null
-        const region = crop(doc(), rect)
-        const canvas = document.createElement('canvas')
-        canvas.width = region.width
-        canvas.height = region.height
-        const context = canvas.getContext('2d')
-        if (!context) return null
-        context.putImageData(region.toImageData(), 0, 0)
-        return canvas.toDataURL('image/png')
+        return bitmapToDataUrl(crop(doc(), rect))
       },
       cutSelection() {
+        commitFloating()
         const rect = selectionRef.current
         if (!rect) return
         historyRef.current.record(doc().clone())
@@ -302,6 +472,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }),
     [
       applyBitmap,
+      commitFloating,
       doc,
       onSizeChange,
       paint,
@@ -392,7 +563,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (tool === 'select') {
         event.preventDefault()
         event.currentTarget.setPointerCapture(event.pointerId)
-        selectRef.current = { pointerId: event.pointerId, start: point }
+        const rect = currentRect()
+        const handle = rect ? hitHandle(rect, point, HANDLE_HIT / zoom) : null
+        if (rect && handle) {
+          selectRef.current = { pointerId: event.pointerId, mode: 'resize', start: point, handle, origin: rect }
+          return
+        }
+        if (rect && pointInRect(point, rect)) {
+          selectRef.current = { pointerId: event.pointerId, mode: 'move', start: point, origin: rect }
+          return
+        }
+        commitFloating()
+        selectRef.current = { pointerId: event.pointerId, mode: 'marquee', start: point }
         updateSelection(clampRect(normalizeRect(point, point), size.width, size.height))
         return
       }
@@ -441,17 +623,47 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brushSize, colorFor, commitText, doc, onPickColor, paint, primary, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection],
+    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, onPickColor, paint, primary, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       const point = toPoint(event)
       onCursorMove(point)
-      if (selectRef.current && selectRef.current.pointerId === event.pointerId) {
-        updateSelection(
-          clampRect(normalizeRect(selectRef.current.start, point), size.width, size.height),
+      if (tool === 'select' && !selectRef.current) {
+        const rect = currentRect()
+        const handle = rect ? hitHandle(rect, point, HANDLE_HIT / zoom) : null
+        setHoverCursor(
+          handle ? handleCursor(handle) : rect && pointInRect(point, rect) ? 'move' : null,
         )
+      }
+      const drag = selectRef.current
+      if (drag && drag.pointerId === event.pointerId) {
+        if (drag.mode === 'marquee') {
+          updateSelection(clampRect(normalizeRect(drag.start, point), size.width, size.height))
+          return
+        }
+        const origin = drag.origin
+        if (!origin) return
+        const floating = ensureFloating(origin)
+        if (drag.mode === 'move') {
+          const x = clamp(origin.x + (point.x - drag.start.x), 0, Math.max(0, size.width - floating.bitmap.width))
+          const y = clamp(origin.y + (point.y - drag.start.y), 0, Math.max(0, size.height - floating.bitmap.height))
+          floating.x = x
+          floating.y = y
+          renderPreview()
+          updateSelection({ x, y, width: floating.bitmap.width, height: floating.bitmap.height })
+          return
+        }
+        if (drag.mode === 'resize' && drag.handle) {
+          const next = resizeRect(origin, drag.handle, point, size.width, size.height)
+          floating.bitmap = scale(floating.source, next.width, next.height)
+          floating.x = next.x
+          floating.y = next.y
+          renderPreview()
+          updateSelection(next)
+          return
+        }
         return
       }
       const stroke = strokeRef.current
@@ -481,19 +693,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brushSize, doc, onCursorMove, paint, primary, renderShape, secondary, size.height, size.width, syncHistory, toPoint, updateSelection],
+    [brushSize, currentRect, doc, ensureFloating, onCursorMove, paint, primary, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
-      if (selectRef.current && selectRef.current.pointerId === event.pointerId) {
-        const rect = clampRect(
-          normalizeRect(selectRef.current.start, toPoint(event)),
-          size.width,
-          size.height,
-        )
-        if (rect.width < 2 && rect.height < 2) updateSelection(null)
-        else updateSelection(rect)
+      const drag = selectRef.current
+      if (drag && drag.pointerId === event.pointerId) {
+        if (drag.mode === 'marquee') {
+          const rect = clampRect(normalizeRect(drag.start, toPoint(event)), size.width, size.height)
+          if (rect.width < 2 && rect.height < 2) updateSelection(null)
+          else updateSelection(rect)
+        }
         selectRef.current = null
         return
       }
@@ -517,7 +728,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [onCursorMove])
 
   const cursor =
-    tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : 'crosshair'
+    tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
 
   return (
     <div
@@ -552,7 +763,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             width: selection.width * zoom,
             height: selection.height * zoom,
           }}
-        />
+        >
+          {SELECTION_HANDLES.map((handle) => (
+            <span key={handle} className={`selection-handle selection-handle-${handle}`} />
+          ))}
+        </div>
       ) : null}
       {editor ? (
         <textarea

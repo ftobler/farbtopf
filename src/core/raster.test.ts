@@ -9,6 +9,7 @@ import {
   drawPolyline,
   drawRect,
   ellipseSpans,
+  extractRegion,
   flipHorizontal,
   flipVertical,
   floodFill,
@@ -204,6 +205,32 @@ describe('blit / crop / scale', () => {
     expect(out.width).toBe(4)
     expect(out.get(0, 0)).toEqual(rgba(255, 0, 0))
     expect(out.get(3, 3)).toEqual(BLACK)
+  })
+})
+
+describe('extractRegion', () => {
+  it('extracts a region preserving pixels', () => {
+    const src = new Bitmap(4, 4, BLACK)
+    const out = extractRegion(src, { x: 1, y: 1, width: 2, height: 2 })
+    expect(out.width).toBe(2)
+    expect(out.height).toBe(2)
+    expect(out.get(0, 0)).toEqual(BLACK)
+    expect(out.get(1, 1)).toEqual(BLACK)
+  })
+
+  it('makes key-coloured pixels transparent', () => {
+    const src = new Bitmap(2, 2, BLACK)
+    src.set(0, 0, WHITE)
+    const out = extractRegion(src, { x: 0, y: 0, width: 2, height: 2 }, WHITE)
+    expect(out.get(0, 0)).toEqual(rgba(0, 0, 0, 0))
+    expect(out.get(1, 0)).toEqual(BLACK)
+  })
+
+  it('turns out-of-bounds reads transparent', () => {
+    const src = new Bitmap(2, 2, BLACK)
+    const out = extractRegion(src, { x: 1, y: 1, width: 3, height: 3 })
+    expect(out.get(2, 2)).toEqual(rgba(0, 0, 0, 0))
+    expect(out.get(0, 0)).toEqual(BLACK)
   })
 })
 

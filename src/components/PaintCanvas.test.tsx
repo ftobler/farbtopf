@@ -2,11 +2,17 @@ import { createRef } from 'react'
 import { act, render } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Bitmap } from '../core/bitmap'
 import { BLACK, WHITE } from '../core/color'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
 
-function setup(tool: 'brush' | 'rectangle' | 'select', width = 20, height = 20) {
+function setup(
+  tool: 'brush' | 'rectangle' | 'select',
+  width = 20,
+  height = 20,
+  transparentSelection = false,
+) {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
   const onCursorMove = vi.fn()
@@ -31,6 +37,7 @@ function setup(tool: 'brush' | 'rectangle' | 'select', width = 20, height = 20) 
       onPickColor={onPickColor}
       onSizeChange={onSizeChange}
       onSelectionChange={onSelectionChange}
+      transparentSelection={transparentSelection}
     />,
   )
 
@@ -125,5 +132,89 @@ describe('PaintCanvas', () => {
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 4, clientY: 4 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 4, clientY: 4 })
     expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('moves a selection when dragged from inside', () => {
+    const { ref, canvas, onHistoryChange } = setup('select', 30, 30)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    expect(ref.current?.getSelection()).toEqual({ x: 7, y: 7, width: 18, height: 18 })
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('moves pixels and fills the vacated area with the secondary colour', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    const doc = new Bitmap(30, 30, WHITE)
+    doc.set(5, 5, BLACK)
+    act(() => ref.current?.loadBitmap(doc))
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+    const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 30 + x) * 4, (y * 30 + x) * 4 + 4))
+    expect(pixel(10, 10)).toEqual([0, 0, 0, 255])
+    expect(pixel(5, 5)).toEqual([255, 255, 255, 255])
+  })
+
+  it('scales a selection from its corner handle', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 20, clientY: 20 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 25, clientY: 25 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 25, clientY: 25 })
+    expect(ref.current?.getSelection()).toEqual({ x: 2, y: 2, width: 23, height: 23 })
+  })
+
+  it('supports transparent selection mode', () => {
+    const { ref, canvas } = setup('select', 30, 30, true)
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    const doc = new Bitmap(30, 30, WHITE)
+    doc.set(5, 5, BLACK)
+    doc.set(21, 21, { r: 255, g: 0, b: 0, a: 255 })
+    act(() => ref.current?.loadBitmap(doc))
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+    const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 30 + x) * 4, (y * 30 + x) * 4 + 4))
+    expect(ref.current?.getSelection()).toEqual({ x: 7, y: 7, width: 18, height: 18 })
+    expect(pixel(10, 10)).toEqual([0, 0, 0, 255])
+    expect(pixel(21, 21)).toEqual([255, 0, 0, 255])
+  })
+
+  it('bakes a moved selection for undo and redo', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    const doc = new Bitmap(30, 30, WHITE)
+    doc.set(5, 5, BLACK)
+    act(() => ref.current?.loadBitmap(doc))
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    act(() => ref.current?.undo())
+    act(() => ref.current?.redo())
+    const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+    const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 30 + x) * 4, (y * 30 + x) * 4 + 4))
+    expect(pixel(10, 10)).toEqual([0, 0, 0, 255])
+    expect(pixel(5, 5)).toEqual([255, 255, 255, 255])
   })
 })

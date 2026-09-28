@@ -3,7 +3,7 @@ import type { Rgba } from '../core/color'
 import { BRUSH_SIZES, TOOLS, isShapeTool } from '../core/tools'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { ColorPalette } from './ColorPalette'
-import { Dropdown, MenuItem } from './Dropdown'
+import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
 import type { IconProps } from './icons'
 import {
   AirbrushIcon,
@@ -67,6 +67,8 @@ export interface RibbonProps {
   onPrimaryChange: (color: Rgba) => void
   onSecondaryChange: (color: Rgba) => void
   onSwap: () => void
+  transparentSelection: boolean
+  onTransparentSelectionChange: (value: boolean) => void
 }
 
 export function Ribbon({
@@ -90,6 +92,8 @@ export function Ribbon({
   onPrimaryChange,
   onSecondaryChange,
   onSwap,
+  transparentSelection,
+  onTransparentSelectionChange,
 }: RibbonProps) {
   const freehandTools = TOOLS.filter(
     (definition) => !isShapeTool(definition.id) && definition.id !== 'select',
@@ -152,16 +156,36 @@ export function Ribbon({
 
       <section className="ribbon-group">
         <div className="ribbon-group-items">
-          <button
-            type="button"
-            className="icon-button"
-            title="Select (S)"
-            aria-label="Select"
-            aria-pressed={tool === 'select'}
-            onClick={() => onToolChange('select')}
+          <Dropdown
+            title="Select"
+            ariaLabel="Select"
+            active={tool === 'select'}
+            trigger={<SelectIcon size={18} />}
           >
-            <SelectIcon size={18} />
-          </button>
+            {(close) => (
+              <>
+                <MenuItem
+                  checked={tool === 'select'}
+                  onClick={() => {
+                    onToolChange('select')
+                    close()
+                  }}
+                >
+                  Rectangular selection
+                </MenuItem>
+                <MenuDivider />
+                <MenuItem
+                  checked={transparentSelection}
+                  onClick={() => {
+                    onTransparentSelectionChange(!transparentSelection)
+                    close()
+                  }}
+                >
+                  Transparent selection
+                </MenuItem>
+              </>
+            )}
+          </Dropdown>
           <button
             type="button"
             className="icon-button"

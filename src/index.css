@@ -215,6 +215,12 @@ textarea {
   background: var(--hover);
 }
 
+.dropdown-trigger[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -475,6 +481,26 @@ textarea {
     border-color: rgba(255, 255, 255, 0.85);
   }
 }
+
+.selection-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+}
+
+.selection-handle-nw { left: 0; top: 0; }
+.selection-handle-n { left: 50%; top: 0; }
+.selection-handle-ne { left: 100%; top: 0; }
+.selection-handle-e { left: 100%; top: 50%; }
+.selection-handle-se { left: 100%; top: 100%; }
+.selection-handle-s { left: 50%; top: 100%; }
+.selection-handle-sw { left: 0; top: 100%; }
+.selection-handle-w { left: 0; top: 50%; }
 
 .text-editor {
   position: absolute;

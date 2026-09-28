@@ -286,6 +286,22 @@ export function crop(source: Bitmap, rect: Rect): Bitmap {
   return result
 }
 
+/** Extracts a sub-region, turning pixels equal to `key` (when given) transparent. */
+export function extractRegion(source: Bitmap, rect: Rect, key: Rgba | null = null): Bitmap {
+  const result = new Bitmap(Math.max(1, rect.width), Math.max(1, rect.height))
+  for (let y = 0; y < result.height; y += 1) {
+    for (let x = 0; x < result.width; x += 1) {
+      const pixel = source.get(rect.x + x, rect.y + y)
+      if (key && colorsEqual(pixel, key)) {
+        result.set(x, y, { r: 0, g: 0, b: 0, a: 0 })
+      } else {
+        result.set(x, y, pixel)
+      }
+    }
+  }
+  return result
+}
+
 /** Scales a bitmap with nearest-neighbour sampling (keeps the pixel-art look). */
 export function scale(source: Bitmap, width: number, height: number): Bitmap {
   const w = Math.max(1, Math.floor(width))

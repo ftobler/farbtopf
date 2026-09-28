@@ -54,6 +54,7 @@ function App() {
   const [newDialogOpen, setNewDialogOpen] = useState(false)
   const [showScaleDialog, setShowScaleDialog] = useState(false)
   const [hasSelection, setHasSelection] = useState(false)
+  const [transparentSelection, setTransparentSelection] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -361,6 +362,8 @@ function App() {
           onPrimaryChange={setPrimary}
           onSecondaryChange={setSecondary}
           onSwap={handleSwapColors}
+          transparentSelection={transparentSelection}
+          onTransparentSelectionChange={setTransparentSelection}
         />
       </div>
 
@@ -384,6 +387,7 @@ function App() {
           onPickColor={handlePickColor}
           onSizeChange={onSizeChange}
           onSelectionChange={setHasSelection}
+          transparentSelection={transparentSelection}
         />
       </div>
 

@@ -10,6 +10,7 @@ export interface DropdownProps {
   align?: 'start' | 'end'
   showChevron?: boolean
   triggerClassName?: string
+  active?: boolean
 }
 
 export function Dropdown({
@@ -20,6 +21,7 @@ export function Dropdown({
   align = 'start',
   showChevron = true,
   triggerClassName,
+  active,
 }: DropdownProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -49,6 +51,7 @@ export function Dropdown({
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-pressed={active === undefined ? undefined : active}
         onClick={() => setOpen((value) => !value)}
       >
         {trigger}
