@@ -521,7 +521,6 @@ textarea {
   display: flex;
   align-items: center;
   gap: 16px;
-  overflow-x: auto;
   flex: none;
 }
 
