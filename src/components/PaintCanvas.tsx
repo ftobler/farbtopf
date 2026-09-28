@@ -30,7 +30,7 @@ import {
 } from '../core/raster'
 import type { BrushShape } from '../core/raster'
 import type { ShapeFill, ToolId } from '../core/tools'
-import { isShapeTool, strokeWidthFor } from '../core/tools'
+import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
 import { fontSizeForBrush, renderText } from '../render/text'
 
@@ -434,14 +434,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       } else {
         historyRef.current.record(base)
         stroke.recorded = true
-        const color = colorFor(slot)
+        const color = strokeColorFor(tool, slot, primary, secondary)
         if (tool === 'airbrush') spray(doc(), point, brushSize, color)
         else stamp(doc(), point.x, point.y, strokeWidthFor(tool, brushSize), color, strokeShape(tool))
         paint(doc())
         syncHistory()
       }
     },
-    [brushSize, colorFor, commitText, doc, onPickColor, paint, size.height, size.width, syncHistory, toPoint, tool, updateSelection],
+    [brushSize, colorFor, commitText, doc, onPickColor, paint, primary, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection],
   )
 
   const handlePointerMove = useCallback(
@@ -466,7 +466,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         renderShape(preview, stroke.start, point, stroke.slot)
         paint(preview)
       } else {
-        const color = colorFor(stroke.slot)
+        const color = strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         if (stroke.tool === 'airbrush') spray(doc(), point, brushSize, color)
         else
           drawLine(
@@ -481,7 +481,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brushSize, colorFor, doc, onCursorMove, paint, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
+    [brushSize, doc, onCursorMove, paint, primary, renderShape, secondary, size.height, size.width, syncHistory, toPoint, updateSelection],
   )
 
   const handlePointerUp = useCallback(

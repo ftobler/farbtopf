@@ -1,3 +1,5 @@
+import type { Rgba } from './color'
+
 export type ToolId =
   | 'select'
   | 'pencil'
@@ -43,6 +45,17 @@ export function isShapeTool(id: ToolId): boolean {
 /** Pencil is always a single pixel wide; every other tool honours the brush size. */
 export function strokeWidthFor(id: ToolId, brushSize: number): number {
   return id === 'pencil' ? 1 : brushSize
+}
+
+/** The eraser always paints with the secondary colour, whatever button is used. */
+export function strokeColorFor(
+  id: ToolId,
+  slot: 'primary' | 'secondary',
+  primary: Rgba,
+  secondary: Rgba,
+): Rgba {
+  if (id === 'eraser') return secondary
+  return slot === 'secondary' ? secondary : primary
 }
 
 export function toolById(id: ToolId): ToolDef {
