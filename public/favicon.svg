@@ -1,25 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="bucket" x1="0" x2="1">
-      <stop offset="0" stop-color="#b8c4d0" />
-      <stop offset="0.45" stop-color="#eef2f6" />
-      <stop offset="1" stop-color="#9aa8b6" />
+    <linearGradient id="paint" gradientUnits="userSpaceOnUse" x1="12" y1="14" x2="56" y2="34">
+      <stop offset="0" stop-color="#ff4fa3" />
+      <stop offset="0.5" stop-color="#a66cff" />
+      <stop offset="1" stop-color="#2f8cff" />
     </linearGradient>
   </defs>
   <!-- handle -->
   <path d="M12 30C12 12 52 12 52 30" stroke="#5b6773" stroke-width="3" fill="none" stroke-linecap="round" />
   <!-- curly paint "hair" -->
   <g stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="5">
-    <path d="M17 30c-6-4-3-12 3-10 5 2 2 8-1 6" stroke="#ff4fa3" />
-    <path d="M26 27c-4-7 2-13 7-9 4 3-1 8-3 5" stroke="#2f8cff" />
-    <path d="M36 27c-1-8 7-11 10-6 2 4-3 6-4 3" stroke="#ff4fa3" />
-    <path d="M46 30c3-6 10-4 9 1-1 4-5 3-5 0" stroke="#2f8cff" />
+    <path d="M17 30c-6-4-3-12 3-10 5 2 2 8-1 6" stroke="#fff" stroke-width="7" />
+    <path d="M17 30c-6-4-3-12 3-10 5 2 2 8-1 6" stroke="url(#paint)" />
+    <path d="M26 27c-4-7 2-13 7-9 4 3-1 8-3 5" stroke="#fff" stroke-width="7" />
+    <path d="M26 27c-4-7 2-13 7-9 4 3-1 8-3 5" stroke="url(#paint)" />
+    <path d="M36 27c-1-8 7-11 10-6 2 4-3 6-4 3" stroke="#fff" stroke-width="7" />
+    <path d="M36 27c-1-8 7-11 10-6 2 4-3 6-4 3" stroke="url(#paint)" />
+    <path d="M46 30c3-6 10-4 9 1-1 4-5 3-5 0" stroke="#fff" stroke-width="7" />
+    <path d="M46 30c3-6 10-4 9 1-1 4-5 3-5 0" stroke="url(#paint)" />
   </g>
   <!-- bucket body -->
-  <path d="M13 30h38l-4 26a5 5 0 0 1-5 4H22a5 5 0 0 1-5-4z" fill="url(#bucket)" stroke="#5b6773" stroke-width="2" stroke-linejoin="round" />
+  <path d="M13 30h38l-4 26a5 5 0 0 1-5 4H22a5 5 0 0 1-5-4z" fill="#d3dbe3" stroke="#5b6773" stroke-width="2" stroke-linejoin="round" />
   <!-- paint surface / rim with drips -->
-  <path d="M12 28h40a2 2 0 0 1 0 5H47c-2 0-2 2-2 4s-3 2-3 0v-2c0-1-1-2-2-2H26c-1 0-2 1-2 2v5c0 2-3 2-3 0v-5c0-1-1-2-2-2h-7a2 2 0 0 1 0-5z" fill="#2f8cff" />
-  <path d="M30 28h22a2 2 0 0 1 0 5H47c-2 0-2 2-2 4s-3 2-3 0v-2c0-1-1-2-2-2H30z" fill="#ff4fa3" />
+  <path d="M12 28h40a2 2 0 0 1 0 5H47c-2 0-2 2-2 4s-3 2-3 0v-2c0-1-1-2-2-2H26c-1 0-2 1-2 2v5c0 2-3 2-3 0v-5c0-1-1-2-2-2h-7a2 2 0 0 1 0-5z" fill="url(#paint)" />
   <!-- face -->
   <circle cx="26" cy="43" r="2.4" fill="#26303a" />
   <circle cx="38" cy="43" r="2.4" fill="#26303a" />
