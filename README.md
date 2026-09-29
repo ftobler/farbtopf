@@ -49,7 +49,7 @@ just build
 | `+` `-` | Zoom in / out |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | New / open / save |
-| Right-click | Draw with the secondary color |
+| Right-click | Open the canvas context menu |
 
 ## Architecture
 
