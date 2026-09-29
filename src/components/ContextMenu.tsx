@@ -33,7 +33,10 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) onClose()
     }
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onClose()
+      }
     }
     document.addEventListener('mousedown', handlePointer)
     document.addEventListener('keydown', handleKey)

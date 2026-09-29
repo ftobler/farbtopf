@@ -671,6 +671,18 @@ describe('App', () => {
     expect(screen.queryByRole('menu')).toBeNull()
     expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
   })
+
+  it('does not clear the selection when Escape dismisses a ribbon dropdown', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
+    expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
+  })
 })
 
 describe('custom color picker', () => {

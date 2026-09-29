@@ -41,7 +41,12 @@ export function Dropdown({
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false)
     }
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') {
+        // Escape dismisses the open menu only; don't let it reach the global
+        // handler that clears the canvas selection.
+        event.stopPropagation()
+        setOpen(false)
+      }
     }
     document.addEventListener('mousedown', handlePointer)
     document.addEventListener('keydown', handleKey)
