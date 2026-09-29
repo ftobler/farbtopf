@@ -541,6 +541,7 @@ describe('PaintCanvas', () => {
       ])
       expect(pixel(7, 2)).toEqual(black)
       expect(pixel(12, 7)).toEqual(black)
+      expect(pixel(7, 7)).toEqual(black)
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
       act(() => ref.current?.undo())
       expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)

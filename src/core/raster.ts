@@ -55,7 +55,8 @@ export function stamp(
   const threshold = s / 2 - 0.5
   for (let j = 0; j < s; j += 1) {
     for (let i = 0; i < s; i += 1) {
-      if (shape === 'round') {
+      // A 2px round brush is its 2×2 square; the circle test would reject every pixel.
+      if (shape === 'round' && s > 2) {
         const dx = i - (s - 1) / 2
         const dy = j - (s - 1) / 2
         if (dx * dx + dy * dy > threshold * threshold) continue

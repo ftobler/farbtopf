@@ -421,3 +421,11 @@ describe('fillPolygon', () => {
     expect(countColor(bitmap)).toBe(25)
   })
 })
+
+describe('stamp size 2', () => {
+  it('paints a 2×2 block with the round brush', () => {
+    const bitmap = new Bitmap(6, 6, WHITE)
+    stamp(bitmap, 2, 2, 2, BLACK, 'round')
+    expect(countColor(bitmap)).toBe(4)
+  })
+})
