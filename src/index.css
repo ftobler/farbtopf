@@ -15,7 +15,7 @@
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
   --checker-a: #ffffff;
   --checker-b: #dfe3e8;
-  --glass-bg: color-mix(in srgb, var(--surface) 20%, transparent);
+  --glass-bg: color-mix(in srgb, var(--surface) 80%, transparent);
   --glass-blur: blur(10px);
 }
 
