@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { Point } from '../core/geometry'
 import { clamp } from '../core/geometry'
-import { WORKSPACE_PADDING, computeScrollbarMetrics, panForScroll } from '../core/scrollbars'
+import { computeScrollbarMetrics, panForScroll } from '../core/scrollbars'
 
 export const SCROLLBAR_INSET = 4
 const IDLE_MS = 1100
@@ -98,14 +98,14 @@ export function Scrollbars({ workspaceRef, zoom, pan, canvasSize, onPanChange }:
 
   useEffect(() => () => clearHide(), [clearHide])
 
-  const innerWidth = Math.max(0, size.width - WORKSPACE_PADDING * 2)
-  const innerHeight = Math.max(0, size.height - WORKSPACE_PADDING * 2)
+  const viewportWidth = Math.max(0, size.width)
+  const viewportHeight = Math.max(0, size.height)
   const contentX = canvasSize.width * zoom
   const contentY = canvasSize.height * zoom
   const trackX = Math.max(0, size.width - SCROLLBAR_INSET * 2)
   const trackY = Math.max(0, size.height - SCROLLBAR_INSET * 2)
-  const metricsX = computeScrollbarMetrics(contentX, innerWidth, pan.x)
-  const metricsY = computeScrollbarMetrics(contentY, innerHeight, pan.y)
+  const metricsX = computeScrollbarMetrics(contentX, viewportWidth, pan.x)
+  const metricsY = computeScrollbarMetrics(contentY, viewportHeight, pan.y)
   const active = visible || dragging !== null
 
   const thumbX = metricsX.thumbRatio * trackX
@@ -132,12 +132,12 @@ export function Scrollbars({ workspaceRef, zoom, pan, canvasSize, onPanChange }:
         maxScroll: metrics.maxScroll,
         scrollPerPx: travel > 0 ? metrics.maxScroll / travel : 0,
         content: axis === 'x' ? contentX : contentY,
-        viewport: axis === 'x' ? innerWidth : innerHeight,
+        viewport: axis === 'x' ? viewportWidth : viewportHeight,
       }
       setDragging(axis)
       show()
     },
-    [contentX, contentY, innerHeight, innerWidth, metricsX, metricsY, show, trackX, trackY],
+    [contentX, contentY, metricsX, metricsY, show, trackX, trackY, viewportHeight, viewportWidth],
   )
 
   const handleTrackDown = useCallback(
@@ -154,7 +154,7 @@ export function Scrollbars({ workspaceRef, zoom, pan, canvasSize, onPanChange }:
       const ratio = travel > 0 ? clamp((offset - (metrics.thumbRatio * track) / 2) / travel, 0, 1) : 0
       const scroll = ratio * metrics.maxScroll
       const content = axis === 'x' ? contentX : contentY
-      const viewport = axis === 'x' ? innerWidth : innerHeight
+      const viewport = axis === 'x' ? viewportWidth : viewportHeight
       const next = panForScroll(content, viewport, scroll)
       element.setPointerCapture?.(event.pointerId)
       dragRef.current = {
@@ -172,7 +172,7 @@ export function Scrollbars({ workspaceRef, zoom, pan, canvasSize, onPanChange }:
       setDragging(axis)
       show()
     },
-    [contentX, contentY, innerHeight, innerWidth, metricsX, metricsY, onPanChange, pan.x, pan.y, show],
+    [contentX, contentY, metricsX, metricsY, onPanChange, pan.x, pan.y, show, viewportHeight, viewportWidth],
   )
 
   const handleDragMove = useCallback(
@@ -193,8 +193,11 @@ export function Scrollbars({ workspaceRef, zoom, pan, canvasSize, onPanChange }:
       if (!drag || drag.pointerId !== event.pointerId) return
       dragRef.current = null
       setDragging(null)
-      if (drag.element === event.currentTarget) {
-        drag.element.releasePointerCapture?.(event.pointerId)
+      if (
+        drag.element === event.currentTarget &&
+        drag.element.hasPointerCapture?.(event.pointerId)
+      ) {
+        drag.element.releasePointerCapture(event.pointerId)
       }
       show()
     },

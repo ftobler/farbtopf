@@ -11,6 +11,13 @@ describe('computeScrollbarMetrics', () => {
     expect(metrics.positionRatio).toBe(0)
   })
 
+  it('treats content equal to the viewport as not scrollable', () => {
+    const metrics = computeScrollbarMetrics(800, 800, 0)
+    expect(metrics.scrollable).toBe(false)
+    expect(metrics.maxScroll).toBe(0)
+    expect(metrics.thumbRatio).toBe(1)
+  })
+
   it('centres the thumb when the content is larger and not panned', () => {
     const metrics = computeScrollbarMetrics(1000, 400, 0)
     expect(metrics.scrollable).toBe(true)

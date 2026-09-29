@@ -2,10 +2,25 @@ import { useRef } from 'react'
 import { fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Point } from '../core/geometry'
-import { Scrollbars } from './Scrollbars'
+import { SCROLLBAR_INSET, Scrollbars } from './Scrollbars'
 
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+const SCROLLBAR_THICKNESS = 7
 let workspaceRect = { width: 800, height: 600 }
+
+function makeRect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+    toJSON: () => ({}),
+  } as DOMRect
+}
 
 interface HarnessProps {
   zoom: number
@@ -38,17 +53,23 @@ describe('Scrollbars', () => {
     workspaceRect = { width: 800, height: 600 }
     HTMLElement.prototype.getBoundingClientRect = function () {
       const { width, height } = workspaceRect
-      return {
-        x: 0,
-        y: 0,
-        left: 0,
-        top: 0,
-        right: width,
-        bottom: height,
-        width,
-        height,
-        toJSON: () => ({}),
-      } as DOMRect
+      if (this.classList.contains('workspace-scrollbar')) {
+        if (this.dataset.axis === 'x') {
+          return makeRect(
+            SCROLLBAR_INSET,
+            height - SCROLLBAR_INSET - SCROLLBAR_THICKNESS,
+            Math.max(0, width - SCROLLBAR_INSET * 2),
+            SCROLLBAR_THICKNESS,
+          )
+        }
+        return makeRect(
+          width - SCROLLBAR_INSET - SCROLLBAR_THICKNESS,
+          SCROLLBAR_INSET,
+          SCROLLBAR_THICKNESS,
+          Math.max(0, height - SCROLLBAR_INSET * 2),
+        )
+      }
+      return makeRect(0, 0, width, height)
     }
   })
 
@@ -59,6 +80,20 @@ describe('Scrollbars', () => {
   it('renders no bars while the content fits', () => {
     const { container } = render(
       <Harness zoom={1} pan={{ x: 0, y: 0 }} canvasSize={{ width: 400, height: 300 }} onPanChange={() => {}} />,
+    )
+    expect(container.querySelectorAll('.workspace-scrollbar')).toHaveLength(0)
+  })
+
+  it('renders no bars when the content exactly matches the viewport', () => {
+    const { container } = render(
+      <Harness zoom={1} pan={{ x: 0, y: 0 }} canvasSize={{ width: 800, height: 600 }} onPanChange={() => {}} />,
+    )
+    expect(container.querySelectorAll('.workspace-scrollbar')).toHaveLength(0)
+  })
+
+  it('keeps a canvas that fits inside the workspace padding free of bars', () => {
+    const { container } = render(
+      <Harness zoom={1} pan={{ x: 0, y: 0 }} canvasSize={{ width: 780, height: 580 }} onPanChange={() => {}} />,
     )
     expect(container.querySelectorAll('.workspace-scrollbar')).toHaveLength(0)
   })
@@ -100,8 +135,33 @@ describe('Scrollbars', () => {
       onPanChange: () => {},
     })
     const element = thumb('x')
-    expect(parseFloat(element.style.width)).toBeCloseTo(297.79, 1)
-    expect(parseFloat(element.style.left)).toBeCloseTo(247.1, 1)
+    expect(parseFloat(element.style.width)).toBeCloseTo(316.8, 1)
+    expect(parseFloat(element.style.left)).toBeCloseTo(237.6, 1)
+  })
+
+  it('sizes and positions the vertical thumb from the scroll geometry', () => {
+    const { thumb } = setup({
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      canvasSize: { width: 100, height: 2000 },
+      onPanChange: () => {},
+    })
+    const element = thumb('y')
+    expect(parseFloat(element.style.height)).toBeCloseTo(177.6, 1)
+    expect(parseFloat(element.style.top)).toBeCloseTo(207.2, 1)
+  })
+
+  it('scales the thumb with the zoom level', () => {
+    const { thumb } = setup({
+      zoom: 2,
+      pan: { x: 0, y: 0 },
+      canvasSize: { width: 600, height: 400 },
+      onPanChange: () => {},
+    })
+    expect(parseFloat(thumb('x').style.width)).toBeCloseTo(528, 1)
+    expect(parseFloat(thumb('x').style.left)).toBeCloseTo(132, 1)
+    expect(parseFloat(thumb('y').style.height)).toBeCloseTo(444, 1)
+    expect(parseFloat(thumb('y').style.top)).toBeCloseTo(74, 1)
   })
 
   it('moves the thumb when the pan changes', () => {
@@ -114,11 +174,30 @@ describe('Scrollbars', () => {
     const view = render(<Harness {...props} />)
     const element = () =>
       view.container.querySelector('.workspace-scrollbar[data-axis="x"] .workspace-scrollbar-thumb') as HTMLElement
-    expect(parseFloat(element().style.left)).toBeCloseTo(247.1, 1)
-    view.rerender(<Harness {...props} pan={{ x: 624, y: 0 }} />)
+    expect(parseFloat(element().style.left)).toBeCloseTo(237.6, 1)
+    view.rerender(<Harness {...props} pan={{ x: 600, y: 0 }} />)
     expect(parseFloat(element().style.left)).toBeCloseTo(0, 1)
-    view.rerender(<Harness {...props} pan={{ x: -624, y: 0 }} />)
-    expect(parseFloat(element().style.left)).toBeCloseTo(494.2, 1)
+    view.rerender(<Harness {...props} pan={{ x: -600, y: 0 }} />)
+    expect(parseFloat(element().style.left)).toBeCloseTo(475.2, 1)
+  })
+
+  it('clamps the thumb for a pan far outside the scroll range without overflowing', () => {
+    const props = {
+      zoom: 1,
+      canvasSize: { width: 2000, height: 100 },
+      onPanChange: () => {},
+    }
+    const view = render(<Harness {...props} pan={{ x: 1e9, y: 0 }} />)
+    const element = () =>
+      view.container.querySelector('.workspace-scrollbar[data-axis="x"] .workspace-scrollbar-thumb') as HTMLElement
+    const start = parseFloat(element().style.left)
+    expect(Number.isFinite(start)).toBe(true)
+    expect(start).toBeCloseTo(0, 1)
+
+    view.rerender(<Harness {...props} pan={{ x: -1e9, y: 0 }} />)
+    const end = parseFloat(element().style.left)
+    expect(Number.isFinite(end)).toBe(true)
+    expect(end).toBeCloseTo(475.2, 1)
   })
 
   it('pans the canvas in the opposite direction of the dragged thumb', () => {
@@ -140,7 +219,7 @@ describe('Scrollbars', () => {
     fireEvent.pointerUp(element, { pointerId: 1, clientX: 400, clientY: 300 })
   })
 
-  it('jumps the thumb when the track is clicked', () => {
+  it('keeps the pan when the middle of the track is clicked', () => {
     const onPanChange = vi.fn()
     const { bar } = setup({
       zoom: 1,
@@ -150,8 +229,39 @@ describe('Scrollbars', () => {
     })
     const element = bar('x')
     element.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(element, { button: 0, pointerId: 2, clientX: 700, clientY: 596 })
+    fireEvent.pointerDown(element, { button: 0, pointerId: 2, clientX: 400, clientY: 592 })
     const pan = onPanChange.mock.calls.at(-1)?.[0] as Point
-    expect(pan.x).toBeCloseTo(-624, 1)
+    expect(pan.x).toBeCloseTo(0, 1)
+  })
+
+  it('jumps the vertical thumb when the track is clicked', () => {
+    const onPanChange = vi.fn()
+    const { bar } = setup({
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      canvasSize: { width: 100, height: 2000 },
+      onPanChange,
+    })
+    const element = bar('y')
+    element.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(element, { button: 0, pointerId: 3, clientX: 792, clientY: 300 })
+    const pan = onPanChange.mock.calls.at(-1)?.[0] as Point
+    expect(pan.y).toBeCloseTo(0, 1)
+    expect(pan.x).toBe(0)
+  })
+
+  it('maps a click at a quarter of the track to the expected pan', () => {
+    const onPanChange = vi.fn()
+    const { bar } = setup({
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      canvasSize: { width: 2000, height: 100 },
+      onPanChange,
+    })
+    const element = bar('x')
+    element.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(element, { button: 0, pointerId: 4, clientX: 202, clientY: 592 })
+    const pan = onPanChange.mock.calls.at(-1)?.[0] as Point
+    expect(pan.x).toBeCloseTo(500, 1)
   })
 })

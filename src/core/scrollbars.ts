@@ -1,8 +1,5 @@
 import { clamp } from './geometry'
 
-/** Padding around the canvas inside `.workspace`, matching index.css. */
-export const WORKSPACE_PADDING = 24
-
 export interface ScrollbarMetrics {
   content: number
   viewport: number
@@ -14,9 +11,12 @@ export interface ScrollbarMetrics {
 }
 
 /**
- * Scroll geometry for one axis. The canvas is centred in the workspace at rest,
- * so the scroll offset is `(content - viewport) / 2 - pan`: a positive pan moves
- * the content right/down and therefore scrolls toward its start.
+ * Scroll geometry for one axis. `viewport` is the full workspace size: the
+ * visible region is clipped to the workspace border box, and the canvas is
+ * centred inside the workspace padding box whose centre matches the border box,
+ * so the 24px padding cancels out and must not be subtracted. The scroll offset
+ * is `(content - viewport) / 2 - pan`: a positive pan moves the content
+ * right/down and therefore scrolls toward its start.
  */
 export function computeScrollbarMetrics(content: number, viewport: number, pan: number): ScrollbarMetrics {
   const safeContent = Math.max(0, content)
