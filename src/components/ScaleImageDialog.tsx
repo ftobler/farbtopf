@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MAX_CANVAS, MIN_CANVAS } from '../core/palette'
+import { MAX_CANVAS } from '../core/palette'
 
 export interface ScaleImageDialogProps {
   open: boolean
@@ -13,9 +13,12 @@ export interface ScaleImageDialogProps {
 
 type ScaleUnit = 'percent' | 'pixels'
 
+/** Scaling may go as small as one pixel, unlike a brand-new canvas. */
+const MIN_SCALE = 1
+
 function clampSize(value: number): number {
-  if (!Number.isFinite(value)) return MIN_CANVAS
-  return Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, Math.round(value)))
+  if (!Number.isFinite(value)) return MIN_SCALE
+  return Math.min(MAX_CANVAS, Math.max(MIN_SCALE, Math.round(value)))
 }
 
 function parsePositive(text: string): number | null {
@@ -82,8 +85,8 @@ export function ScaleImageDialog({
 
   // With the ratio locked, percentages move together and pixel sizes follow
   // the original image's proportions.
-  const linked = (value: number, text: string, from: number, to: number): string =>
-    unit === 'percent' ? text : String(Math.max(1, Math.round((value * to) / from)))
+  const linked = (value: number, text: string, from: number, to: number, target: ScaleUnit = unit): string =>
+    target === 'percent' ? text : String(Math.max(1, Math.round((value * to) / from)))
 
   const changeHorizontal = (text: string) => {
     setHorizontal(text)
@@ -106,8 +109,16 @@ export function ScaleImageDialog({
         ? String(Math.max(1, Math.round((original * value) / 100)))
         : formatPercent((value / original) * 100)
     }
-    setHorizontal(convert(horizontal, initialWidth))
-    setVertical(convert(vertical, initialHeight))
+    const nextHorizontal = convert(horizontal, initialWidth)
+    setHorizontal(nextHorizontal)
+    const value = parsePositive(nextHorizontal)
+    // Re-derive the locked axis in the new unit so rounding doesn't let the
+    // two fields drift apart.
+    if (keepRatio && value !== null) {
+      setVertical(linked(value, nextHorizontal, initialWidth, initialHeight, next))
+    } else {
+      setVertical(convert(vertical, initialHeight))
+    }
     setUnit(next)
   }
 

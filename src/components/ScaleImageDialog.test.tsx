@@ -83,6 +83,21 @@ describe('ScaleImageDialog', () => {
     expect(onApply).toHaveBeenCalledWith(1000, 750)
   })
 
+  it('keeps the two fields in ratio when the unit changes', () => {
+    const { horizontal, vertical, pixels, percent } = setup()
+    fireEvent.click(pixels)
+    fireEvent.change(horizontal, { target: { value: '333' } })
+    expect(vertical.value).toBe('250')
+    fireEvent.click(percent)
+    expect(horizontal.value).toBe(vertical.value)
+  })
+
+  it('allows scaling below the new-canvas minimum', () => {
+    const { apply, onApply } = setup(10, 5)
+    fireEvent.click(apply)
+    expect(onApply).toHaveBeenCalledWith(10, 5)
+  })
+
   it('sets pixel sizes independently when unlocked', () => {
     const { horizontal, vertical, pixels, lock, apply, onApply } = setup()
     fireEvent.click(pixels)
