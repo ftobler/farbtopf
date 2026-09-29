@@ -188,10 +188,6 @@ textarea {
   gap: 10px;
 }
 
-.text-options {
-  gap: 4px;
-}
-
 .text-option-value {
   display: inline-block;
   min-width: 48px;
@@ -816,18 +812,60 @@ textarea {
 
 .text-editor {
   position: absolute;
-  min-width: 72px;
-  min-height: 1.25em;
+  min-width: 0;
+  min-height: 0;
   padding: 2px;
   margin: 0;
   border: none;
   background: transparent;
   color: inherit;
   font-family: var(--font);
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
   resize: none;
   overflow: hidden;
-  outline: 1px dashed var(--accent);
+}
+
+.text-overlay {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px dashed var(--accent);
+}
+
+.text-handle {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.text-handle-nw { left: 0; top: 0; }
+.text-handle-n { left: 50%; top: 0; }
+.text-handle-ne { left: 100%; top: 0; }
+.text-handle-e { left: 100%; top: 50%; }
+.text-handle-se { left: 100%; top: 100%; }
+.text-handle-s { left: 50%; top: 100%; }
+.text-handle-sw { left: 0; top: 100%; }
+.text-handle-w { left: 0; top: 50%; }
+
+.text-toolbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  z-index: 30;
+}
+
+.text-toolbar .text-size-input {
+  height: 30px;
 }
 
 .color-palette {

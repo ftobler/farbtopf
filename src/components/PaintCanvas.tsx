@@ -6,7 +6,10 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import { Bitmap } from '../core/bitmap'
 import {
   HIGHLIGHTER_ALPHA,
@@ -41,8 +44,9 @@ import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
-import { DEFAULT_TEXT_OPTIONS, renderText } from '../render/text'
+import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
+import { Dropdown, MenuItem } from './Dropdown'
 
 export interface PaintCanvasHandle {
   newDocument: (width: number, height: number) => void
@@ -96,6 +100,8 @@ export interface PaintCanvasProps {
   brush?: BrushId
   /** Font, size and style used by the text tool. */
   text?: TextOptions
+  /** Called by the floating text toolbar when a text option changes. */
+  onTextChange?: (patch: Partial<TextOptions>) => void
   /** Shows a small overview of the whole image in the corner of the workspace. */
   showMiniature?: boolean
   /** Called when the miniature view is dragged to move the visible area. */
@@ -136,8 +142,15 @@ interface PolylineState {
 interface TextEditorState {
   x: number
   y: number
+  width: number
+  height: number
   value: string
   slot: 'primary' | 'secondary'
+}
+
+interface TextResizeState {
+  pointerId: number
+  handle: SelectionHandle
 }
 
 type SelectionHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
@@ -173,6 +186,12 @@ const HANDLE_HIT = 4
 const DOUBLE_CLICK_MS = 300
 /** How far apart, in screen pixels, the two presses of a double-click may be. */
 const DOUBLE_CLICK_SLOP = 4
+
+const MIN_TEXT_SIZE = 24
+const DEFAULT_TEXT_WIDTH = 200
+const TEXT_TOOLBAR_WIDTH = 300
+const TEXT_TOOLBAR_HEIGHT = 40
+const TEXT_TOOLBAR_GAP = 8
 
 /** The points handed to `renderShape`: the dragged box, or the whole freehand trail. */
 function shapePoints(stroke: StrokeState, end: Point): Point[] {
@@ -264,6 +283,27 @@ function resizeRect(origin: Rect, handle: SelectionHandle, point: Point, width: 
     if (handle.includes('n')) top = bottom - 1
     else bottom = top + 1
   }
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+const fontLabel = (value: string): string =>
+  FONT_FAMILIES.find((font) => font.value === value)?.label ?? 'Segoe UI'
+
+function resizeTextBox(
+  origin: Rect,
+  handle: SelectionHandle,
+  point: Point,
+  width: number,
+  height: number,
+): Rect {
+  let left = origin.x
+  let top = origin.y
+  let right = origin.x + origin.width
+  let bottom = origin.y + origin.height
+  if (handle.includes('w')) left = clamp(Math.round(point.x), 0, right - MIN_TEXT_SIZE)
+  if (handle.includes('e')) right = clamp(Math.round(point.x), left + MIN_TEXT_SIZE, width)
+  if (handle.includes('n')) top = clamp(Math.round(point.y), 0, bottom - MIN_TEXT_SIZE)
+  if (handle.includes('s')) bottom = clamp(Math.round(point.y), top + MIN_TEXT_SIZE, height)
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
@@ -362,6 +402,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     selectionShape = 'rectangle',
     brush = 'round',
     text = DEFAULT_TEXT_OPTIONS,
+    onTextChange = () => {},
     showMiniature = false,
     onPanChange,
   },
@@ -374,6 +415,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const historyRef = useRef(new History<Bitmap>(HISTORY_LIMIT))
   const strokeRef = useRef<StrokeState | null>(null)
   const editorRef = useRef<TextEditorState | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const textToolbarRef = useRef<HTMLDivElement | null>(null)
+  const textOverlayRef = useRef<HTMLDivElement | null>(null)
+  const textResizeRef = useRef<TextResizeState | null>(null)
   const selectionRef = useRef<Rect | null>(null)
   const maskRef = useRef<SelectionMask | null>(null)
   const selectRef = useRef<SelectDrag | null>(null)
@@ -935,7 +980,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     editorRef.current = null
     setEditor(null)
     if (current.value.trim().length === 0) return
-    const rendered = renderText(current.value, { ...text, color: colorFor(current.slot) })
+    const rendered = renderText(current.value, {
+      ...text,
+      color: colorFor(current.slot),
+      maxWidth: current.width,
+    })
     if (!rendered) return
     historyRef.current.record(doc().clone())
     blitAlpha(doc(), rendered, current.x, current.y)
@@ -996,7 +1045,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return
       }
       if (tool === 'text') {
-        const next = { x: point.x, y: point.y, value: '', slot }
+        const next = {
+          x: point.x,
+          y: point.y,
+          width: Math.max(MIN_TEXT_SIZE, Math.min(DEFAULT_TEXT_WIDTH, size.width - point.x)),
+          height: Math.max(MIN_TEXT_SIZE, Math.round(text.fontSize * 1.25) + 4),
+          value: '',
+          slot,
+        }
         editorRef.current = next
         setEditor(next)
         return
@@ -1068,7 +1124,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitFloating, commitText, currentRect, doc, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitFloating, commitText, currentRect, doc, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, text.fontSize, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -1263,6 +1319,79 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }
   }, [onCursorMove, previewPolyline])
 
+  const keepTextFocus = useCallback(
+    (event: ReactPointerEvent<HTMLElement> | ReactMouseEvent<HTMLElement>) => {
+      if ((event.target as HTMLElement).tagName === 'INPUT') return
+      event.preventDefault()
+      event.stopPropagation()
+    },
+    [],
+  )
+
+  const handleTextHandleDown = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>, handle: SelectionHandle) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (!editorRef.current) return
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      textResizeRef.current = { pointerId: event.pointerId, handle }
+    },
+    [],
+  )
+
+  const handleTextHandleMove = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>) => {
+      const drag = textResizeRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      const current = editorRef.current
+      if (!current) return
+      const point = clientToCanvas(event.clientX, event.clientY)
+      const next = resizeTextBox(current, drag.handle, point, size.width, size.height)
+      const updated = { ...current, ...next }
+      editorRef.current = updated
+      setEditor(updated)
+    },
+    [clientToCanvas, size.width, size.height],
+  )
+
+  const handleTextHandleUp = useCallback((event: ReactPointerEvent<HTMLSpanElement>) => {
+    const drag = textResizeRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    textResizeRef.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!editor) return
+    const handleOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (textareaRef.current?.contains(target)) return
+      if (textToolbarRef.current?.contains(target)) return
+      if (textOverlayRef.current?.contains(target)) return
+      commitText()
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [editor, commitText])
+
+  const textToolbarPosition = editor
+    ? (() => {
+        const frameWidth = size.width * zoom
+        const frameHeight = size.height * zoom
+        const left = clamp(editor.x * zoom, 0, Math.max(0, frameWidth - TEXT_TOOLBAR_WIDTH))
+        const above = editor.y * zoom - TEXT_TOOLBAR_HEIGHT - TEXT_TOOLBAR_GAP
+        const top =
+          above >= 0
+            ? above
+            : Math.min(
+                Math.max(0, frameHeight - TEXT_TOOLBAR_HEIGHT),
+                (editor.y + editor.height) * zoom + TEXT_TOOLBAR_GAP,
+              )
+        return { left, top }
+      })()
+    : null
+
   const cursor =
     tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
 
@@ -1332,8 +1461,82 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           />
         </svg>
       ) : null}
+      {editor && textToolbarPosition ? (
+        <div
+          ref={textToolbarRef}
+          className="text-toolbar"
+          role="toolbar"
+          aria-label="Text options"
+          style={{ left: textToolbarPosition.left, top: textToolbarPosition.top }}
+          onPointerDown={keepTextFocus}
+          onMouseDown={keepTextFocus}
+        >
+          <Dropdown
+            title="Font"
+            ariaLabel="Font"
+            trigger={<span className="text-option-value">{fontLabel(text.fontFamily)}</span>}
+          >
+            {(close) => (
+              <>
+                {FONT_FAMILIES.map((font) => (
+                  <MenuItem
+                    key={font.label}
+                    checked={text.fontFamily === font.value}
+                    onClick={() => {
+                      onTextChange({ fontFamily: font.value })
+                      close()
+                    }}
+                  >
+                    {font.label}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          </Dropdown>
+          <input
+            type="number"
+            className="text-size-input"
+            min={8}
+            max={200}
+            value={text.fontSize}
+            aria-label="Text size"
+            onChange={(event) => {
+              const value = Number(event.target.value)
+              if (Number.isFinite(value) && value > 0) onTextChange({ fontSize: Math.min(200, Math.round(value)) })
+            }}
+          />
+          <button
+            type="button"
+            className="icon-button text-format-button"
+            aria-label="Bold"
+            aria-pressed={text.bold}
+            onClick={() => onTextChange({ bold: !text.bold })}
+          >
+            <span className="text-format-glyph glyph-bold">B</span>
+          </button>
+          <button
+            type="button"
+            className="icon-button text-format-button"
+            aria-label="Italic"
+            aria-pressed={text.italic}
+            onClick={() => onTextChange({ italic: !text.italic })}
+          >
+            <span className="text-format-glyph glyph-italic">I</span>
+          </button>
+          <button
+            type="button"
+            className="icon-button text-format-button"
+            aria-label="Underline"
+            aria-pressed={text.underline}
+            onClick={() => onTextChange({ underline: !text.underline })}
+          >
+            <span className="text-format-glyph glyph-underline">U</span>
+          </button>
+        </div>
+      ) : null}
       {editor ? (
         <textarea
+          ref={textareaRef}
           className="text-editor"
           autoFocus
           spellCheck={false}
@@ -1341,6 +1544,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           style={{
             left: editor.x * zoom,
             top: editor.y * zoom,
+            width: editor.width * zoom,
+            height: editor.height * zoom,
             fontFamily: text.fontFamily,
             fontSize: text.fontSize * zoom,
             fontWeight: text.bold ? 700 : 400,
@@ -1364,8 +1569,32 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
               commitText()
             }
           }}
-          onBlur={commitText}
         />
+      ) : null}
+      {editor ? (
+        <div
+          ref={textOverlayRef}
+          className="text-overlay"
+          aria-hidden="true"
+          style={{
+            left: editor.x * zoom,
+            top: editor.y * zoom,
+            width: editor.width * zoom,
+            height: editor.height * zoom,
+          }}
+        >
+          {SELECTION_HANDLES.map((handle) => (
+            <span
+              key={handle}
+              className={`selection-handle text-handle text-handle-${handle}`}
+              style={{ cursor: handleCursor(handle) }}
+              onPointerDown={(event) => handleTextHandleDown(event, handle)}
+              onPointerMove={handleTextHandleMove}
+              onPointerUp={handleTextHandleUp}
+              onPointerCancel={handleTextHandleUp}
+            />
+          ))}
+        </div>
       ) : null}
       </div>
       {showMiniature ? (

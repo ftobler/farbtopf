@@ -14,6 +14,8 @@ export interface TextRenderOptions extends TextOptions {
   color: Rgba
   padding?: number
   lineHeight?: number
+  /** When set, wraps the text to this many image pixels per line. */
+  maxWidth?: number
 }
 
 export const TEXT_FONT_STACK =
@@ -47,6 +49,54 @@ function fontShorthand(options: TextOptions): string {
   return `${italic}${weight}${options.fontSize}px ${options.fontFamily}`
 }
 
+type Measure = (value: string) => number
+
+function breakWord(word: string, maxWidth: number, measure: Measure): string[] {
+  const chunks: string[] = []
+  let current = ''
+  for (const character of word) {
+    const candidate = current + character
+    if (current.length > 0 && measure(candidate) > maxWidth) {
+      chunks.push(current)
+      current = character
+    } else {
+      current = candidate
+    }
+  }
+  chunks.push(current)
+  return chunks
+}
+
+function wrapParagraph(paragraph: string, maxWidth: number, measure: Measure): string[] {
+  if (paragraph.length === 0) return ['']
+  const lines: string[] = []
+  let current = ''
+  for (const word of paragraph.split(' ')) {
+    const candidate = current.length === 0 ? word : `${current} ${word}`
+    if (measure(candidate) <= maxWidth) {
+      current = candidate
+      continue
+    }
+    if (current.length > 0) {
+      lines.push(current)
+      current = ''
+    }
+    if (measure(word) <= maxWidth) {
+      current = word
+      continue
+    }
+    const chunks = breakWord(word, maxWidth, measure)
+    lines.push(...chunks.slice(0, -1))
+    current = chunks[chunks.length - 1]
+  }
+  lines.push(current)
+  return lines
+}
+
+function wrapLines(text: string, maxWidth: number, measure: Measure): string[] {
+  return text.split('\n').flatMap((paragraph) => wrapParagraph(paragraph, maxWidth, measure))
+}
+
 /**
  * Rasterises a (possibly multi-line) string into a transparent bitmap. The first
  * baseline is placed exactly where a CSS line box of the same line-height puts it,
@@ -62,10 +112,18 @@ export function renderText(text: string, options: TextRenderOptions): Bitmap | n
   const font = fontShorthand(options)
   context.font = font
 
-  const lines = text.length > 0 ? text.split('\n') : ['']
+  const measure: Measure = (value) => context.measureText(value).width
+  const { maxWidth } = options
+  const wraps = maxWidth !== undefined && maxWidth > 0
+  const lines = wraps
+    ? wrapLines(text, Math.max(1, maxWidth - padding * 2), measure)
+    : text.length > 0
+      ? text.split('\n')
+      : ['']
   const widest = Math.max(1, ...lines.map((line) => context.measureText(line).width))
   const lineHeightPx = Math.ceil(options.fontSize * lineHeight)
-  const width = Math.ceil(widest) + padding * 2
+  const naturalWidth = Math.ceil(widest) + padding * 2
+  const width = wraps ? Math.max(1, Math.min(Math.ceil(maxWidth), naturalWidth)) : naturalWidth
   const height = lineHeightPx * lines.length + padding * 2
 
   canvas.width = width
