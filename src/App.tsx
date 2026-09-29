@@ -10,6 +10,7 @@ import { StatusBar } from './components/StatusBar'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
 import type { SelectionShape } from './core/selection'
+import type { ShapeKind } from './core/shapes'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
 import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
 import { TOOLS, BRUSH_SIZES, toolById } from './core/tools'
@@ -47,6 +48,7 @@ function App() {
   const [secondary, setSecondary] = useState<Rgba>(DEFAULT_SECONDARY)
   const [brushSize, setBrushSize] = useState(4)
   const [shapeFill, setShapeFill] = useState<ShapeFill>('outline')
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('rectangle')
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
   const [canUndo, setCanUndo] = useState(false)
@@ -387,6 +389,8 @@ function App() {
           onBrushSizeChange={setBrushSize}
           shapeFill={shapeFill}
           onShapeFillChange={setShapeFill}
+          shapeKind={shapeKind}
+          onShapeKindChange={setShapeKind}
           hasSelection={hasSelection}
           onCrop={handleCrop}
           onScale={() => setShowScaleDialog(true)}
@@ -422,6 +426,7 @@ function App() {
           secondary={secondary}
           brushSize={brushSize}
           shapeFill={shapeFill}
+          shapeKind={shapeKind}
           zoom={zoom}
           showGrid={showGrid}
           onHistoryChange={(undo, redo) => {

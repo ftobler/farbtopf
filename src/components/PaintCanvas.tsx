@@ -16,9 +16,7 @@ import { History } from '../core/history'
 import {
   blitAlpha,
   crop,
-  drawEllipse,
   drawLine,
-  drawRect,
   extractRegion,
   flipHorizontal,
   flipVertical,
@@ -30,6 +28,8 @@ import {
 import type { BrushShape } from '../core/raster'
 import { applyMask, fillSelection, invertSelection, isSelected, polygonSelection } from '../core/selection'
 import type { SelectionMask, SelectionShape } from '../core/selection'
+import { renderShape as drawShape } from '../core/shapes'
+import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
@@ -70,6 +70,7 @@ export interface PaintCanvasProps {
   secondary: Rgba
   brushSize: number
   shapeFill: ShapeFill
+  shapeKind?: ShapeKind
   zoom: number
   showGrid: boolean
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void
@@ -300,6 +301,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     secondary,
     brushSize,
     shapeFill,
+    shapeKind = 'rectangle',
     zoom,
     showGrid,
     onHistoryChange,
@@ -681,30 +683,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (target: Bitmap, start: Point, end: Point, slot: 'primary' | 'secondary') => {
       const color = colorFor(slot)
       const fillColor = slot === 'secondary' ? primary : secondary
-      const rect = normalizeRect(start, end)
-      if (tool === 'line') {
-        drawLine(target, start, end, brushSize, color, 'round')
-        return
-      }
-      if (tool === 'rectangle') {
-        if (shapeFill === 'filled') {
-          drawRect(target, rect, 1, color, true)
-        } else {
-          if (shapeFill === 'outline-filled') drawRect(target, rect, 1, fillColor, true)
-          drawRect(target, rect, brushSize, color, false)
-        }
-        return
-      }
-      if (tool === 'ellipse') {
-        if (shapeFill === 'filled') {
-          drawEllipse(target, rect, 1, color, true)
-        } else {
-          if (shapeFill === 'outline-filled') drawEllipse(target, rect, 1, fillColor, true)
-          drawEllipse(target, rect, brushSize, color, false)
-        }
-      }
+      drawShape(target, shapeKind, [start, end], {
+        width: brushSize,
+        stroke: shapeFill === 'filled' ? null : color,
+        fill: shapeFill === 'filled' ? color : shapeFill === 'outline-filled' ? fillColor : null,
+      })
     },
-    [brushSize, colorFor, primary, secondary, shapeFill, tool],
+    [brushSize, colorFor, primary, secondary, shapeFill, shapeKind],
   )
 
   const commitText = useCallback(() => {

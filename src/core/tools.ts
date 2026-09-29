@@ -8,9 +8,7 @@ export type ToolId =
   | 'eraser'
   | 'fill'
   | 'picker'
-  | 'line'
-  | 'rectangle'
-  | 'ellipse'
+  | 'shape'
   | 'text'
   | 'zoom'
 
@@ -35,13 +33,11 @@ export const TOOLS: readonly ToolDef[] = [
   { id: 'picker', label: 'Color picker', shortcut: 'K', group: 'utility' },
   { id: 'text', label: 'Text', shortcut: 'T', group: 'utility' },
   { id: 'zoom', label: 'Zoom', shortcut: 'Z', group: 'utility' },
-  { id: 'line', label: 'Line', shortcut: 'L', group: 'shape' },
-  { id: 'rectangle', label: 'Rectangle', shortcut: 'R', group: 'shape' },
-  { id: 'ellipse', label: 'Ellipse', shortcut: 'O', group: 'shape' },
+  { id: 'shape', label: 'Shape', shortcut: 'U', group: 'shape' },
 ]
 
 export function isShapeTool(id: ToolId): boolean {
-  return id === 'line' || id === 'rectangle' || id === 'ellipse'
+  return id === 'shape'
 }
 
 /** Pencil is always a single pixel wide; every other tool honours the brush size. */

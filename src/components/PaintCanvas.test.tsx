@@ -8,7 +8,7 @@ import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
 
 function setup(
-  tool: 'brush' | 'rectangle' | 'select' | 'zoom',
+  tool: 'brush' | 'shape' | 'select' | 'zoom',
   width = 20,
   height = 20,
   transparentSelection = false,
@@ -90,7 +90,7 @@ describe('PaintCanvas', () => {
   })
 
   it('commits a shape stroke on pointer up', () => {
-    const { ref, canvas, onHistoryChange } = setup('rectangle')
+    const { ref, canvas, onHistoryChange } = setup('shape')
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 10, clientY: 10 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 10, clientY: 10 })

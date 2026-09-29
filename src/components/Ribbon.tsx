@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { Rgba } from '../core/color'
 import type { SelectionShape } from '../core/selection'
 import { BRUSH_SIZES, TOOLS, isShapeTool, toolById } from '../core/tools'
+import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { ColorPalette } from './ColorPalette'
 import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
@@ -12,11 +13,9 @@ import {
   CopyIcon,
   CropIcon,
   CutIcon,
-  EllipseIcon,
   EraserIcon,
   FillIcon,
   FlipIcon,
-  LineIcon,
   MagnifierIcon,
   PasteIcon,
   PencilIcon,
@@ -37,9 +36,7 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
   fill: FillIcon,
   picker: PickerIcon,
   text: TextIcon,
-  line: LineIcon,
-  rectangle: RectangleIcon,
-  ellipse: EllipseIcon,
+  shape: RectangleIcon,
   zoom: MagnifierIcon,
 }
 
@@ -60,6 +57,8 @@ export interface RibbonProps {
   onBrushSizeChange: (size: number) => void
   shapeFill: ShapeFill
   onShapeFillChange: (fill: ShapeFill) => void
+  shapeKind: ShapeKind
+  onShapeKindChange: (kind: ShapeKind) => void
   hasSelection: boolean
   onCrop: () => void
   onScale: () => void
