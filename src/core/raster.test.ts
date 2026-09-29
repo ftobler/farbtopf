@@ -10,6 +10,7 @@ import {
   drawRect,
   ellipseSpans,
   extractRegion,
+  fillPolygon,
   flipHorizontal,
   flipVertical,
   floodFill,
@@ -372,5 +373,51 @@ describe('rotateBy', () => {
     const out = rotateBy(new Bitmap(10, 10, BLACK), 30)
     expect(out.get(0, 0).a).toBe(0)
     expect(out.get(Math.floor(out.width / 2), Math.floor(out.height / 2))).toEqual(BLACK)
+  })
+})
+
+describe('fillPolygon', () => {
+  it('fills a square region by pixel centres', () => {
+    const bitmap = new Bitmap(10, 10)
+    fillPolygon(bitmap, [{ x: 2, y: 2 }, { x: 6, y: 2 }, { x: 6, y: 5 }, { x: 2, y: 5 }], BLACK)
+    expect(countColor(bitmap)).toBe(12)
+    expect(bitmap.get(2, 2)).toEqual(BLACK)
+    expect(bitmap.get(5, 4)).toEqual(BLACK)
+    expect(bitmap.get(6, 4).a).toBe(0)
+    expect(bitmap.get(5, 5).a).toBe(0)
+  })
+
+  it('fills a triangle and leaves the corner outside empty', () => {
+    const bitmap = new Bitmap(20, 20)
+    fillPolygon(bitmap, [{ x: 10, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }], BLACK)
+    expect(bitmap.get(10, 10)).toEqual(BLACK)
+    expect(bitmap.get(0, 0).a).toBe(0)
+    expect(bitmap.get(19, 0).a).toBe(0)
+    expect(bitmap.get(10, 19)).toEqual(BLACK)
+  })
+
+  it('uses the even-odd rule for self-intersecting polygons', () => {
+    const bitmap = new Bitmap(20, 20)
+    // Two overlapping squares traced as one path: the overlap is a hole.
+    fillPolygon(
+      bitmap,
+      [
+        { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 5, y: 10 }, { x: 5, y: 5 },
+        { x: 15, y: 5 }, { x: 15, y: 15 }, { x: 5, y: 15 }, { x: 5, y: 10 }, { x: 0, y: 10 },
+      ],
+      BLACK,
+    )
+    expect(bitmap.get(2, 2)).toEqual(BLACK)
+    expect(bitmap.get(12, 12)).toEqual(BLACK)
+    expect(bitmap.get(7, 7).a).toBe(0)
+  })
+
+  it('ignores degenerate polygons and clips to the bitmap', () => {
+    const bitmap = new Bitmap(5, 5)
+    fillPolygon(bitmap, [], BLACK)
+    fillPolygon(bitmap, [{ x: 1, y: 1 }, { x: 3, y: 1 }], BLACK)
+    expect(countColor(bitmap)).toBe(0)
+    fillPolygon(bitmap, [{ x: -10, y: -10 }, { x: 100, y: -10 }, { x: 100, y: 100 }, { x: -10, y: 100 }], BLACK)
+    expect(countColor(bitmap)).toBe(25)
   })
 })

@@ -208,6 +208,39 @@ export function drawEllipse(
   }
 }
 
+/**
+ * Scanline fill of a polygon using the even-odd rule. Coordinates are continuous:
+ * pixel (x, y) covers [x, x + 1) and is filled when its centre lies inside.
+ */
+export function fillPolygon(bitmap: Bitmap, points: readonly Point[], color: Rgba): void {
+  if (points.length < 3) return
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const p of points) {
+    minY = Math.min(minY, p.y)
+    maxY = Math.max(maxY, p.y)
+  }
+  const top = Math.max(0, Math.floor(minY))
+  const bottom = Math.min(bitmap.height - 1, Math.ceil(maxY))
+  const crossings: number[] = []
+  for (let py = top; py <= bottom; py += 1) {
+    const sy = py + 0.5
+    crossings.length = 0
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[i]
+      const b = points[(i + 1) % points.length]
+      if (a.y <= sy === b.y <= sy) continue
+      crossings.push(a.x + ((sy - a.y) * (b.x - a.x)) / (b.y - a.y))
+    }
+    crossings.sort((a, b) => a - b)
+    for (let i = 0; i + 1 < crossings.length; i += 2) {
+      const left = Math.max(0, Math.ceil(crossings[i] - 0.5))
+      const right = Math.min(bitmap.width - 1, Math.ceil(crossings[i + 1] - 0.5) - 1)
+      for (let px = left; px <= right; px += 1) bitmap.set(px, py, color)
+    }
+  }
+}
+
 /** 4-way flood fill starting at `start`. Returns the number of pixels changed. */
 export function floodFill(
   bitmap: Bitmap,
