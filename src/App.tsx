@@ -443,6 +443,9 @@ function App() {
       }
 
       if (event.key === 'Escape') {
+        // While the context menu is open Escape only dismisses it; it must not
+        // also clear the canvas selection.
+        if (contextMenu) return
         canvasRef.current?.clearSelection()
         return
       }
@@ -474,6 +477,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     brushSize,
+    contextMenu,
     handleCopyFromCanvas,
     handleCutFromCanvas,
     handleDeleteSelection,

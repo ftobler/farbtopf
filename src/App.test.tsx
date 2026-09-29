@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { SHAPES } from './core/shapes'
 import { CUSTOM_COLORS_KEY } from './core/customColors'
@@ -554,6 +554,67 @@ describe('App', () => {
     expect(screen.getByRole('menu')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('keeps the context menu inside the viewport', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 200,
+      bottom: 100,
+      width: 200,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect)
+    try {
+      const { container } = render(<App />)
+      fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, {
+        clientX: 99999,
+        clientY: 99999,
+      })
+      const menu = screen.getByRole('menu') as HTMLElement
+      expect(menu.style.left).toBe(`${Math.max(0, window.innerWidth - 200)}px`)
+      expect(menu.style.top).toBe(`${Math.max(0, window.innerHeight - 100)}px`)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('opens a submenu to the left when it would overflow the right edge', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 5000,
+      bottom: 5000,
+      width: 5000,
+      height: 5000,
+      toJSON: () => ({}),
+    } as DOMRect)
+    try {
+      const { container } = render(<App />)
+      fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+      fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Rotate' }))
+      const panel = screen.getByRole('menuitem', { name: 'Rotate left 90°' }).closest('.menu-submenu-panel')
+      expect(panel?.classList.contains('menu-submenu-panel-left')).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('does not clear the selection when Escape dismisses the context menu', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
+    expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
   })
 })
 

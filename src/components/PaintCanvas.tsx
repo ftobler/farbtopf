@@ -757,6 +757,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (rect: Rect) => {
       finishPolyline()
       commitFloating()
+      // The old selection/mask no longer matches the resized document.
+      updateSelection(null)
+      setLasso(null)
       const source = doc()
       const next = resizeTo(source, rect)
       historyRef.current.record(source.clone())
@@ -766,7 +769,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       paint(next)
       syncHistory()
     },
-    [commitFloating, doc, finishPolyline, onSizeChange, paint, resizeTo, syncHistory],
+    [commitFloating, doc, finishPolyline, onSizeChange, paint, resizeTo, syncHistory, updateSelection],
   )
 
   useImperativeHandle(
@@ -1006,17 +1009,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       if (event.button !== 0 && event.button !== 2) return
+      // A right-click always opens the workspace context menu and no tool acts on
+      // it: no secondary-colour paint, no zoom-out, no colour pick. The canvas
+      // `onContextMenu` swallows the native menu.
+      if (event.button === 2) return
       if (editorRef.current) {
         commitText()
         return
       }
       event.preventDefault()
       const point = toPoint(event)
-      const slot: 'primary' | 'secondary' = event.button === 2 ? 'secondary' : 'primary'
-
-      // A right-click opens the workspace context menu. Only tools that leave no
-      // stroke behind (zoom, picker) react to it, so no half-started stroke exists.
-      if (event.button === 2 && tool !== 'zoom' && tool !== 'picker') return
+      const slot: 'primary' | 'secondary' = 'primary'
 
       if (tool === 'select') {
         event.preventDefault()
@@ -1043,7 +1046,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return
       }
       if (tool === 'zoom') {
-        onZoomClick(slot === 'secondary' ? -1 : 1)
+        onZoomClick(1)
         return
       }
       if (tool === 'picker') {
@@ -1514,19 +1517,21 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           onBlur={commitText}
         />
       ) : null}
-      <div className="canvas-resize-handles">
-        {SELECTION_HANDLES.map((handle) => (
-          <span
-            key={handle}
-            className={`canvas-resize-handle canvas-resize-handle-${handle}`}
-            title="Resize canvas"
-            onPointerDown={(event) => handleCanvasResizeDown(event, handle)}
-            onPointerMove={handleCanvasResizeMove}
-            onPointerUp={handleCanvasResizeUp}
-            onPointerCancel={handleCanvasResizeUp}
-          />
-        ))}
-      </div>
+      {selection === null && lasso === null ? (
+        <div className="canvas-resize-handles">
+          {SELECTION_HANDLES.map((handle) => (
+            <span
+              key={handle}
+              className={`canvas-resize-handle canvas-resize-handle-${handle}`}
+              title="Resize canvas"
+              onPointerDown={(event) => handleCanvasResizeDown(event, handle)}
+              onPointerMove={handleCanvasResizeMove}
+              onPointerUp={handleCanvasResizeUp}
+              onPointerCancel={handleCanvasResizeUp}
+            />
+          ))}
+        </div>
+      ) : null}
       </div>
       {showMiniature ? (
         <div

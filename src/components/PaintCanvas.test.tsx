@@ -15,7 +15,7 @@ vi.mock('../core/shapes', async (importOriginal) => {
 import { renderShape } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 
-type SetupTool = 'brush' | 'shape' | 'select' | 'zoom'
+type SetupTool = 'brush' | 'shape' | 'select' | 'zoom' | 'picker'
 
 function setup(
   tool: SetupTool,
@@ -76,7 +76,7 @@ function setup(
     ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, container, setProps, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick }
+  return { ref, canvas, container, setProps, onHistoryChange, onPickColor, onSizeChange, onSelectionChange, onZoomClick }
 }
 
 describe('PaintCanvas', () => {
@@ -84,15 +84,31 @@ describe('PaintCanvas', () => {
     vi.restoreAllMocks()
   })
 
-  it('zooms in on left click and out on right click with the zoom tool', () => {
+  it('zooms in on left click and ignores a right click with the zoom tool', () => {
     const { canvas, onZoomClick, onHistoryChange } = setup('zoom')
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
     expect(onZoomClick).toHaveBeenLastCalledWith(1)
     fireEvent.pointerDown(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
     fireEvent.pointerUp(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
-    expect(onZoomClick).toHaveBeenLastCalledWith(-1)
+    expect(onZoomClick).toHaveBeenCalledTimes(1)
     expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
+  })
+
+  it('never acts on a right click: no paint, no pick, no zoom', () => {
+    const { canvas, onZoomClick } = setup('brush', 20, 20)
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    context.putImageData.mockClear()
+    fireEvent.pointerDown(canvas, { button: 2, pointerId: 3, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 3, clientX: 5, clientY: 5 })
+    expect(context.putImageData).not.toHaveBeenCalled()
+    expect(onZoomClick).not.toHaveBeenCalled()
+
+    const picker = setup('picker', 20, 20)
+    fireEvent.pointerDown(picker.canvas, { button: 2, pointerId: 4, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(picker.canvas, { button: 2, pointerId: 4, clientX: 5, clientY: 5 })
+    expect(picker.onPickColor).not.toHaveBeenCalled()
   })
 
   it('records history when a freehand stroke is drawn', () => {
@@ -756,6 +772,38 @@ describe('PaintCanvas', () => {
     it('renders eight resize handles around the canvas', () => {
       const { container } = setup('brush')
       expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+    })
+
+    it('hides the canvas resize handles while a selection is active', () => {
+      const { ref, container } = setup('select', 20, 20)
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+      act(() => ref.current?.selectAll())
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(0)
+      act(() => ref.current?.clearSelection())
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+    })
+
+    it('clears the selection after resizeCanvas', () => {
+      const { ref, onSelectionChange } = setup('select', 20, 20)
+      act(() => ref.current?.selectAll())
+      expect(ref.current?.getSelection()).not.toBeNull()
+      onSelectionChange.mockClear()
+      act(() => ref.current?.resizeCanvas({ x: 0, y: 0, width: 30, height: 30 }))
+      expect(ref.current?.getSelection()).toBeNull()
+      expect(onSelectionChange).toHaveBeenLastCalledWith(false)
+    })
+
+    it('clears a floating selection when resizing the canvas', () => {
+      const { ref, canvas } = setup('select', 30, 30)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+      fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+      expect(ref.current?.getSelection()).not.toBeNull()
+      act(() => ref.current?.resizeCanvas({ x: 0, y: 0, width: 40, height: 40 }))
+      expect(ref.current?.getSelection()).toBeNull()
     })
 
     it('resizes the document from a corner handle', () => {
