@@ -4,8 +4,6 @@ import type { BrushId } from '../core/brushes'
 import type { Rgba } from '../core/color'
 import type { SelectionShape } from '../core/selection'
 import { BRUSH_SIZES, TOOLS, toolById } from '../core/tools'
-import { FONT_FAMILIES } from '../render/text'
-import type { TextOptions } from '../render/text'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { ColorPalette } from './ColorPalette'
@@ -51,9 +49,6 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
 
 /** Tools group, in reading order: two rows of three. */
 const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'eraser', 'picker', 'zoom']
-
-const fontLabel = (value: string): string =>
-  FONT_FAMILIES.find((font) => font.value === value)?.label ?? 'Segoe UI'
 
 const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
   outline: 'Outline',
@@ -106,8 +101,6 @@ export interface RibbonProps {
   onDeleteSelection: () => void
   brush: BrushId
   onBrushChange: (brush: BrushId) => void
-  text: TextOptions
-  onTextChange: (patch: Partial<TextOptions>) => void
 }
 
 export function Ribbon({
@@ -148,8 +141,6 @@ export function Ribbon({
   onDeleteSelection,
   brush,
   onBrushChange,
-  text,
-  onTextChange,
 }: RibbonProps) {
   const utilityTools = TOOL_GRID.map(toolById)
   const ShapeFillIcon = SHAPE_FILL_ICONS[shapeFill]
@@ -423,79 +414,6 @@ export function Ribbon({
         </div>
         <div className="ribbon-group-label">Brushes</div>
       </section>
-
-      {tool === 'text' ? (
-        <>
-          <div className="ribbon-separator" />
-
-          <section className="ribbon-group">
-            <div className="ribbon-group-items text-options" aria-label="Text options">
-              <Dropdown
-                title="Font"
-                ariaLabel="Font"
-                trigger={<span className="text-option-value">{fontLabel(text.fontFamily)}</span>}
-              >
-            {(close) => (
-              <>
-                {FONT_FAMILIES.map((font) => (
-                  <MenuItem
-                    key={font.label}
-                    checked={text.fontFamily === font.value}
-                    onClick={() => {
-                      onTextChange({ fontFamily: font.value })
-                      close()
-                    }}
-                  >
-                    {font.label}
-                  </MenuItem>
-                ))}
-              </>
-            )}
-          </Dropdown>
-          <input
-            type="number"
-            className="text-size-input"
-            min={8}
-            max={200}
-            value={text.fontSize}
-            aria-label="Text size"
-            onChange={(event) => {
-              const value = Number(event.target.value)
-              if (Number.isFinite(value) && value > 0) onTextChange({ fontSize: Math.min(200, Math.round(value)) })
-            }}
-          />
-          <button
-            type="button"
-            className="icon-button text-format-button"
-            aria-label="Bold"
-            aria-pressed={text.bold}
-            onClick={() => onTextChange({ bold: !text.bold })}
-          >
-            <span className="text-format-glyph glyph-bold">B</span>
-          </button>
-          <button
-            type="button"
-            className="icon-button text-format-button"
-            aria-label="Italic"
-            aria-pressed={text.italic}
-            onClick={() => onTextChange({ italic: !text.italic })}
-          >
-            <span className="text-format-glyph glyph-italic">I</span>
-          </button>
-          <button
-            type="button"
-            className="icon-button text-format-button"
-            aria-label="Underline"
-            aria-pressed={text.underline}
-            onClick={() => onTextChange({ underline: !text.underline })}
-          >
-            <span className="text-format-glyph glyph-underline">U</span>
-          </button>
-        </div>
-            <div className="ribbon-group-label">Text</div>
-          </section>
-        </>
-      ) : null}
 
       <div className="ribbon-separator" />
 

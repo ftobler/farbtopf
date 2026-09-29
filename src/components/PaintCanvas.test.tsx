@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import { act, render } from '@testing-library/react'
+import { act, render, within } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Bitmap } from '../core/bitmap'
@@ -15,7 +15,7 @@ vi.mock('../core/shapes', async (importOriginal) => {
 import { renderShape } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 
-type SetupTool = 'brush' | 'shape' | 'select' | 'zoom'
+type SetupTool = 'brush' | 'shape' | 'select' | 'zoom' | 'text'
 
 function setup(
   tool: SetupTool,
@@ -34,6 +34,7 @@ function setup(
   const onSizeChange = vi.fn()
   const onSelectionChange = vi.fn()
   const onZoomClick = vi.fn()
+  const onTextChange = vi.fn()
 
   const element = (props: { tool: SetupTool; shapeKind: ShapeKind; brush: BrushId; brushSize: number }) => (
     <PaintCanvas
@@ -57,6 +58,7 @@ function setup(
       transparentSelection={transparentSelection}
       selectionShape={selectionShape}
       brush={props.brush}
+      onTextChange={onTextChange}
     />
   )
   const { container, rerender } = render(element({ tool, shapeKind, brush, brushSize }))
@@ -76,7 +78,7 @@ function setup(
     ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, container, setProps, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick }
+  return { ref, canvas, container, setProps, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick, onTextChange }
 }
 
 describe('PaintCanvas', () => {
@@ -733,6 +735,123 @@ describe('PaintCanvas', () => {
       // A pixel overlapped by several dabs keeps the same colour as one dab.
       expect(pixel(12, 10)).toEqual(painted)
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+  })
+
+  describe('text tool', () => {
+    function openEditor(canvas: HTMLCanvasElement, x = 10, y = 10) {
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
+    }
+
+    function fullGesture(element: Element) {
+      fireEvent.pointerDown(element, { button: 0, pointerId: 9 })
+      fireEvent.mouseDown(element, { button: 0 })
+    }
+
+    async function flushOutsideListener() {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+
+    it('opens a resizable text box with eight handles and a formatting toolbar', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      expect(container.querySelector('.text-editor')).toBeNull()
+      openEditor(canvas)
+      expect(container.querySelector('.text-editor')).not.toBeNull()
+      expect(container.querySelectorAll('.text-handle')).toHaveLength(8)
+      expect(within(container).getByLabelText('Text size')).toBeTruthy()
+      expect(within(container).getByRole('button', { name: 'Bold' })).toBeTruthy()
+    })
+
+    it('resizes the text box from a handle without stamping it', () => {
+      const { canvas, container, onHistoryChange } = setup('text', 200, 200)
+      openEditor(canvas)
+      const handle = container.querySelector('.text-handle-se') as HTMLElement
+      handle.setPointerCapture = vi.fn()
+      fireEvent.pointerDown(handle, { button: 0, pointerId: 2, clientX: 200, clientY: 44 })
+      fireEvent.pointerMove(handle, { pointerId: 2, clientX: 150, clientY: 140 })
+      fireEvent.pointerUp(handle, { pointerId: 2, clientX: 150, clientY: 140 })
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      expect(textarea.style.width).toBe('140px')
+      expect(textarea.style.height).toBe('130px')
+      expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
+    })
+
+    it('keeps the text editable when formatting changes and commits on a canvas click', () => {
+      const { canvas, container, onHistoryChange, onTextChange } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'hi' } })
+
+      const bold = within(container).getByRole('button', { name: 'Bold' })
+      fullGesture(bold)
+      fireEvent.click(bold)
+      expect(onTextChange).toHaveBeenCalledWith({ bold: true })
+      expect(container.querySelector('.text-editor')).not.toBeNull()
+      expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
+
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 3, clientX: 30, clientY: 30 })
+      expect(container.querySelector('.text-editor')).toBeNull()
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('ignores the compatibility mousedown that follows the opening pointerdown', () => {
+      const { canvas, container } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      fireEvent.mouseDown(canvas, { button: 0 })
+      expect(container.querySelector('.text-editor')).not.toBeNull()
+    })
+
+    it('keeps the editor open and records no history for gestures on the toolbar, format buttons and font menu', async () => {
+      const { canvas, container, onHistoryChange, onTextChange } = setup('text', 200, 200)
+      openEditor(canvas, 20, 20)
+      await flushOutsideListener()
+      onHistoryChange.mockClear()
+
+      fullGesture(within(container).getByLabelText('Text size'))
+
+      const bold = within(container).getByRole('button', { name: 'Bold' })
+      fullGesture(bold)
+      fireEvent.click(bold)
+
+      const italic = within(container).getByRole('button', { name: 'Italic' })
+      fullGesture(italic)
+      fireEvent.click(italic)
+      expect(onTextChange).toHaveBeenCalledWith({ italic: true })
+
+      const font = within(container).getByRole('button', { name: 'Font' })
+      fullGesture(font)
+      fireEvent.click(font)
+      const georgia = within(container).getByRole('menuitem', { name: 'Georgia' })
+      fullGesture(georgia)
+      fireEvent.click(georgia)
+      expect(onTextChange).toHaveBeenCalledWith({ fontFamily: expect.stringContaining('Georgia') })
+
+      expect(container.querySelector('.text-editor')).not.toBeNull()
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+
+    it('commits exactly once when the mousedown lands outside the editor', async () => {
+      const { canvas, container, onHistoryChange } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'hi' } })
+      await flushOutsideListener()
+      onHistoryChange.mockClear()
+
+      fireEvent.mouseDown(document.body)
+
+      expect(container.querySelector('.text-editor')).toBeNull()
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('opens the font menu upward when there is no room below', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      openEditor(canvas, 180, 180)
+      fireEvent.click(within(container).getByRole('button', { name: 'Font' }))
+      expect(container.querySelector('.dropdown-menu')?.classList.contains('dropdown-up')).toBe(true)
     })
   })
 })

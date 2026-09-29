@@ -160,13 +160,23 @@ describe('App', () => {
     expect(screen.getByRole('menuitem', { name: 'Smudge' }).querySelector('svg')).toBeTruthy()
   })
 
-  it('shows the text formatting controls only with the text tool', () => {
+  it('shows the floating text controls only while a text box is open', () => {
     render(<App />)
     expect(screen.queryByLabelText('Text size')).toBeNull()
+
     fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+    expect(screen.queryByLabelText('Text size')).toBeNull()
+
+    const canvas = document.querySelector('.paint-canvas') as HTMLCanvasElement
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
     expect(screen.getByLabelText('Text size')).toBeTruthy()
+
+    const undo = screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement
     fireEvent.click(screen.getByRole('button', { name: 'Italic' }))
     expect(screen.getByRole('button', { name: 'Italic' }).getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('.text-editor')).not.toBeNull()
+    expect(undo.disabled).toBe(true)
+
     fireEvent.click(screen.getByRole('button', { name: 'Font' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Georgia' }))
     expect(screen.getByRole('button', { name: 'Font' }).textContent).toContain('Georgia')

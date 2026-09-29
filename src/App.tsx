@@ -562,8 +562,6 @@ function App() {
           onDeleteSelection={handleDeleteSelection}
           brush={brush}
           onBrushChange={setBrush}
-          text={text}
-          onTextChange={handleTextChange}
         />
       </div>
 
@@ -605,6 +603,7 @@ function App() {
           selectionShape={selectionShape}
           brush={brush}
           text={text}
+          onTextChange={handleTextChange}
           showMiniature={showMiniature}
           onPanChange={setPan}
         />
