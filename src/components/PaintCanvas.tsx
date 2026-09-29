@@ -44,8 +44,12 @@ export interface PaintCanvasHandle {
   redo: () => void
   toDataUrl: () => string
   getSize: () => { width: number; height: number }
+  /** Mirrors the selection, or the whole image when nothing is selected. */
   flip: (axis: 'horizontal' | 'vertical') => void
-  /** Rotates the image clockwise by any angle; the canvas grows to fit and new corners take the secondary colour. */
+  /**
+   * Rotates the selection clockwise about its centre, or the whole image when nothing
+   * is selected; the canvas then grows to fit and new corners take the secondary colour.
+   */
   rotate: (degrees: number) => void
   resize: (width: number, height: number) => void
   cropToSelection: () => void
@@ -104,13 +108,20 @@ interface FloatingSelection {
   base: Bitmap
 }
 
+interface RotationStart {
+  bitmap: Bitmap
+  shape: Bitmap
+  center: Point
+}
+
 interface SelectDrag {
   pointerId: number
-  mode: 'marquee' | 'lasso' | 'move' | 'resize'
+  mode: 'marquee' | 'lasso' | 'move' | 'resize' | 'rotate'
   start: Point
   points?: Point[]
   handle?: SelectionHandle
   origin?: Rect
+  rotation?: RotationStart
 }
 
 const HISTORY_LIMIT = 80
@@ -191,14 +202,10 @@ function resizeRect(origin: Rect, handle: SelectionHandle, point: Point, width: 
   let top = origin.y
   let right = origin.x + origin.width
   let bottom = origin.y + origin.height
-  if (handle.includes('w')) left = Math.round(point.x)
-  if (handle.includes('e')) right = Math.round(point.x)
-  if (handle.includes('n')) top = Math.round(point.y)
-  if (handle.includes('s')) bottom = Math.round(point.y)
-  left = clamp(left, 0, width - 1)
-  top = clamp(top, 0, height - 1)
-  right = clamp(right, 1, width)
-  bottom = clamp(bottom, 1, height)
+  if (handle.includes('w')) left = clamp(Math.round(point.x), 0, width - 1)
+  if (handle.includes('e')) right = clamp(Math.round(point.x), 1, width)
+  if (handle.includes('n')) top = clamp(Math.round(point.y), 0, height - 1)
+  if (handle.includes('s')) bottom = clamp(Math.round(point.y), 1, height)
   if (right <= left) {
     if (handle.includes('w')) left = right - 1
     else right = left + 1
@@ -208,6 +215,45 @@ function resizeRect(origin: Rect, handle: SelectionHandle, point: Point, width: 
     else bottom = top + 1
   }
   return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+/** An opaque bitmap of the selected pixels, used to rotate a selection's shape. */
+function shapeBitmap(width: number, height: number, mask: SelectionMask | null): Bitmap {
+  const shape = new Bitmap(width, height)
+  const local = { x: 0, y: 0, width, height }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (isSelected(local, mask, x, y)) shape.set(x, y, WHITE)
+    }
+  }
+  return shape
+}
+
+function maskFromShape(shape: Bitmap): SelectionMask | null {
+  const data = new Uint8Array(shape.width * shape.height)
+  let full = true
+  for (let i = 0; i < data.length; i += 1) {
+    data[i] = shape.data[i * 4 + 3] >= 128 ? 1 : 0
+    if (!data[i]) full = false
+  }
+  return full ? null : { width: shape.width, height: shape.height, data }
+}
+
+function flipMask(mask: SelectionMask, axis: 'horizontal' | 'vertical'): SelectionMask {
+  const { width, height } = mask
+  const data = new Uint8Array(width * height)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sx = axis === 'horizontal' ? width - 1 - x : x
+      const sy = axis === 'vertical' ? height - 1 - y : y
+      data[y * width + x] = mask.data[sy * width + sx]
+    }
+  }
+  return { width, height, data }
+}
+
+function pointerAngle(center: Point, point: Point): number {
+  return Math.atan2(point.y - center.y, point.x - center.x)
 }
 
 function MaskOutline({ mask }: { mask: SelectionMask }) {
@@ -346,6 +392,36 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [doc, secondary, syncHistory, transparentSelection],
   )
 
+  const beginRotation = useCallback((): RotationStart | null => {
+    const rect = currentRect()
+    if (!rect) return null
+    const floating = ensureFloating(rect)
+    const { width, height } = floating.bitmap
+    return {
+      bitmap: floating.bitmap,
+      shape: shapeBitmap(width, height, maskRef.current),
+      center: { x: floating.x + width / 2, y: floating.y + height / 2 },
+    }
+  }, [currentRect, ensureFloating])
+
+  const applyRotation = useCallback(
+    (start: RotationStart, degrees: number) => {
+      const floating = floatingRef.current
+      if (!floating) return
+      const angle = Math.round(degrees * 1e6) / 1e6
+      const bitmap = rotateBy(start.bitmap, angle, null)
+      floating.bitmap = bitmap
+      floating.x = Math.round(start.center.x - bitmap.width / 2)
+      floating.y = Math.round(start.center.y - bitmap.height / 2)
+      renderPreview()
+      updateSelection(
+        { x: floating.x, y: floating.y, width: bitmap.width, height: bitmap.height },
+        maskFromShape(rotateBy(start.shape, angle, null)),
+      )
+    },
+    [renderPreview, updateSelection],
+  )
+
   const commitFloating = useCallback(() => {
     const floating = floatingRef.current
     if (!floating) return
@@ -451,12 +527,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return { width: size.width, height: size.height }
       },
       flip(axis) {
-        commitFloating()
-        applyBitmap(axis === 'horizontal' ? flipHorizontal(doc()) : flipVertical(doc()))
+        const mirror = axis === 'horizontal' ? flipHorizontal : flipVertical
+        const rect = currentRect()
+        if (rect) {
+          const floating = ensureFloating(rect)
+          floating.bitmap = mirror(floating.bitmap)
+          floating.source = mirror(floating.source)
+          renderPreview()
+          const selectionMask = maskRef.current
+          updateSelection(
+            { x: floating.x, y: floating.y, width: floating.bitmap.width, height: floating.bitmap.height },
+            selectionMask ? flipMask(selectionMask, axis) : null,
+          )
+          return
+        }
+        applyBitmap(mirror(doc()))
       },
       rotate(degrees) {
-        commitFloating()
-        updateSelection(null)
+        const start = beginRotation()
+        if (start) {
+          applyRotation(start, degrees)
+          const floating = floatingRef.current
+          if (floating) floating.source = floating.bitmap
+          return
+        }
         applyBitmap(rotateBy(doc(), degrees, secondary))
       },
       resize(width, height) {
@@ -544,10 +638,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }),
     [
       applyBitmap,
+      applyRotation,
+      beginRotation,
       commitFloating,
+      currentRect,
       doc,
+      ensureFloating,
       onSizeChange,
       paint,
+      renderPreview,
       resetDocument,
       secondary,
       size.width,
@@ -731,8 +830,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (!origin) return
         const floating = ensureFloating(origin)
         if (drag.mode === 'move') {
-          const x = clamp(origin.x + (point.x - drag.start.x), 0, Math.max(0, size.width - floating.bitmap.width))
-          const y = clamp(origin.y + (point.y - drag.start.y), 0, Math.max(0, size.height - floating.bitmap.height))
+          const spareX = size.width - floating.bitmap.width
+          const spareY = size.height - floating.bitmap.height
+          const x = clamp(
+            origin.x + (point.x - drag.start.x),
+            Math.min(0, spareX, origin.x),
+            Math.max(0, spareX, origin.x),
+          )
+          const y = clamp(
+            origin.y + (point.y - drag.start.y),
+            Math.min(0, spareY, origin.y),
+            Math.max(0, spareY, origin.y),
+          )
           floating.x = x
           floating.y = y
           renderPreview()
@@ -812,6 +921,52 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [paint, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
   )
 
+  const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: ((clientX - rect.left) * canvas.width) / rect.width,
+      y: ((clientY - rect.top) * canvas.height) / rect.height,
+    }
+  }, [])
+
+  const handleRotateDown = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      const rotation = beginRotation()
+      if (!rotation) return
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      const start = clientToCanvas(event.clientX, event.clientY)
+      selectRef.current = { pointerId: event.pointerId, mode: 'rotate', start, rotation }
+    },
+    [beginRotation, clientToCanvas],
+  )
+
+  const handleRotateMove = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>) => {
+      const drag = selectRef.current
+      if (!drag || drag.mode !== 'rotate' || drag.pointerId !== event.pointerId || !drag.rotation) return
+      event.stopPropagation()
+      const { center } = drag.rotation
+      const point = clientToCanvas(event.clientX, event.clientY)
+      const radians = pointerAngle(center, point) - pointerAngle(center, drag.start)
+      applyRotation(drag.rotation, (radians * 180) / Math.PI)
+    },
+    [applyRotation, clientToCanvas],
+  )
+
+  const handleRotateUp = useCallback((event: ReactPointerEvent<HTMLSpanElement>) => {
+    const drag = selectRef.current
+    if (!drag || drag.mode !== 'rotate' || drag.pointerId !== event.pointerId) return
+    event.stopPropagation()
+    const floating = floatingRef.current
+    if (floating) floating.source = floating.bitmap
+    selectRef.current = null
+  }, [])
+
   const handlePointerLeave = useCallback(() => {
     onCursorMove(null)
   }, [onCursorMove])
@@ -857,6 +1012,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           {SELECTION_HANDLES.map((handle) => (
             <span key={handle} className={`selection-handle selection-handle-${handle}`} />
           ))}
+          <span className="selection-rotate-line" />
+          <span
+            className="selection-rotate-handle"
+            title="Rotate"
+            onPointerDown={handleRotateDown}
+            onPointerMove={handleRotateMove}
+            onPointerUp={handleRotateUp}
+            onPointerCancel={handleRotateUp}
+          />
         </div>
       ) : null}
       {lasso ? (

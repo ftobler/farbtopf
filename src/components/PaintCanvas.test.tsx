@@ -49,7 +49,7 @@ function setup(
     ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, onHistoryChange, onSizeChange, onSelectionChange }
+  return { ref, canvas, container, onHistoryChange, onSizeChange, onSelectionChange }
 }
 
 describe('PaintCanvas', () => {
@@ -293,5 +293,173 @@ describe('PaintCanvas', () => {
     expect(pixel(1, 1)).toEqual([255, 255, 255, 255])
     expect(pixel(12, 12)).toEqual([255, 0, 0, 255])
     expect(pixel(28, 28)).toEqual([255, 0, 0, 255])
+  })
+
+  describe('rotating and flipping a selection', () => {
+    const red = { r: 255, g: 0, b: 0, a: 255 }
+
+    function selectBar(canvas: HTMLCanvasElement) {
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 10, clientY: 13 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 16 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 16 })
+    }
+
+    function spyPixels(canvas: HTMLCanvasElement, width: number) {
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      return (x: number, y: number) => {
+        const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+        return Array.from(image.data.slice((y * width + x) * 4, (y * width + x) * 4 + 4))
+      }
+    }
+
+    function dragRotate(container: HTMLElement, from: { x: number; y: number }, to: { x: number; y: number }) {
+      const handle = container.querySelector('.selection-rotate-handle')
+      if (!handle) throw new Error('rotate handle not rendered')
+      handle.setPointerCapture = vi.fn()
+      fireEvent.pointerDown(handle, { button: 0, pointerId: 5, clientX: from.x, clientY: from.y })
+      fireEvent.pointerMove(handle, { pointerId: 5, clientX: to.x, clientY: to.y })
+      fireEvent.pointerUp(handle, { pointerId: 5, clientX: to.x, clientY: to.y })
+    }
+
+    it('renders a rotate handle only while there is a selection', () => {
+      const { canvas, container } = setup('select', 40, 40)
+      expect(container.querySelector('.selection-rotate-handle')).toBeNull()
+      selectBar(canvas)
+      expect(container.querySelector('.selection-rotate-handle')).not.toBeNull()
+    })
+
+    it('rotates the selection a quarter turn about its centre when the handle is dragged', () => {
+      const { ref, canvas, container } = setup('select', 40, 40)
+      const pixel = spyPixels(canvas, 40)
+      const doc = new Bitmap(40, 40, WHITE)
+      doc.set(10, 13, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      selectBar(canvas)
+      expect(ref.current?.getSelection()).toEqual({ x: 10, y: 13, width: 10, height: 4 })
+      dragRotate(container, { x: 15, y: 5 }, { x: 25, y: 15 })
+      expect(ref.current?.getSelection()).toEqual({ x: 13, y: 10, width: 4, height: 10 })
+      expect(pixel(16, 10)).toEqual([0, 0, 0, 255])
+      expect(pixel(10, 13)).toEqual([255, 255, 255, 255])
+    })
+
+    it('follows the pointer angle without snapping', () => {
+      const { ref, canvas, container } = setup('select', 40, 40)
+      selectBar(canvas)
+      const radians = (30 * Math.PI) / 180
+      dragRotate(container, { x: 15, y: 5 }, { x: 15 + 10 * Math.sin(radians), y: 15 - 10 * Math.cos(radians) })
+      const rotated = ref.current?.getSelection()
+      expect(rotated?.width).toBe(11)
+      expect(rotated?.height).toBe(9)
+    })
+
+    it('applies small angles too', () => {
+      const { ref, canvas, container } = setup('select', 40, 40)
+      selectBar(canvas)
+      const radians = (5 * Math.PI) / 180
+      dragRotate(container, { x: 15, y: 5 }, { x: 15 + 10 * Math.sin(radians), y: 15 - 10 * Math.cos(radians) })
+      const rotated = ref.current?.getSelection()
+      expect(rotated?.width).toBe(11)
+      expect(rotated?.height).toBe(5)
+    })
+
+    it('keeps the pixels under the transparent corners of a rotated selection', () => {
+      const { ref, canvas } = setup('select', 40, 40)
+      const pixel = spyPixels(canvas, 40)
+      act(() => ref.current?.loadBitmap(new Bitmap(40, 40, red)))
+      selectBar(canvas)
+      act(() => ref.current?.rotate(30))
+      expect(ref.current?.getSelection()).toEqual({ x: 10, y: 11, width: 11, height: 9 })
+      expect(pixel(10, 11)).toEqual([255, 0, 0, 255])
+      expect(ref.current?.getSize()).toEqual({ width: 40, height: 40 })
+    })
+
+    it('flips only the selected pixels', () => {
+      const { ref, canvas } = setup('select', 20, 20)
+      const pixel = spyPixels(canvas, 20)
+      const doc = new Bitmap(20, 20, WHITE)
+      doc.set(2, 2, BLACK)
+      doc.set(15, 15, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 5, clientY: 5 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 5, clientY: 5 })
+      act(() => ref.current?.flip('horizontal'))
+      expect(pixel(5, 2)).toEqual([0, 0, 0, 255])
+      expect(pixel(2, 2)).toEqual([255, 255, 255, 255])
+      expect(pixel(15, 15)).toEqual([0, 0, 0, 255])
+      expect(pixel(4, 15)).toEqual([255, 255, 255, 255])
+      expect(ref.current?.getSelection()).toEqual({ x: 2, y: 2, width: 4, height: 4 })
+    })
+
+    it('flips the whole image without a selection', () => {
+      const { ref, canvas } = setup('brush', 20, 20)
+      const pixel = spyPixels(canvas, 20)
+      const doc = new Bitmap(20, 20, WHITE)
+      doc.set(0, 0, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      act(() => ref.current?.flip('horizontal'))
+      expect(pixel(19, 0)).toEqual([0, 0, 0, 255])
+      expect(pixel(0, 0)).toEqual([255, 255, 255, 255])
+    })
+
+    it('flips a free-form mask along with the pixels', () => {
+      const { ref, canvas } = setup('select', 10, 10, false, 'freeform')
+      const pixel = spyPixels(canvas, 10)
+      act(() => ref.current?.loadBitmap(new Bitmap(10, 10, BLACK)))
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 8, clientY: 0 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 0, clientY: 8 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 0, clientY: 8 })
+      act(() => ref.current?.flip('horizontal'))
+      act(() => ref.current?.cutSelection())
+      expect(pixel(6, 6)).toEqual([255, 255, 255, 255])
+      expect(pixel(2, 6)).toEqual([0, 0, 0, 255])
+    })
+
+    it('rotates only the selection by a quarter turn', () => {
+      const { ref, canvas, onSizeChange } = setup('select', 40, 40)
+      const pixel = spyPixels(canvas, 40)
+      const doc = new Bitmap(40, 40, WHITE)
+      doc.set(10, 13, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      selectBar(canvas)
+      onSizeChange.mockClear()
+      act(() => ref.current?.rotate(90))
+      expect(ref.current?.getSelection()).toEqual({ x: 13, y: 10, width: 4, height: 10 })
+      expect(ref.current?.getSize()).toEqual({ width: 40, height: 40 })
+      expect(onSizeChange).not.toHaveBeenCalled()
+      expect(pixel(16, 10)).toEqual([0, 0, 0, 255])
+      expect(pixel(10, 13)).toEqual([255, 255, 255, 255])
+    })
+
+    it('rotates the whole canvas without a selection', () => {
+      const { ref, onSizeChange } = setup('select', 20, 10)
+      act(() => ref.current?.rotate(90))
+      expect(ref.current?.getSize()).toEqual({ width: 10, height: 20 })
+      expect(onSizeChange).toHaveBeenLastCalledWith(10, 20)
+    })
+
+    it('scales the rotated result with the resize handles', () => {
+      const { ref, canvas, container } = setup('select', 40, 40)
+      selectBar(canvas)
+      dragRotate(container, { x: 15, y: 5 }, { x: 25, y: 15 })
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 17, clientY: 20 })
+      fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 21, clientY: 20 })
+      fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 21, clientY: 20 })
+      expect(ref.current?.getSelection()).toEqual({ x: 13, y: 10, width: 8, height: 10 })
+    })
+
+    it('moves a rotated selection that sticks out of the canvas', () => {
+      const { ref, canvas } = setup('select', 20, 20)
+      act(() => ref.current?.selectAll())
+      act(() => ref.current?.rotate(45))
+      const rotated = ref.current?.getSelection()
+      expect(rotated?.x).toBeLessThan(0)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 12, clientY: 11 })
+      fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 12, clientY: 11 })
+      expect(ref.current?.getSelection()).toEqual({ ...rotated, x: (rotated?.x ?? 0) + 2, y: (rotated?.y ?? 0) + 1 })
+    })
   })
 })

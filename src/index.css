@@ -551,6 +551,35 @@ textarea {
 .selection-handle-sw { left: 0; top: 100%; }
 .selection-handle-w { left: 0; top: 50%; }
 
+.selection-rotate-line {
+  position: absolute;
+  left: 50%;
+  top: -20px;
+  height: 20px;
+  border-left: 1px solid var(--accent);
+  transform: translateX(-50%);
+}
+
+.selection-rotate-handle {
+  position: absolute;
+  left: 50%;
+  top: -20px;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.selection-rotate-handle:active {
+  cursor: grabbing;
+}
+
 .text-editor {
   position: absolute;
   min-width: 72px;
