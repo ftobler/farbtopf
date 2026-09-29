@@ -7,6 +7,7 @@ import type { PaintCanvasHandle } from './components/PaintCanvas'
 import { Ribbon } from './components/Ribbon'
 import { RotateDialog } from './components/RotateDialog'
 import { ScaleImageDialog } from './components/ScaleImageDialog'
+import { Scrollbars } from './components/Scrollbars'
 import { StatusBar } from './components/StatusBar'
 import type { BrushId } from './core/brushes'
 import type { Rgba } from './core/color'
@@ -605,6 +606,13 @@ function App() {
           brush={brush}
           text={text}
           showMiniature={showMiniature}
+          onPanChange={setPan}
+        />
+        <Scrollbars
+          workspaceRef={workspaceRef}
+          zoom={zoom}
+          pan={pan}
+          canvasSize={canvasSize}
           onPanChange={setPan}
         />
       </div>
