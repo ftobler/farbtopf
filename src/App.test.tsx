@@ -203,6 +203,7 @@ describe('App', () => {
       'Cut',
       'Copy',
       'Paste',
+      'Copy visible layers',
     ])
     expect(editItems.every((item) => item.querySelector('svg'))).toBe(true)
   })
@@ -782,5 +783,22 @@ describe('custom color picker', () => {
     expect(within(list).getByRole('option', { name: 'Layer 2' }).getAttribute('aria-selected')).toBe('true')
     fireEvent.click(toggle)
     expect(screen.queryByRole('complementary', { name: 'Layers panel' })).toBeNull()
+  })
+
+  it('offers copy visible layers in the Edit menu after a divider', () => {
+    render(<App />)
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Edit' }))
+    const item = screen.getByRole('menuitem', { name: /Copy visible layers/ })
+    expect(item.previousElementSibling?.getAttribute('role')).toBe('separator')
+    fireEvent.click(item)
+    expect(screen.getByText('Clipboard copy is not supported here')).toBeTruthy()
+  })
+
+  it('opens only the layer menu when a layer is right-clicked', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Layers' }))
+    fireEvent.contextMenu(screen.getByRole('option', { name: 'Background' }), { clientX: 20, clientY: 20 })
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    expect(screen.getByRole('menuitem', { name: /Delete layer/ })).toBeTruthy()
   })
 })

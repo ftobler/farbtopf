@@ -84,6 +84,8 @@ export interface PaintCanvasHandle {
   invertSelection: () => void
   deleteSelection: () => void
   getSelectionDataUrl: () => string | null
+  /** The selection, or the whole image, with every layer flattened, as a PNG data URL. */
+  getVisibleDataUrl: () => string
   cutSelection: () => void
   /** Adds a transparent layer above the active one and makes it active. */
   addLayer: () => void
@@ -1085,6 +1087,21 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const rect = selectionRef.current
         if (!rect) return null
         const region = crop(doc(), rect)
+        return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
+      },
+      getVisibleDataUrl() {
+        finishPolyline()
+        const floating = floatingRef.current
+        let active = doc()
+        if (floating) {
+          active = floating.base.clone()
+          blitAlpha(active, floating.bitmap, floating.x, floating.y)
+        }
+        const stack = currentLayers().map((layer, index) => (index === activeRef.current ? active : layer.bitmap))
+        const flat = compositeLayers(stack) ?? active
+        const rect = currentRect()
+        if (!rect) return bitmapToDataUrl(flat)
+        const region = crop(flat, rect)
         return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
       },
       cutSelection() {

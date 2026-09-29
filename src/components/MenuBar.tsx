@@ -40,6 +40,7 @@ export interface MenuBarProps {
   onCut: () => void
   onCopy: () => void
   onPaste: () => void
+  onCopyVisible: () => void
   onZoomChange: (zoom: number) => void
   onZoomFit: () => void
   onToggleGrid: () => void
@@ -65,6 +66,7 @@ export function MenuBar({
   onCut,
   onCopy,
   onPaste,
+  onCopyVisible,
   onZoomChange,
   onZoomFit,
   onToggleGrid,
@@ -181,6 +183,16 @@ export function MenuBar({
                 }}
               >
                 Paste
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem
+                icon={<CopyIcon size={16} />}
+                onClick={() => {
+                  onCopyVisible()
+                  close()
+                }}
+              >
+                Copy visible layers
               </MenuItem>
             </>
           )}

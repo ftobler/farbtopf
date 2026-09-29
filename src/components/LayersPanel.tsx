@@ -53,7 +53,15 @@ export function LayersPanel({ layers, active, onSelect, onAdd, onDelete, onMove 
   const canDelete = layers.length > 1
 
   return (
-    <aside className="layers-panel" aria-label="Layers panel">
+    <aside
+      className="layers-panel"
+      aria-label="Layers panel"
+      onContextMenu={(event) => {
+        // The panel sits inside the workspace; keep the canvas context menu from opening too.
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+    >
       <ul className="layers-list" role="listbox" aria-label="Layers">
         <li className="layers-add-item" role="presentation">
           <button

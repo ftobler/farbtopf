@@ -165,21 +165,30 @@ function App() {
     }
   }, [notify, openFile])
 
-  const handleCopyFromCanvas = useCallback(async () => {
-    const dataUrl = canvasRef.current?.getSelectionDataUrl() ?? canvasRef.current?.toDataUrl()
-    if (!dataUrl) return
-    if (!navigator.clipboard?.write) {
-      notify('Clipboard copy is not supported here')
-      return
-    }
-    try {
-      const blob = await (await fetch(dataUrl)).blob()
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-      notify('Copied to the clipboard')
-    } catch {
-      notify('Could not copy to the clipboard')
-    }
-  }, [notify])
+  const copyDataUrl = useCallback(
+    async (dataUrl: string | undefined) => {
+      if (!dataUrl) return
+      if (!navigator.clipboard?.write) {
+        notify('Clipboard copy is not supported here')
+        return
+      }
+      try {
+        const blob = await (await fetch(dataUrl)).blob()
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        notify('Copied to the clipboard')
+      } catch {
+        notify('Could not copy to the clipboard')
+      }
+    },
+    [notify],
+  )
+
+  const handleCopyFromCanvas = useCallback(
+    () => copyDataUrl(canvasRef.current?.getSelectionDataUrl() ?? canvasRef.current?.toDataUrl()),
+    [copyDataUrl],
+  )
+
+  const handleCopyVisible = useCallback(() => copyDataUrl(canvasRef.current?.getVisibleDataUrl()), [copyDataUrl])
 
   const handleCutFromCanvas = useCallback(async () => {
     const handle = canvasRef.current
@@ -541,6 +550,7 @@ function App() {
         onCut={handleCutFromCanvas}
         onCopy={handleCopyFromCanvas}
         onPaste={handlePasteFromClipboard}
+        onCopyVisible={handleCopyVisible}
         onZoomChange={setZoom}
         onZoomFit={handleZoomFit}
         onToggleGrid={() => setShowGrid((value) => !value)}

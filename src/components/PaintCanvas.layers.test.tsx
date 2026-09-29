@@ -208,4 +208,52 @@ describe('PaintCanvas layers', () => {
     act(() => ref.current?.newDocument(10, 10))
     expect(layers()).toEqual(['Background'])
   })
+
+  describe('copying visible layers', () => {
+    /** Captures the image drawn onto the canvas that encodes the copied PNG. */
+    function captureCopy(run: () => string | undefined) {
+      const putImageData = vi.fn()
+      const spy = vi
+        .spyOn(document, 'createElement')
+        .mockImplementation(((tag: string) => {
+          const element = Document.prototype.createElement.call(document, tag)
+          if (element instanceof HTMLCanvasElement) {
+            element.getContext = vi.fn(() => ({ putImageData })) as unknown as typeof element.getContext
+          }
+          return element
+        }) as typeof document.createElement)
+      const url = run()
+      spy.mockRestore()
+      const image = putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray; width: number; height: number }
+      const pixel = (x: number, y: number) => {
+        const i = (y * image.width + x) * 4
+        return Array.from(image.data.slice(i, i + 4))
+      }
+      return { url, image, pixel }
+    }
+
+    it('copies every layer flattened into one image', () => {
+      const { ref, click } = setup()
+      click(5, 5)
+      act(() => ref.current?.addLayer())
+      click(6, 6)
+      const { url, image, pixel } = captureCopy(() => ref.current?.getVisibleDataUrl())
+      expect(url).toMatch(/^data:image\/png/)
+      expect([image.width, image.height]).toEqual([SIZE, SIZE])
+      expect(pixel(5, 5)).toEqual(black)
+      expect(pixel(6, 6)).toEqual(black)
+      expect(pixel(7, 7)).toEqual(white)
+    })
+
+    it('copies only the selected area of the flattened image', () => {
+      const { ref, click, setTool } = setup()
+      click(5, 5)
+      act(() => ref.current?.addLayer())
+      click(6, 6)
+      setTool('select')
+      act(() => ref.current?.selectAll())
+      const { image } = captureCopy(() => ref.current?.getVisibleDataUrl())
+      expect([image.width, image.height]).toEqual([SIZE, SIZE])
+    })
+  })
 })
