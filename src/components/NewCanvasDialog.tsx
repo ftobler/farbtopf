@@ -71,6 +71,14 @@ export function NewCanvasDialog({
             event.preventDefault()
             submit()
           }}
+          onKeyDown={(event) => {
+            // A form with several fields and no submit button does not submit on
+            // Enter, so wire it up explicitly.
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              submit()
+            }
+          }}
         >
           <label>
             Width
