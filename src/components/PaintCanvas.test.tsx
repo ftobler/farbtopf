@@ -298,6 +298,31 @@ describe('PaintCanvas', () => {
     expect(onSelectionChange).toHaveBeenLastCalledWith(true)
   })
 
+  it('keeps a full-canvas selection full when dragged by its corner handle', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    act(() => ref.current?.selectAll())
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 30, clientY: 30 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 30, clientY: 30 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 30, clientY: 30 })
+    expect(ref.current?.getSelection()).toEqual({ x: 0, y: 0, width: 30, height: 30 })
+  })
+
+  it('drops the selection when the document is scaled', () => {
+    const { ref } = setup('select', 30, 30)
+    act(() => ref.current?.selectAll())
+    expect(ref.current?.getSelection()).not.toBeNull()
+    act(() => ref.current?.resize(15, 15))
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('drops the selection when the canvas is cleared', () => {
+    const { ref } = setup('select', 30, 30)
+    act(() => ref.current?.selectAll())
+    expect(ref.current?.getSelection()).not.toBeNull()
+    act(() => ref.current?.clear())
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
   it('inverts a rectangular selection', () => {
     const { ref, canvas } = setup('select', 10, 10)
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })

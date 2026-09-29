@@ -943,6 +943,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         recordHistory(doc().clone())
         doc().fill(activeRef.current === 0 ? WHITE : TRANSPARENT)
         paint(doc())
+        // The cleared canvas no longer matches any selection mask.
+        updateSelection(null)
         syncHistory()
       },
       undo() {
@@ -1004,6 +1006,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       resize(width, height) {
         finishPolyline()
         commitFloating()
+        // Scaling moves every pixel, so the old selection coordinates are stale.
+        updateSelection(null)
         applyToLayers((bitmap) => scale(bitmap, width, height))
       },
       resizeCanvas(rect) {
@@ -1187,6 +1191,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       size.width,
       size.height,
     )
+  }, [size.width, size.height])
+
+  // Resize handles sit on the far edges, so their pointer may reach x=width or
+  // y=height; clampPoint would cap it one pixel short and shrink the selection.
+  const toEdgePoint = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = rect.width === 0 ? 1 : size.width / rect.width
+    const scaleY = rect.height === 0 ? 1 : size.height / rect.height
+    return {
+      x: clamp((event.clientX - rect.left) * scaleX, 0, size.width),
+      y: clamp((event.clientY - rect.top) * scaleY, 0, size.height),
+    }
   }, [size.width, size.height])
 
   const commitText = useCallback(() => {
@@ -1392,7 +1410,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           return
         }
         if (drag.mode === 'resize' && drag.handle) {
-          const next = resizeRect(origin, drag.handle, point, size.width, size.height)
+          const next = resizeRect(origin, drag.handle, toEdgePoint(event), size.width, size.height)
           floating.bitmap = scale(floating.source, next.width, next.height)
           floating.x = next.x
           floating.y = next.y
@@ -1438,7 +1456,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewPolyline, primary, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewPolyline, primary, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toEdgePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
