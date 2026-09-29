@@ -1,36 +1,26 @@
 import { BLACK, WHITE } from './color'
 
-/** The default two-row swatch palette, in the spirit of classic MS Paint. */
-export const DEFAULT_PALETTE: readonly string[] = [
-  '#000000',
-  '#7f7f7f',
-  '#880015',
-  '#ed1c24',
-  '#ff7f27',
-  '#fff200',
-  '#22b14c',
-  '#00a2e8',
-  '#3f48cc',
-  '#a349a4',
-  '#b97a57',
-  '#ffaec9',
-  '#7f6b3f',
-  '#ffffff',
-  '#c8c8c8',
-  '#e6b8af',
-  '#ffc90e',
-  '#efe4b0',
-  '#b5e61d',
-  '#99d9ea',
-  '#7092be',
-  '#c3c3c3',
-  '#a0e7a0',
-  '#d5e8d4',
-  '#ffe599',
-  '#ffcccc',
-  '#0000a0',
-  '#f5f5f5',
+export interface PaletteColumn {
+  top: string
+  bottom: string
+}
+
+/** Palette columns: saturated colours on top, brighter pastels below. */
+export const PALETTE_COLUMNS: readonly PaletteColumn[] = [
+  { top: '#000000', bottom: '#ffffff' },
+  { top: '#7f7f7f', bottom: '#c3c3c3' },
+  { top: '#e81123', bottom: '#ffadb0' },
+  { top: '#ff8c00', bottom: '#ffd3a3' },
+  { top: '#ffd800', bottom: '#fff4a3' },
+  { top: '#16a34a', bottom: '#a7e8b9' },
+  { top: '#00a2e8', bottom: '#a6e3f7' },
+  { top: '#2b4bd8', bottom: '#b0bdf5' },
+  { top: '#8e44ad', bottom: '#d7b8ea' },
+  { top: '#e3268f', bottom: '#f7b3d8' },
 ]
+
+/** The swatches in render order: the grid fills column by column, top then bottom. */
+export const DEFAULT_PALETTE: readonly string[] = PALETTE_COLUMNS.flatMap((column) => [column.top, column.bottom])
 
 export const DEFAULT_PRIMARY = BLACK
 export const DEFAULT_SECONDARY = WHITE
