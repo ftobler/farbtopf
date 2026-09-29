@@ -103,6 +103,17 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
   })
 
+  it('arranges the image commands in a two by two grid', () => {
+    render(<App />)
+    const names = ['Crop', 'Rotate', 'Scale', 'Flip']
+    const buttons = names.map((name) => screen.getByRole('button', { name }))
+    const grid = buttons[0].closest('.button-grid')
+    expect(grid).toBeTruthy()
+    const cells = buttons.map((button) => [...grid!.children].find((cell) => cell.contains(button)))
+    expect(cells.every(Boolean)).toBe(true)
+    expect(cells.map((cell) => [...grid!.children].indexOf(cell!))).toEqual([0, 1, 2, 3])
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')

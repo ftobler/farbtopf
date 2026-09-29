@@ -245,7 +245,7 @@ export function Ribbon({
       <div className="ribbon-separator" />
 
       <section className="ribbon-group">
-        <div className="ribbon-group-items">
+        <div className="ribbon-group-items button-grid">
           <button
             type="button"
             className="icon-button"
@@ -256,6 +256,36 @@ export function Ribbon({
           >
             <CropIcon size={18} />
           </button>
+          <Dropdown title="Rotate" ariaLabel="Rotate" trigger={<RotateIcon size={18} />}>
+            {(close) => (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    onRotate(90)
+                    close()
+                  }}
+                >
+                  Rotate right 90°
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onRotate(270)
+                    close()
+                  }}
+                >
+                  Rotate left 90°
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onRotate(180)
+                    close()
+                  }}
+                >
+                  Rotate 180°
+                </MenuItem>
+              </>
+            )}
+          </Dropdown>
           <button
             type="button"
             className="icon-button"
@@ -283,36 +313,6 @@ export function Ribbon({
                   }}
                 >
                   Flip vertical
-                </MenuItem>
-              </>
-            )}
-          </Dropdown>
-          <Dropdown title="Rotate" ariaLabel="Rotate" trigger={<RotateIcon size={18} />}>
-            {(close) => (
-              <>
-                <MenuItem
-                  onClick={() => {
-                    onRotate(90)
-                    close()
-                  }}
-                >
-                  Rotate right 90°
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    onRotate(270)
-                    close()
-                  }}
-                >
-                  Rotate left 90°
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    onRotate(180)
-                    close()
-                  }}
-                >
-                  Rotate 180°
                 </MenuItem>
               </>
             )}
