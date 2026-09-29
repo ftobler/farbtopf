@@ -209,6 +209,44 @@ describe('PaintCanvas layers', () => {
     expect(layers()).toEqual(['Background'])
   })
 
+  it('keeps a moved selection when the active layer changes', () => {
+    const { ref, canvas, shown } = setup('select')
+    const findBlack = () => {
+      for (let y = 0; y < SIZE; y += 1) {
+        for (let x = 0; x < SIZE; x += 1) {
+          if (shown(x, y).every((channel, index) => channel === black[index])) return { x, y }
+        }
+      }
+      return null
+    }
+    const doc = new Bitmap(SIZE, SIZE, WHITE)
+    doc.set(3, 3, BLACK)
+    act(() => ref.current?.loadBitmap(doc))
+    act(() => ref.current?.addLayer())
+    act(() => ref.current?.selectLayer(0))
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 18, clientY: 18 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 18, clientY: 18 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 13, clientY: 13 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 13, clientY: 13 })
+    const moved = findBlack()
+    expect(moved).not.toBeNull()
+    act(() => ref.current?.selectLayer(1))
+    expect(findBlack()).toEqual(moved)
+  })
+
+  it('does not corrupt undo history when a delete moves the active layer', () => {
+    const { ref, click, shown } = setup()
+    act(() => ref.current?.addLayer())
+    act(() => ref.current?.addLayer())
+    act(() => ref.current?.deleteLayer(2))
+    click(5, 5)
+    expect(shown(5, 5)).toEqual(black)
+    act(() => ref.current?.undo())
+    expect(shown(5, 5)).toEqual(white)
+  })
+
   describe('copying visible layers', () => {
     /** Captures the image drawn onto the canvas that encodes the copied PNG. */
     function captureCopy(run: () => string | undefined) {

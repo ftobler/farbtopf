@@ -900,10 +900,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const changeLayers = useCallback(
     (next: Layer[], active: number) => {
       recordHistory(doc().clone())
-      setLayers(next, active)
-      syncHistory()
+      // `next` reuses layer objects that the snapshot just recorded by
+      // reference; give the live active surface its own copy so painting it
+      // later cannot reach back into the undo history.
+      const isolated = next.map((layer, index) =>
+        index === active ? { ...layer, bitmap: layer.bitmap.clone() } : layer,
+      )
+      setLayers(isolated, active)
     },
-    [doc, recordHistory, setLayers, syncHistory],
+    [doc, recordHistory, setLayers],
   )
 
   /** Builds the document described by `rect`, keeping content at its image position. */
@@ -1143,25 +1148,27 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         changeLayers(next, activeRef.current + 1)
       },
       deleteLayer(index) {
+        // Settle first: a pending floating selection replaces the live bitmap,
+        // so capturing the stack before that would drop the moved pixels.
+        settle()
         const stack = currentLayers()
         if (stack.length < 2 || !stack[index]) return
-        settle()
         const active = activeRef.current
         const next = stack.filter((_, i) => i !== index)
         changeLayers(next, index < active || (index === active && active > 0) ? active - 1 : active)
       },
       moveLayer(from, to) {
+        settle()
         const stack = currentLayers()
         if (!stack[from] || from === to) return
-        settle()
         const activeId = stack[activeRef.current].id
         const next = moveItem(stack, from, to)
         changeLayers(next, next.findIndex((layer) => layer.id === activeId))
       },
       selectLayer(index) {
+        settle()
         const stack = currentLayers()
         if (!stack[index] || index === activeRef.current) return
-        settle()
         // The newly active bitmap is painted in place, so it must not be shared with any undo step.
         stack[index] = { ...stack[index], bitmap: stack[index].bitmap.clone() }
         setLayers(stack, index)
