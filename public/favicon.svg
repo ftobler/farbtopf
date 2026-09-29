@@ -5,18 +5,29 @@
       <stop offset="0.5" stop-color="#a66cff" />
       <stop offset="1" stop-color="#2f8cff" />
     </linearGradient>
+    <linearGradient id="paintDark" gradientUnits="userSpaceOnUse" x1="12" y1="14" x2="56" y2="34">
+      <stop offset="0" stop-color="#c2237a" />
+      <stop offset="0.5" stop-color="#7040d0" />
+      <stop offset="1" stop-color="#1560c8" />
+    </linearGradient>
   </defs>
-  <!-- handle -->
-  <path d="M12 30C12 12 52 12 52 30" stroke="#5b6773" stroke-width="3" fill="none" stroke-linecap="round" />
+  <!-- paint mass behind the curls, fills the gaps -->
+  <g fill="url(#paint)">
+    <circle cx="19" cy="25" r="6" />
+    <circle cx="29" cy="21" r="7" />
+    <circle cx="40" cy="21" r="7" />
+    <circle cx="50" cy="27" r="5.5" />
+    <rect x="14" y="22" width="40" height="8" />
+  </g>
   <!-- curly paint "hair" -->
   <g stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="5">
-    <path d="M17 30c-6-4-3-12 3-10 5 2 2 8-1 6" stroke="#fff" stroke-width="7" />
+    <path d="M17 30c-6-4-3-12 3-10 5 2 2 8-1 6" stroke="url(#paintDark)" stroke-width="6.5" />
     <path d="M17 30c-6-4-3-12 3-10 5 2 2 8-1 6" stroke="url(#paint)" />
-    <path d="M26 27c-4-7 2-13 7-9 4 3-1 8-3 5" stroke="#fff" stroke-width="7" />
+    <path d="M26 27c-4-7 2-13 7-9 4 3-1 8-3 5" stroke="url(#paintDark)" stroke-width="6.5" />
     <path d="M26 27c-4-7 2-13 7-9 4 3-1 8-3 5" stroke="url(#paint)" />
-    <path d="M36 27c-1-8 7-11 10-6 2 4-3 6-4 3" stroke="#fff" stroke-width="7" />
+    <path d="M36 27c-1-8 7-11 10-6 2 4-3 6-4 3" stroke="url(#paintDark)" stroke-width="6.5" />
     <path d="M36 27c-1-8 7-11 10-6 2 4-3 6-4 3" stroke="url(#paint)" />
-    <path d="M46 30c3-6 10-4 9 1-1 4-5 3-5 0" stroke="#fff" stroke-width="7" />
+    <path d="M46 30c3-6 10-4 9 1-1 4-5 3-5 0" stroke="url(#paintDark)" stroke-width="6.5" />
     <path d="M46 30c3-6 10-4 9 1-1 4-5 3-5 0" stroke="url(#paint)" />
   </g>
   <!-- bucket body -->
