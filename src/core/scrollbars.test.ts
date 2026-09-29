@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeScrollbarMetrics, panForScroll } from './scrollbars'
+import { SCROLL_OVERSCROLL, computeScrollbarMetrics, panForScroll } from './scrollbars'
 
 describe('computeScrollbarMetrics', () => {
   it('marks an axis as not scrollable when the content fits', () => {
@@ -21,17 +21,28 @@ describe('computeScrollbarMetrics', () => {
   it('centres the thumb when the content is larger and not panned', () => {
     const metrics = computeScrollbarMetrics(1000, 400, 0)
     expect(metrics.scrollable).toBe(true)
-    expect(metrics.maxScroll).toBe(600)
-    expect(metrics.scroll).toBe(300)
+    expect(metrics.maxScroll).toBe(640)
+    expect(metrics.scroll).toBe(320)
     expect(metrics.positionRatio).toBe(0.5)
-    expect(metrics.thumbRatio).toBeCloseTo(0.4)
+    expect(metrics.thumbRatio).toBeCloseTo(400 / 1040)
+  })
+
+  it('lets the canvas travel one overscroll past each edge at the limits', () => {
+    const start = computeScrollbarMetrics(1000, 400, 320)
+    expect(start.scroll).toBe(0)
+    // Canvas left edge sits one overscroll (20px) inside the viewport start.
+    expect(400 / 2 - 1000 / 2 + panForScroll(1000, 400, start.scroll)).toBe(SCROLL_OVERSCROLL)
+    const end = computeScrollbarMetrics(1000, 400, -320)
+    expect(end.scroll).toBe(end.maxScroll)
+    // Canvas right edge sits one overscroll (20px) inside the viewport end.
+    expect(400 / 2 + 1000 / 2 + panForScroll(1000, 400, end.scroll)).toBe(400 - SCROLL_OVERSCROLL)
   })
 
   it('maps panning to the scroll offset and clamps at both ends', () => {
-    expect(computeScrollbarMetrics(1000, 400, 300).scroll).toBe(0)
-    expect(computeScrollbarMetrics(1000, 400, -300).scroll).toBe(600)
+    expect(computeScrollbarMetrics(1000, 400, 300).scroll).toBe(20)
+    expect(computeScrollbarMetrics(1000, 400, -300).scroll).toBe(620)
     expect(computeScrollbarMetrics(1000, 400, 900).scroll).toBe(0)
-    expect(computeScrollbarMetrics(1000, 400, -900).scroll).toBe(600)
+    expect(computeScrollbarMetrics(1000, 400, -900).scroll).toBe(640)
   })
 
   it('never reports a viewport longer than the content as a thumb bigger than the track', () => {
@@ -42,9 +53,9 @@ describe('computeScrollbarMetrics', () => {
 
 describe('panForScroll', () => {
   it('is the inverse of the metrics scroll offset', () => {
-    expect(panForScroll(1000, 400, 0)).toBe(300)
-    expect(panForScroll(1000, 400, 600)).toBe(-300)
-    expect(panForScroll(1000, 400, 300)).toBe(0)
+    expect(panForScroll(1000, 400, 0)).toBe(320)
+    expect(panForScroll(1000, 400, 600)).toBe(-280)
+    expect(panForScroll(1000, 400, 300)).toBe(20)
   })
 
   it('round-trips through the metrics', () => {

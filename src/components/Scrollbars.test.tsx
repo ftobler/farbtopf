@@ -135,8 +135,8 @@ describe('Scrollbars', () => {
       onPanChange: () => {},
     })
     const element = thumb('x')
-    expect(parseFloat(element.style.width)).toBeCloseTo(316.8, 1)
-    expect(parseFloat(element.style.left)).toBeCloseTo(237.6, 1)
+    expect(parseFloat(element.style.width)).toBeCloseTo(310.6, 1)
+    expect(parseFloat(element.style.left)).toBeCloseTo(240.7, 1)
   })
 
   it('sizes and positions the vertical thumb from the scroll geometry', () => {
@@ -147,8 +147,8 @@ describe('Scrollbars', () => {
       onPanChange: () => {},
     })
     const element = thumb('y')
-    expect(parseFloat(element.style.height)).toBeCloseTo(177.6, 1)
-    expect(parseFloat(element.style.top)).toBeCloseTo(207.2, 1)
+    expect(parseFloat(element.style.height)).toBeCloseTo(174.1, 1)
+    expect(parseFloat(element.style.top)).toBeCloseTo(208.9, 1)
   })
 
   it('scales the thumb with the zoom level', () => {
@@ -158,10 +158,10 @@ describe('Scrollbars', () => {
       canvasSize: { width: 600, height: 400 },
       onPanChange: () => {},
     })
-    expect(parseFloat(thumb('x').style.width)).toBeCloseTo(528, 1)
-    expect(parseFloat(thumb('x').style.left)).toBeCloseTo(132, 1)
-    expect(parseFloat(thumb('y').style.height)).toBeCloseTo(444, 1)
-    expect(parseFloat(thumb('y').style.top)).toBeCloseTo(74, 1)
+    expect(parseFloat(thumb('x').style.width)).toBeCloseTo(511, 1)
+    expect(parseFloat(thumb('x').style.left)).toBeCloseTo(140.5, 1)
+    expect(parseFloat(thumb('y').style.height)).toBeCloseTo(422.9, 1)
+    expect(parseFloat(thumb('y').style.top)).toBeCloseTo(84.6, 1)
   })
 
   it('moves the thumb when the pan changes', () => {
@@ -174,11 +174,11 @@ describe('Scrollbars', () => {
     const view = render(<Harness {...props} />)
     const element = () =>
       view.container.querySelector('.workspace-scrollbar[data-axis="x"] .workspace-scrollbar-thumb') as HTMLElement
-    expect(parseFloat(element().style.left)).toBeCloseTo(237.6, 1)
-    view.rerender(<Harness {...props} pan={{ x: 600, y: 0 }} />)
+    expect(parseFloat(element().style.left)).toBeCloseTo(240.7, 1)
+    view.rerender(<Harness {...props} pan={{ x: 620, y: 0 }} />)
     expect(parseFloat(element().style.left)).toBeCloseTo(0, 1)
-    view.rerender(<Harness {...props} pan={{ x: -600, y: 0 }} />)
-    expect(parseFloat(element().style.left)).toBeCloseTo(475.2, 1)
+    view.rerender(<Harness {...props} pan={{ x: -620, y: 0 }} />)
+    expect(parseFloat(element().style.left)).toBeCloseTo(481.4, 1)
   })
 
   it('clamps the thumb for a pan far outside the scroll range without overflowing', () => {
@@ -197,7 +197,7 @@ describe('Scrollbars', () => {
     view.rerender(<Harness {...props} pan={{ x: -1e9, y: 0 }} />)
     const end = parseFloat(element().style.left)
     expect(Number.isFinite(end)).toBe(true)
-    expect(end).toBeCloseTo(475.2, 1)
+    expect(end).toBeCloseTo(481.4, 1)
   })
 
   it('pans the canvas in the opposite direction of the dragged thumb', () => {
@@ -214,7 +214,7 @@ describe('Scrollbars', () => {
     fireEvent.pointerDown(element, { button: 0, pointerId: 1, clientX: 300, clientY: 300 })
     fireEvent.pointerMove(element, { pointerId: 1, clientX: 400, clientY: 300 })
     const pan = onPanChange.mock.calls.at(-1)?.[0] as Point
-    expect(pan.x).toBeCloseTo(-252.5, 1)
+    expect(pan.x).toBeCloseTo(-257.6, 1)
     expect(pan.x).toBeLessThan(0)
     fireEvent.pointerUp(element, { pointerId: 1, clientX: 400, clientY: 300 })
   })
@@ -262,6 +262,6 @@ describe('Scrollbars', () => {
     element.setPointerCapture = vi.fn()
     fireEvent.pointerDown(element, { button: 0, pointerId: 4, clientX: 202, clientY: 592 })
     const pan = onPanChange.mock.calls.at(-1)?.[0] as Point
-    expect(pan.x).toBeCloseTo(500, 1)
+    expect(pan.x).toBeCloseTo(510, 1)
   })
 })
