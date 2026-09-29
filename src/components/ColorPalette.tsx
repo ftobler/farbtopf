@@ -29,15 +29,6 @@ export function ColorPalette({
   return (
     <div className="color-palette">
       <div className="current-colors">
-        <label className="color-swatch secondary" title={`Secondary color ${toHex(secondary)}`}>
-          <span style={{ background: toCss(secondary) }} />
-          <input
-            type="color"
-            value={toHex(secondary)}
-            aria-label="Secondary color"
-            onChange={(event) => onSecondaryChange(parseColor(event.target.value) ?? secondary)}
-          />
-        </label>
         <label className="color-swatch primary" title={`Primary color ${toHex(primary)}`}>
           <span style={{ background: toCss(primary) }} />
           <input
@@ -45,6 +36,15 @@ export function ColorPalette({
             value={toHex(primary)}
             aria-label="Primary color"
             onChange={(event) => onPrimaryChange(parseColor(event.target.value) ?? primary)}
+          />
+        </label>
+        <label className="color-swatch secondary" title={`Secondary color ${toHex(secondary)}`}>
+          <span style={{ background: toCss(secondary) }} />
+          <input
+            type="color"
+            value={toHex(secondary)}
+            aria-label="Secondary color"
+            onChange={(event) => onSecondaryChange(parseColor(event.target.value) ?? secondary)}
           />
         </label>
         <button type="button" className="icon-button swap-button" title="Swap colors (X)" aria-label="Swap colors" onClick={onSwap}>

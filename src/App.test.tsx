@@ -143,6 +143,12 @@ describe('App', () => {
     expect(zoom.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('stacks the primary colour above the secondary colour', () => {
+    const { container } = render(<App />)
+    const swatches = [...container.querySelectorAll('.current-colors .color-swatch')]
+    expect(swatches.map((swatch) => swatch.classList.contains('primary'))).toEqual([true, false])
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')
