@@ -37,4 +37,25 @@ describe('Dropdown', () => {
     expect(screen.getByRole('menuitem', { name: 'Rotate 180°' })).toBeTruthy()
     expect(onAction).not.toHaveBeenCalled()
   })
+
+  it('marks a checked item that shows an icon', () => {
+    render(
+      <Dropdown title="Fill" ariaLabel="Fill" trigger={<span>F</span>}>
+        {() => (
+          <>
+            <MenuItem icon={<svg />} checked>
+              Filled
+            </MenuItem>
+            <MenuItem icon={<svg />}>Outline</MenuItem>
+          </>
+        )}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Fill' }))
+    const filled = screen.getByRole('menuitem', { name: 'Filled' })
+    const outline = screen.getByRole('menuitem', { name: 'Outline' })
+    expect(filled.classList.contains('menu-item-checked')).toBe(true)
+    expect(outline.classList.contains('menu-item-checked')).toBe(false)
+    expect(filled.querySelector('svg')).toBeTruthy()
+  })
 })

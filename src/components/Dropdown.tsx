@@ -115,7 +115,7 @@ export function MenuItem({ children, onClick, shortcut, disabled, checked, icon 
     <button
       type="button"
       role="menuitem"
-      className="menu-item"
+      className={`menu-item${icon && checked ? ' menu-item-checked' : ''}`}
       disabled={disabled}
       onClick={onClick}
     >

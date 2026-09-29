@@ -478,6 +478,14 @@ describe('App', () => {
     expect(trigger.querySelector('svg')).toBeTruthy()
   })
 
+  it('shows an icon next to every option in the fill dropdown', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Fill' }))
+    for (const label of ['Outline', 'Filled', 'Outline + fill']) {
+      expect(screen.getByRole('menuitem', { name: label }).querySelector('svg')).toBeTruthy()
+    }
+  })
+
   it('renders an icon on the fill trigger for every fill option', () => {
     render(<App />)
     for (const label of ['Filled', 'Outline + fill', 'Outline']) {

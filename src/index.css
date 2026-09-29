@@ -471,6 +471,14 @@ textarea {
   color: var(--text-muted);
 }
 
+.menu-item-checked {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.menu-item-checked .menu-item-icon {
+  color: var(--accent);
+}
+
 .menu-submenu {
   position: relative;
 }

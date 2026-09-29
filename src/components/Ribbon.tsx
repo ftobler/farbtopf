@@ -548,18 +548,22 @@ export function Ribbon({
             >
               {(close) => (
                 <>
-                  {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => (
-                    <MenuItem
-                      key={fill}
-                      checked={fill === shapeFill}
-                      onClick={() => {
-                        onShapeFillChange(fill)
-                        close()
-                      }}
-                    >
-                      {SHAPE_FILL_LABELS[fill]}
-                    </MenuItem>
-                  ))}
+                  {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => {
+                    const FillIcon = SHAPE_FILL_ICONS[fill]
+                    return (
+                      <MenuItem
+                        key={fill}
+                        icon={<FillIcon size={16} />}
+                        checked={fill === shapeFill}
+                        onClick={() => {
+                          onShapeFillChange(fill)
+                          close()
+                        }}
+                      >
+                        {SHAPE_FILL_LABELS[fill]}
+                      </MenuItem>
+                    )
+                  })}
                 </>
               )}
             </Dropdown>
