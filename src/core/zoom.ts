@@ -29,3 +29,24 @@ export function nearestZoomIndex(value: number): number {
   }
   return best
 }
+
+/**
+ * The zoom actually shown on screen. On a fractional device pixel ratio
+ * (e.g. Windows at 125%) a whole-number level would put each image pixel on
+ * a fractional number of device pixels, so every n-th row or column showed up
+ * one device pixel thicker. Whole-number levels are snapped to whole device
+ * pixels instead, like MS Paint does; fractional levels are uneven anyway.
+ */
+export function displayZoom(zoom: number, ratio: number): number {
+  if (!Number.isInteger(zoom) || !(ratio > 0) || Number.isInteger(ratio)) return zoom
+  return Math.max(1, Math.round(zoom * ratio)) / ratio
+}
+
+/**
+ * Canvas backing-store pixels per image pixel. Only a whole-number ratio is
+ * worth upscaling by; a fractional one would stretch rows unevenly before the
+ * browser even scales the canvas.
+ */
+export function backingScale(ratio: number): number {
+  return Number.isInteger(ratio) && ratio > 1 ? ratio : 1
+}

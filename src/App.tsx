@@ -22,8 +22,9 @@ import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
 import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
 import { TOOLS, BRUSH_SIZES, toolById } from './core/tools'
 import type { ShapeFill, ToolId } from './core/tools'
-import { ZOOM_LEVELS, nextZoom } from './core/zoom'
+import { ZOOM_LEVELS, displayZoom, nextZoom } from './core/zoom'
 import { useCustomColors } from './hooks/useCustomColors'
+import { useDevicePixelRatio } from './hooks/useDevicePixelRatio'
 import { useTheme } from './hooks/useTheme'
 import { downloadDataUrl, readFileAsDataUrl } from './render/image'
 import { DEFAULT_TEXT_OPTIONS } from './render/text'
@@ -68,6 +69,9 @@ function App() {
   const [shapeFill, setShapeFill] = useState<ShapeFill>('outline')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rectangle')
   const [zoom, setZoom] = useState(1)
+  const pixelRatio = useDevicePixelRatio()
+  // What the canvas is drawn at; `zoom` stays the nominal level the UI shows.
+  const shownZoom = displayZoom(zoom, pixelRatio)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
@@ -338,20 +342,21 @@ function App() {
       if (frame) {
         const workspaceRect = workspace.getBoundingClientRect()
         const frameRect = frame.getBoundingClientRect()
-        const canvasX = (event.clientX - frameRect.left) / zoom
-        const canvasY = (event.clientY - frameRect.top) / zoom
-        const offsetX = (workspaceRect.width - canvasSize.width * target) / 2
-        const offsetY = (workspaceRect.height - canvasSize.height * target) / 2
+        const shownTarget = displayZoom(target, pixelRatio)
+        const canvasX = (event.clientX - frameRect.left) / shownZoom
+        const canvasY = (event.clientY - frameRect.top) / shownZoom
+        const offsetX = (workspaceRect.width - canvasSize.width * shownTarget) / 2
+        const offsetY = (workspaceRect.height - canvasSize.height * shownTarget) / 2
         setPan({
-          x: event.clientX - workspaceRect.left - offsetX - canvasX * target,
-          y: event.clientY - workspaceRect.top - offsetY - canvasY * target,
+          x: event.clientX - workspaceRect.left - offsetX - canvasX * shownTarget,
+          y: event.clientY - workspaceRect.top - offsetY - canvasY * shownTarget,
         })
       }
       setZoom(target)
     }
     workspace.addEventListener('wheel', handleWheel, { passive: false })
     return () => workspace.removeEventListener('wheel', handleWheel)
-  }, [zoom, canvasSize.width, canvasSize.height])
+  }, [zoom, shownZoom, pixelRatio, canvasSize.width, canvasSize.height])
 
   const handlePanDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -626,7 +631,7 @@ function App() {
           brushSize={brushSize}
           shapeFill={shapeFill}
           shapeKind={shapeKind}
-          zoom={zoom}
+          zoom={shownZoom}
           pan={pan}
           showGrid={showGrid}
           onHistoryChange={(undo, redo) => {
@@ -649,7 +654,7 @@ function App() {
         />
         <Scrollbars
           workspaceRef={workspaceRef}
-          zoom={zoom}
+          zoom={shownZoom}
           pan={pan}
           canvasSize={canvasSize}
           onPanChange={setPan}

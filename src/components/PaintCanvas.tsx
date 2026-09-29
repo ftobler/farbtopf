@@ -48,6 +48,7 @@ import { renderShape as drawShape, shapeById } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
+import { backingScale } from '../core/zoom'
 import { bitmapFromDataUrl } from '../render/image'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
@@ -501,10 +502,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const context = canvas.getContext('2d')
     if (!context) return
 
-    // Scale the backing store with the device pixel ratio so strokes stay crisp
-    // on high-density displays; the CSS size (and therefore the shown zoom)
-    // is untouched.
-    const ratio = window.devicePixelRatio || 1
+    // Scale the backing store with a whole-number device pixel ratio so strokes
+    // stay crisp on high-density displays; the CSS size (and therefore the
+    // shown zoom) is untouched.
+    const ratio = backingScale(window.devicePixelRatio || 1)
     const backingWidth = Math.max(1, Math.round(bitmap.width * ratio))
     const backingHeight = Math.max(1, Math.round(bitmap.height * ratio))
     if (canvas.width !== backingWidth) canvas.width = backingWidth

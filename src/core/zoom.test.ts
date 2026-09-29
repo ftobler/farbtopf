@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ZOOM_LEVELS, nearestZoomIndex, nextZoom } from './zoom'
+import { ZOOM_LEVELS, backingScale, displayZoom, nearestZoomIndex, nextZoom } from './zoom'
 
 describe('nextZoom', () => {
   it('steps up through the levels', () => {
@@ -37,5 +37,38 @@ describe('nearestZoomIndex', () => {
   it('clamps beyond the ends', () => {
     expect(nearestZoomIndex(0.01)).toBe(0)
     expect(nearestZoomIndex(100)).toBe(ZOOM_LEVELS.length - 1)
+  })
+})
+
+describe('displayZoom', () => {
+  it('leaves every level alone on a whole-number pixel ratio', () => {
+    for (const level of ZOOM_LEVELS) {
+      expect(displayZoom(level, 1)).toBe(level)
+      expect(displayZoom(level, 2)).toBe(level)
+    }
+  })
+
+  it('snaps whole-number levels to whole device pixels on a fractional ratio', () => {
+    // Windows at 125%: 100% shows one physical pixel per image pixel.
+    expect(displayZoom(1, 1.25) * 1.25).toBe(1)
+    expect(displayZoom(4, 1.25) * 1.25).toBe(5)
+    expect(displayZoom(2, 1.5) * 1.5).toBe(3)
+  })
+
+  it('keeps fractional levels as they are', () => {
+    expect(displayZoom(1.5, 1.25)).toBe(1.5)
+    expect(displayZoom(0.5, 1.25)).toBe(0.5)
+  })
+})
+
+describe('backingScale', () => {
+  it('matches a whole-number pixel ratio', () => {
+    expect(backingScale(1)).toBe(1)
+    expect(backingScale(2)).toBe(2)
+  })
+
+  it('uses the bitmap size on a fractional ratio so no rows get stretched', () => {
+    expect(backingScale(1.25)).toBe(1)
+    expect(backingScale(1.5)).toBe(1)
   })
 })

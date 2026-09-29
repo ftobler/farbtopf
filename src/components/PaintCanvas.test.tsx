@@ -162,6 +162,21 @@ describe('PaintCanvas', () => {
     }
   })
 
+  it('keeps the backing store at bitmap size on a fractional device pixel ratio', () => {
+    const original = window.devicePixelRatio
+    Object.defineProperty(window, 'devicePixelRatio', { value: 1.25, configurable: true })
+    try {
+      const { ref, canvas } = setup('brush', 20, 20)
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      act(() => ref.current?.newDocument(20, 20))
+      expect(canvas.width).toBe(20)
+      expect(canvas.height).toBe(20)
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { value: original, configurable: true })
+    }
+  })
+
   it('resizes the document and notifies the size change', () => {
     const { ref, onSizeChange } = setup('brush')
     act(() => ref.current?.resize(10, 30))
