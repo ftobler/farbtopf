@@ -42,35 +42,52 @@ describe('LayersPanel', () => {
     expect(onSelect).toHaveBeenCalledWith(2)
   })
 
-  it('adds a new layer', () => {
+  it('adds a new layer from the plus tile at the top of the list', () => {
     const { onAdd } = setup()
-    fireEvent.click(screen.getByRole('button', { name: 'New layer' }))
+    const add = screen.getByRole('button', { name: 'New layer' })
+    const list = screen.getByRole('listbox', { name: 'Layers' })
+    expect(list.firstElementChild?.contains(add)).toBe(true)
+    expect(add.style.width).toBe('64px')
+    expect(add.style.height).toBe('48px')
+    fireEvent.click(add)
     expect(onAdd).toHaveBeenCalled()
   })
 
-  it('deletes the active layer', () => {
+  it('has no move or delete buttons', () => {
+    setup()
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['New layer'])
+  })
+
+  it('deletes a layer with the Delete key', () => {
     const { onDelete } = setup(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Delete layer' }))
+    fireEvent.keyDown(rows()[1], { key: 'Delete' })
     expect(onDelete).toHaveBeenCalledWith(1)
   })
 
+  it('keeps the Delete key from reaching the rest of the app', () => {
+    const onWindowKey = vi.fn()
+    window.addEventListener('keydown', onWindowKey)
+    setup(1)
+    fireEvent.keyDown(rows()[1], { key: 'Delete' })
+    window.removeEventListener('keydown', onWindowKey)
+    expect(onWindowKey).not.toHaveBeenCalled()
+  })
+
+  it('deletes a layer from its right-click menu', () => {
+    const { onDelete, onSelect } = setup(1)
+    fireEvent.contextMenu(rows()[0], { clientX: 40, clientY: 50 })
+    expect(onSelect).toHaveBeenCalledWith(2)
+    fireEvent.click(screen.getByRole('menuitem', { name: /Delete layer/ }))
+    expect(onDelete).toHaveBeenCalledWith(2)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('cannot delete the only layer', () => {
-    setup(0, [layer(1, 'Background')])
-    expect(screen.getByRole('button', { name: 'Delete layer' }).hasAttribute('disabled')).toBe(true)
-  })
-
-  it('moves the active layer up and down the stack', () => {
-    const { onMove } = setup(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Move layer up' }))
-    expect(onMove).toHaveBeenLastCalledWith(1, 2)
-    fireEvent.click(screen.getByRole('button', { name: 'Move layer down' }))
-    expect(onMove).toHaveBeenLastCalledWith(1, 0)
-  })
-
-  it('disables moving past the ends of the stack', () => {
-    setup(2)
-    expect(screen.getByRole('button', { name: 'Move layer up' }).hasAttribute('disabled')).toBe(true)
-    expect(screen.getByRole('button', { name: 'Move layer down' }).hasAttribute('disabled')).toBe(false)
+    const { onDelete } = setup(0, [layer(1, 'Background')])
+    fireEvent.keyDown(rows()[0], { key: 'Delete' })
+    fireEvent.contextMenu(rows()[0])
+    expect(screen.getByRole('menuitem', { name: /Delete layer/ }).hasAttribute('disabled')).toBe(true)
+    expect(onDelete).not.toHaveBeenCalled()
   })
 
   it('re-orders layers by drag and drop', () => {
