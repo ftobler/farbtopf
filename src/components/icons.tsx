@@ -31,7 +31,7 @@ export function LogoIcon({ size = 22, ...rest }: IconProps) {
     'M46 30c3-6 10-4 9 1-1 4-5 3-5 0',
   ]
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" {...rest}>
+    <svg width={size} height={size} viewBox="0 5 64 64" aria-hidden="true" {...rest}>
       <defs>
         <linearGradient id="logo-paint" gradientUnits="userSpaceOnUse" x1="12" y1="14" x2="56" y2="34">
           <stop offset="0" stopColor="#ff4fa3" />
