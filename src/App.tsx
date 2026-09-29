@@ -4,6 +4,7 @@ import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
 import { Ribbon } from './components/Ribbon'
+import { RotateDialog } from './components/RotateDialog'
 import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { StatusBar } from './components/StatusBar'
 import type { Rgba } from './core/color'
@@ -54,6 +55,8 @@ function App() {
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
   const [showScaleDialog, setShowScaleDialog] = useState(false)
+  const [showRotateDialog, setShowRotateDialog] = useState(false)
+  const [customRotation, setCustomRotation] = useState(0)
   const [hasSelection, setHasSelection] = useState(false)
   const [transparentSelection, setTransparentSelection] = useState(false)
   const [selectionShape, setSelectionShape] = useState<SelectionShape>('rectangle')
@@ -208,6 +211,15 @@ function App() {
   const handleRotate = useCallback((degrees: number) => {
     canvasRef.current?.rotate(degrees)
   }, [])
+
+  const handleCustomRotateApply = useCallback(
+    (degrees: number) => {
+      setCustomRotation(degrees)
+      setShowRotateDialog(false)
+      handleRotate(degrees)
+    },
+    [handleRotate],
+  )
 
   const handlePickColor = useCallback(
     (color: Rgba, slot: 'primary' | 'secondary') => {
@@ -380,6 +392,7 @@ function App() {
           onScale={() => setShowScaleDialog(true)}
           onFlip={handleFlip}
           onRotate={handleRotate}
+          onCustomRotate={() => setShowRotateDialog(true)}
           onPaste={handlePasteFromClipboard}
           onCut={handleCutFromCanvas}
           onCopy={handleCopyFromCanvas}
@@ -464,6 +477,15 @@ function App() {
           initialHeight={canvasSize.height}
           onCancel={() => setShowScaleDialog(false)}
           onApply={handleScaleApply}
+        />
+      ) : null}
+
+      {showRotateDialog ? (
+        <RotateDialog
+          open={showRotateDialog}
+          initialDegrees={customRotation}
+          onCancel={() => setShowRotateDialog(false)}
+          onApply={handleCustomRotateApply}
         />
       ) : null}
 

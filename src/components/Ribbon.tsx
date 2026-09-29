@@ -59,6 +59,7 @@ export interface RibbonProps {
   onScale: () => void
   onFlip: (axis: 'horizontal' | 'vertical') => void
   onRotate: (degrees: number) => void
+  onCustomRotate: () => void
   onPaste: () => void
   onCut: () => void
   onCopy: () => void
@@ -89,6 +90,7 @@ export function Ribbon({
   onScale,
   onFlip,
   onRotate,
+  onCustomRotate,
   onPaste,
   onCut,
   onCopy,
@@ -282,6 +284,14 @@ export function Ribbon({
                   }}
                 >
                   Rotate 180°
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onCustomRotate()
+                    close()
+                  }}
+                >
+                  Custom rotation…
                 </MenuItem>
               </>
             )}

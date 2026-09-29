@@ -162,6 +162,47 @@ describe('App', () => {
     expect(screen.getByText('Flip vertical')).toBeTruthy()
   })
 
+  it('lists the rotate modes', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent)
+    expect(items).toEqual([
+      'Rotate right 90°',
+      'Rotate left 90°',
+      'Rotate 180°',
+      'Custom rotation…',
+    ])
+  })
+
+  it('opens the custom rotation dialog and applies an angle', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Custom rotation…' }))
+    expect(screen.getByRole('dialog', { name: 'Rotate' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Degrees/), { target: { value: '30' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('cancels the custom rotation dialog', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Custom rotation…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('does not apply an invalid custom rotation', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Custom rotation…' }))
+    fireEvent.change(screen.getByLabelText(/Degrees/), { target: { value: '' } })
+    const apply = screen.getByRole('button', { name: 'Apply' }) as HTMLButtonElement
+    expect(apply.disabled).toBe(true)
+    fireEvent.click(apply)
+    expect(screen.getByRole('dialog', { name: 'Rotate' })).toBeTruthy()
+  })
+
   it('keeps the pixel grid toggle in the status bar', () => {
     const { container } = render(<App />)
     const statusbar = container.querySelector('.statusbar')
