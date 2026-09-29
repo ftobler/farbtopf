@@ -103,6 +103,12 @@ export function MenuBar({
           )}
         </Dropdown>
 
+        <Dropdown trigger="View" showChevron={false} triggerClassName="menubar-button">
+          {() => null}
+        </Dropdown>
+
+        <div className="menubar-separator" role="separator" />
+
         <div className="menubar-actions">
           <button
             type="button"
@@ -113,6 +119,7 @@ export function MenuBar({
           >
             <SaveIcon size={18} />
           </button>
+          <div className="menubar-separator" role="separator" />
           <button
             type="button"
             className="icon-button"

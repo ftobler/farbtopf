@@ -100,6 +100,9 @@ textarea {
 }
 
 .menubar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 30px;
   padding: 0 10px;
   border: 1px solid transparent;
@@ -107,11 +110,23 @@ textarea {
   background: transparent;
   color: var(--text);
   font-size: 13px;
+  line-height: 1;
   cursor: pointer;
 }
 
 .menubar-button:hover {
   background: var(--hover);
+}
+
+.menubar .icon-button svg {
+  transform: translateY(-1px);
+}
+
+.menubar-separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 4px;
+  background: var(--border);
 }
 
 .topbar {
@@ -160,6 +175,8 @@ textarea {
 .ribbon-separator {
   width: 1px;
   align-self: stretch;
+  margin-top: 6px;
+  margin-bottom: 6px;
   background: var(--border);
 }
 

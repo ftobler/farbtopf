@@ -170,8 +170,10 @@ export function EllipseIcon(props: IconProps) {
 export function UndoIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M8 8 4.5 11.5 8 15" />
-      <path d="M4.5 11.5H14a5 5 0 0 1 0 10h-3" />
+      <g transform="translate(0 -3)">
+        <path d="M8 8 4.5 11.5 8 15" />
+        <path d="M4.5 11.5H14a5 5 0 0 1 0 10h-3" />
+      </g>
     </Svg>
   )
 }
@@ -179,8 +181,10 @@ export function UndoIcon(props: IconProps) {
 export function RedoIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="m16 8 3.5 3.5L16 15" />
-      <path d="M19.5 11.5H10a5 5 0 0 0 0 10h3" />
+      <g transform="translate(0 -3)">
+        <path d="m16 8 3.5 3.5L16 15" />
+        <path d="M19.5 11.5H10a5 5 0 0 0 0 10h3" />
+      </g>
     </Svg>
   )
 }

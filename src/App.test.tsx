@@ -82,7 +82,7 @@ describe('App', () => {
       'Transparent selection',
       'Clear selection',
     ])
-    expect(screen.getByRole('separator')).toBeTruthy()
+    expect(within(screen.getByRole('menu')).getByRole('separator')).toBeTruthy()
   })
 
   it('switches to the select tool with a free-form shape', () => {
