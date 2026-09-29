@@ -9,9 +9,27 @@ export interface ScaleImageDialogProps {
   onApply: (width: number, height: number) => void
 }
 
+type ScaleUnit = 'percent' | 'pixels'
+
 function clampSize(value: number): number {
   if (!Number.isFinite(value)) return MIN_CANVAS
   return Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, Math.round(value)))
+}
+
+function parsePositive(text: string): number | null {
+  if (text.trim() === '') return null
+  const value = Number(text)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function formatPercent(value: number): string {
+  return String(Math.round(value * 100) / 100)
+}
+
+function toPixels(text: string, unit: ScaleUnit, original: number): number | null {
+  const value = parsePositive(text)
+  if (value === null) return null
+  return clampSize(unit === 'percent' ? (original * value) / 100 : value)
 }
 
 export function ScaleImageDialog({
@@ -21,14 +39,18 @@ export function ScaleImageDialog({
   onCancel,
   onApply,
 }: ScaleImageDialogProps) {
-  const [width, setWidth] = useState(initialWidth)
-  const [height, setHeight] = useState(initialHeight)
+  const [unit, setUnit] = useState<ScaleUnit>('percent')
+  const [keepRatio, setKeepRatio] = useState(true)
+  const [horizontal, setHorizontal] = useState('100')
+  const [vertical, setVertical] = useState('100')
   const [wasOpen, setWasOpen] = useState(open)
 
   if (open && !wasOpen) {
     setWasOpen(true)
-    setWidth(initialWidth)
-    setHeight(initialHeight)
+    setUnit('percent')
+    setKeepRatio(true)
+    setHorizontal('100')
+    setVertical('100')
   } else if (!open && wasOpen) {
     setWasOpen(false)
   }
@@ -44,7 +66,46 @@ export function ScaleImageDialog({
 
   if (!open) return null
 
-  const submit = () => onApply(clampSize(width), clampSize(height))
+  const width = toPixels(horizontal, unit, initialWidth)
+  const height = toPixels(vertical, unit, initialHeight)
+  const valid = width !== null && height !== null
+
+  const submit = () => {
+    if (width !== null && height !== null) onApply(width, height)
+  }
+
+  // With the ratio locked, percentages move together and pixel sizes follow
+  // the original image's proportions.
+  const linked = (value: number, text: string, from: number, to: number): string =>
+    unit === 'percent' ? text : String(Math.max(1, Math.round((value * to) / from)))
+
+  const changeHorizontal = (text: string) => {
+    setHorizontal(text)
+    const value = parsePositive(text)
+    if (keepRatio && value !== null) setVertical(linked(value, text, initialWidth, initialHeight))
+  }
+
+  const changeVertical = (text: string) => {
+    setVertical(text)
+    const value = parsePositive(text)
+    if (keepRatio && value !== null) setHorizontal(linked(value, text, initialHeight, initialWidth))
+  }
+
+  const switchUnit = (next: ScaleUnit) => {
+    if (next === unit) return
+    const convert = (text: string, original: number): string => {
+      const value = parsePositive(text)
+      if (value === null) return ''
+      return next === 'pixels'
+        ? String(Math.max(1, Math.round((original * value) / 100)))
+        : formatPercent((value / original) * 100)
+    }
+    setHorizontal(convert(horizontal, initialWidth))
+    setVertical(convert(vertical, initialHeight))
+    setUnit(next)
+  }
+
+  const suffix = unit === 'percent' ? '%' : 'px'
 
   return (
     <div className="modal-overlay" role="presentation" onMouseDown={onCancel}>
@@ -57,6 +118,25 @@ export function ScaleImageDialog({
       >
         <h2 className="modal-title">Scale image</h2>
 
+        <div className="preset-list" role="group" aria-label="Scale by">
+          <button
+            type="button"
+            className="preset-button"
+            aria-pressed={unit === 'percent'}
+            onClick={() => switchUnit('percent')}
+          >
+            Percentage
+          </button>
+          <button
+            type="button"
+            className="preset-button"
+            aria-pressed={unit === 'pixels'}
+            onClick={() => switchUnit('pixels')}
+          >
+            Pixels
+          </button>
+        </div>
+
         <form
           className="size-form"
           onSubmit={(event) => {
@@ -65,32 +145,53 @@ export function ScaleImageDialog({
           }}
         >
           <label>
-            Width
-            <input
-              type="number"
-              min={MIN_CANVAS}
-              max={MAX_CANVAS}
-              value={width}
-              onChange={(event) => setWidth(Number(event.target.value))}
-            />
+            Horizontal
+            <span className="unit-input">
+              <input
+                type="number"
+                min={1}
+                step="any"
+                aria-label="Horizontal"
+                value={horizontal}
+                autoFocus
+                onChange={(event) => changeHorizontal(event.target.value)}
+              />
+              <span aria-hidden="true">{suffix}</span>
+            </span>
           </label>
           <label>
-            Height
-            <input
-              type="number"
-              min={MIN_CANVAS}
-              max={MAX_CANVAS}
-              value={height}
-              onChange={(event) => setHeight(Number(event.target.value))}
-            />
+            Vertical
+            <span className="unit-input">
+              <input
+                type="number"
+                min={1}
+                step="any"
+                aria-label="Vertical"
+                value={vertical}
+                onChange={(event) => changeVertical(event.target.value)}
+              />
+              <span aria-hidden="true">{suffix}</span>
+            </span>
           </label>
         </form>
+
+        <div className="scale-options">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={keepRatio}
+              onChange={(event) => setKeepRatio(event.target.checked)}
+            />
+            Maintain aspect ratio
+          </label>
+          <span className="scale-result">{valid ? `${width} × ${height} px` : 'Invalid size'}</span>
+        </div>
 
         <div className="modal-actions">
           <button type="button" className="button" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="button primary" onClick={submit}>
+          <button type="button" className="button primary" disabled={!valid} onClick={submit}>
             Apply
           </button>
         </div>
