@@ -20,6 +20,7 @@ import {
   FillIcon,
   FilledShapeIcon,
   FlipIcon,
+  LayersIcon,
   MagnifierIcon,
   OutlineFilledIcon,
   OutlineShapeIcon,
@@ -92,6 +93,8 @@ export interface RibbonProps {
   onSwap: () => void
   onAddCustomColor: (color: Rgba) => void
   onRemoveCustomColor: (hex: string) => void
+  showLayers: boolean
+  onToggleLayers: () => void
   transparentSelection: boolean
   onTransparentSelectionChange: (value: boolean) => void
   selectionShape: SelectionShape
@@ -132,6 +135,8 @@ export function Ribbon({
   onSwap,
   onAddCustomColor,
   onRemoveCustomColor,
+  showLayers,
+  onToggleLayers,
   transparentSelection,
   onTransparentSelectionChange,
   selectionShape,
@@ -507,6 +512,24 @@ export function Ribbon({
           />
         </div>
         <div className="ribbon-group-label">Colors</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          <button
+            type="button"
+            className="icon-button icon-button-large"
+            title="Show or hide the layers panel"
+            aria-label="Layers"
+            aria-pressed={showLayers}
+            onClick={onToggleLayers}
+          >
+            <LayersIcon size={28} />
+          </button>
+        </div>
+        <div className="ribbon-group-label">Layers</div>
       </section>
     </div>
   )

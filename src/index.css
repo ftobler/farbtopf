@@ -120,10 +120,6 @@ textarea {
   background: var(--hover);
 }
 
-.menubar-button[aria-pressed="true"] {
-  background: var(--accent-soft);
-}
-
 .menubar .icon-button svg {
   transform: translateY(-1px);
 }

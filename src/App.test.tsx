@@ -766,9 +766,11 @@ describe('custom color picker', () => {
     expect(screen.queryByRole('button', { name: 'Custom color #abcdef' })).toBeNull()
   })
 
-  it('toggles the layers panel from the menubar and adds layers', () => {
+  it('toggles the layers panel from the ribbon and adds layers', () => {
     render(<App />)
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Layers' })).toBeNull()
     const toggle = screen.getByRole('button', { name: 'Layers' })
+    expect(toggle.closest('.ribbon-group')?.previousElementSibling?.previousElementSibling?.textContent).toContain('Colors')
     expect(screen.queryByRole('complementary', { name: 'Layers panel' })).toBeNull()
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-pressed')).toBe('true')

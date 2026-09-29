@@ -31,7 +31,6 @@ export interface MenuBarProps {
   showGrid: boolean
   isFullscreen: boolean
   showMiniature: boolean
-  showLayers: boolean
   onNew: () => void
   onOpen: () => void
   onSave: () => void
@@ -46,7 +45,6 @@ export interface MenuBarProps {
   onToggleGrid: () => void
   onToggleFullscreen: () => void
   onToggleMiniature: () => void
-  onToggleLayers: () => void
   onToggleTheme: () => void
 }
 
@@ -58,7 +56,6 @@ export function MenuBar({
   showGrid,
   isFullscreen,
   showMiniature,
-  showLayers,
   onNew,
   onOpen,
   onSave,
@@ -73,7 +70,6 @@ export function MenuBar({
   onToggleGrid,
   onToggleFullscreen,
   onToggleMiniature,
-  onToggleLayers,
   onToggleTheme,
 }: MenuBarProps) {
   return (
@@ -275,16 +271,6 @@ export function MenuBar({
             </>
           )}
         </Dropdown>
-
-        <button
-          type="button"
-          className={`menubar-button${showLayers ? ' active' : ''}`}
-          aria-pressed={showLayers}
-          title="Show or hide the layers panel"
-          onClick={onToggleLayers}
-        >
-          Layers
-        </button>
 
         <div className="menubar-separator" role="separator" />
 

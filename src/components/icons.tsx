@@ -392,6 +392,16 @@ export function SwapIcon(props: IconProps) {
   )
 }
 
+export function LayersIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m12 4 8 4-8 4-8-4 8-4Z" />
+      <path d="m4 12 8 4 8-4" />
+      <path d="m4 16 8 4 8-4" />
+    </Svg>
+  )
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <Svg {...props}>

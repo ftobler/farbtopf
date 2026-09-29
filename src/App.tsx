@@ -532,7 +532,6 @@ function App() {
         showGrid={showGrid}
         isFullscreen={isFullscreen}
         showMiniature={showMiniature}
-        showLayers={showLayers}
         onNew={() => setNewDialogOpen(true)}
         onOpen={handleOpenClick}
         onSave={handleSave}
@@ -547,7 +546,6 @@ function App() {
         onToggleGrid={() => setShowGrid((value) => !value)}
         onToggleFullscreen={handleToggleFullscreen}
         onToggleMiniature={() => setShowMiniature((value) => !value)}
-        onToggleLayers={() => setShowLayers((value) => !value)}
         onToggleTheme={toggleTheme}
       />
 
@@ -581,6 +579,8 @@ function App() {
           onSwap={handleSwapColors}
           onAddCustomColor={customColors.add}
           onRemoveCustomColor={customColors.remove}
+          showLayers={showLayers}
+          onToggleLayers={() => setShowLayers((value) => !value)}
           transparentSelection={transparentSelection}
           onTransparentSelectionChange={setTransparentSelection}
           selectionShape={selectionShape}
