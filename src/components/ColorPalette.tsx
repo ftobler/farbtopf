@@ -65,7 +65,7 @@ export function ColorPalette({
           />
         </label>
         <button type="button" className="icon-button swap-button" title="Swap colors (X)" aria-label="Swap colors" onClick={onSwap}>
-          <SwapIcon size={16} />
+          <SwapIcon size={18} />
         </button>
       </div>
 
