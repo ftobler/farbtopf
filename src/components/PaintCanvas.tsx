@@ -11,7 +11,7 @@ import { Bitmap } from '../core/bitmap'
 import type { Rgba } from '../core/color'
 import { WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
-import { clamp, clampPoint, distance, normalizeRect, pointInRect } from '../core/geometry'
+import { clamp, clampPoint, distance, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
 import {
   blitAlpha,
@@ -28,7 +28,7 @@ import {
 import type { BrushShape } from '../core/raster'
 import { applyMask, fillSelection, invertSelection, isSelected, polygonSelection } from '../core/selection'
 import type { SelectionMask, SelectionShape } from '../core/selection'
-import { renderShape as drawShape } from '../core/shapes'
+import { renderShape as drawShape, shapeById } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
@@ -88,10 +88,29 @@ interface StrokeState {
   pointerId: number
   slot: 'primary' | 'secondary'
   tool: ToolId
+  kind: ShapeKind
   start: Point
   last: Point
   base: Bitmap
   recorded: boolean
+  /** Every pointer position of a freehand shape. */
+  points: Point[]
+}
+
+/**
+ * A polyline being built click by click. The document stays untouched until it is
+ * finished; only then is it drawn onto `base` and recorded as a single history entry.
+ */
+interface PolylineState {
+  kind: ShapeKind
+  slot: 'primary' | 'secondary'
+  base: Bitmap
+  points: Point[]
+  /** The loose end that follows the pointer while dragging or hovering. */
+  pending: Point | null
+  /** The pointer held down to place the next vertex, if any. */
+  pointerId: number | null
+  lastDown: { time: number; point: Point }
 }
 
 interface TextEditorState {
@@ -131,6 +150,14 @@ const HISTORY_LIMIT = 80
 
 const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const HANDLE_HIT = 4
+const DOUBLE_CLICK_MS = 300
+/** How far apart, in screen pixels, the two presses of a double-click may be. */
+const DOUBLE_CLICK_SLOP = 4
+
+/** The points handed to `renderShape`: the dragged box, or the whole freehand trail. */
+function shapePoints(stroke: StrokeState, end: Point): Point[] {
+  return shapeById(stroke.kind).interaction === 'freehand' ? stroke.points : [stroke.start, end]
+}
 
 function strokeShape(tool: ToolId): BrushShape {
   return tool === 'pencil' || tool === 'eraser' ? 'square' : 'round'
@@ -324,6 +351,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const maskRef = useRef<SelectionMask | null>(null)
   const selectRef = useRef<SelectDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
+  const polylineRef = useRef<PolylineState | null>(null)
+  const [polylineActive, setPolylineActive] = useState(false)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [editor, setEditor] = useState<TextEditorState | null>(null)
   const [selection, setSelection] = useState<Rect | null>(null)
@@ -452,8 +481,78 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     paint(doc())
   }, [size, paint, doc])
 
+  const colorFor = useCallback(
+    (slot: 'primary' | 'secondary') => (slot === 'secondary' ? secondary : primary),
+    [primary, secondary],
+  )
+
+  const renderShape = useCallback(
+    (target: Bitmap, kind: ShapeKind, points: readonly Point[], slot: 'primary' | 'secondary') => {
+      const color = colorFor(slot)
+      const fillColor = slot === 'secondary' ? primary : secondary
+      drawShape(target, kind, points, {
+        width: brushSize,
+        stroke: shapeFill === 'filled' ? null : color,
+        fill: shapeFill === 'filled' ? color : shapeFill === 'outline-filled' ? fillColor : null,
+      })
+    },
+    [brushSize, colorFor, primary, secondary, shapeFill],
+  )
+
+  const previewPolyline = useCallback(() => {
+    const polyline = polylineRef.current
+    if (!polyline) return
+    const points = polyline.pending ? [...polyline.points, polyline.pending] : polyline.points
+    const preview = polyline.base.clone()
+    if (points.length > 1) renderShape(preview, polyline.kind, points, polyline.slot)
+    paint(preview)
+  }, [paint, renderShape])
+
+  /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
+  const finishPolyline = useCallback(() => {
+    const polyline = polylineRef.current
+    if (!polyline) return
+    polylineRef.current = null
+    setPolylineActive(false)
+    if (polyline.points.length < 2) {
+      paint(doc())
+      return
+    }
+    historyRef.current.record(polyline.base)
+    const final = polyline.base.clone()
+    renderShape(final, polyline.kind, polyline.points, polyline.slot)
+    bitmapRef.current = final
+    paint(final)
+    syncHistory()
+  }, [doc, paint, renderShape, syncHistory])
+
+  const finishPolylineRef = useRef(finishPolyline)
+  useEffect(() => {
+    finishPolylineRef.current = finishPolyline
+  }, [finishPolyline])
+
+  useEffect(() => {
+    finishPolylineRef.current()
+  }, [tool, shapeKind])
+
+  useEffect(() => {
+    if (!polylineActive) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== 'Escape') return
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return
+      // Escape keeps what has been drawn, like Enter: MS Paint has no way to take back a vertex either.
+      event.preventDefault()
+      finishPolylineRef.current()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [polylineActive])
+
   const resetDocument = useCallback(
     (bitmap: Bitmap) => {
+      polylineRef.current = null
+      setPolylineActive(false)
       bitmapRef.current = bitmap
       historyRef.current = new History<Bitmap>(HISTORY_LIMIT)
       editorRef.current = null
@@ -492,6 +591,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         resetDocument(await bitmapFromDataUrl(src))
       },
       clear() {
+        finishPolyline()
         commitFloating()
         const history = historyRef.current
         history.record(doc().clone())
@@ -500,6 +600,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       undo() {
+        finishPolyline()
         if (floatingRef.current) {
           commitFloating()
           updateSelection(null)
@@ -513,6 +614,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       redo() {
+        finishPolyline()
         if (floatingRef.current) {
           commitFloating()
           updateSelection(null)
@@ -526,12 +628,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       toDataUrl() {
+        finishPolyline()
         return canvasRef.current?.toDataURL('image/png') ?? ''
       },
       getSize() {
         return { width: size.width, height: size.height }
       },
       flip(axis) {
+        finishPolyline()
         const mirror = axis === 'horizontal' ? flipHorizontal : flipVertical
         const rect = currentRect()
         if (rect) {
@@ -549,6 +653,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyBitmap(mirror(doc()))
       },
       rotate(degrees) {
+        finishPolyline()
         const start = beginRotation()
         if (start) {
           applyRotation(start, degrees)
@@ -559,10 +664,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyBitmap(rotateBy(doc(), degrees, secondary))
       },
       resize(width, height) {
+        finishPolyline()
         commitFloating()
         applyBitmap(scale(doc(), width, height))
       },
       cropToSelection() {
+        finishPolyline()
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
@@ -587,15 +694,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         updateSelection(null)
       },
       selectAll() {
+        finishPolyline()
         commitFloating()
         updateSelection({ x: 0, y: 0, width: doc().width, height: doc().height })
       },
       invertSelection() {
+        finishPolyline()
         commitFloating()
         const inverted = invertSelection(selectionRef.current, maskRef.current, doc().width, doc().height)
         updateSelection(inverted?.rect ?? null, inverted?.mask ?? null)
       },
       deleteSelection() {
+        finishPolyline()
         const floating = floatingRef.current
         if (floating) {
           floatingRef.current = null
@@ -614,6 +724,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         updateSelection(null)
       },
       getSelectionDataUrl() {
+        finishPolyline()
         const floating = floatingRef.current
         if (floating) {
           const composite = floating.base.clone()
@@ -632,6 +743,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
       },
       cutSelection() {
+        finishPolyline()
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
@@ -649,6 +761,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       currentRect,
       doc,
       ensureFloating,
+      finishPolyline,
       onSizeChange,
       paint,
       renderPreview,
@@ -659,11 +772,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       syncHistory,
       updateSelection,
     ],
-  )
-
-  const colorFor = useCallback(
-    (slot: 'primary' | 'secondary') => (slot === 'secondary' ? secondary : primary),
-    [primary, secondary],
   )
 
   const toPoint = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point => {
@@ -678,19 +786,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       canvas.height,
     )
   }, [])
-
-  const renderShape = useCallback(
-    (target: Bitmap, start: Point, end: Point, slot: 'primary' | 'secondary') => {
-      const color = colorFor(slot)
-      const fillColor = slot === 'secondary' ? primary : secondary
-      drawShape(target, shapeKind, [start, end], {
-        width: brushSize,
-        stroke: shapeFill === 'filled' ? null : color,
-        fill: shapeFill === 'filled' ? color : shapeFill === 'outline-filled' ? fillColor : null,
-      })
-    },
-    [brushSize, colorFor, primary, secondary, shapeFill, shapeKind],
-  )
 
   const commitText = useCallback(() => {
     const current = editorRef.current
@@ -769,15 +864,45 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
 
       event.currentTarget.setPointerCapture(event.pointerId)
+      if (isShapeTool(tool) && shapeById(shapeKind).interaction === 'polyline') {
+        const now = performance.now()
+        const polyline = polylineRef.current
+        if (!polyline) {
+          polylineRef.current = {
+            kind: shapeKind,
+            slot,
+            base: doc().clone(),
+            points: [point],
+            pending: point,
+            pointerId: event.pointerId,
+            lastDown: { time: now, point },
+          }
+          setPolylineActive(true)
+          previewPolyline()
+          return
+        }
+        const { lastDown } = polyline
+        if (now - lastDown.time <= DOUBLE_CLICK_MS && distance(lastDown.point, point) <= DOUBLE_CLICK_SLOP / zoom) {
+          finishPolyline()
+          return
+        }
+        polyline.lastDown = { time: now, point }
+        polyline.pointerId = event.pointerId
+        polyline.pending = point
+        previewPolyline()
+        return
+      }
       const base = doc().clone()
       const stroke: StrokeState = {
         pointerId: event.pointerId,
         slot,
         tool,
+        kind: shapeKind,
         start: point,
         last: point,
         base,
         recorded: false,
+        points: [point],
       }
       strokeRef.current = stroke
 
@@ -793,7 +918,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, onPickColor, onZoomClick, paint, primary, secondary, selectionShape, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -851,6 +976,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         return
       }
+      const polyline = polylineRef.current
+      if (polyline) {
+        if (polyline.pointerId !== null && polyline.pointerId !== event.pointerId) return
+        polyline.pending = point
+        previewPolyline()
+        return
+      }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       if (isShapeTool(stroke.tool)) {
@@ -859,8 +991,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           stroke.recorded = true
           syncHistory()
         }
+        stroke.points.push(point)
         const preview = stroke.base.clone()
-        renderShape(preview, stroke.start, point, stroke.slot)
+        renderShape(preview, stroke.kind, shapePoints(stroke, point), stroke.slot)
         paint(preview)
       } else {
         const color = strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
@@ -878,7 +1011,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brushSize, currentRect, doc, ensureFloating, onCursorMove, paint, primary, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brushSize, currentRect, doc, ensureFloating, onCursorMove, paint, previewPolyline, primary, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -898,19 +1031,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         selectRef.current = null
         return
       }
+      const polyline = polylineRef.current
+      if (polyline) {
+        if (polyline.pointerId !== event.pointerId) return
+        const end = toPoint(event)
+        if (!pointsEqual(end, polyline.points[polyline.points.length - 1])) polyline.points.push(end)
+        polyline.pointerId = null
+        polyline.pending = end
+        previewPolyline()
+        return
+      }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       if (isShapeTool(stroke.tool) && stroke.recorded) {
         const end = toPoint(event)
+        if (!pointsEqual(end, stroke.points[stroke.points.length - 1])) stroke.points.push(end)
         const final = stroke.base.clone()
-        renderShape(final, stroke.start, end, stroke.slot)
+        renderShape(final, stroke.kind, shapePoints(stroke, end), stroke.slot)
         bitmapRef.current = final
         paint(final)
         syncHistory()
       }
       strokeRef.current = null
     },
-    [paint, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
+    [paint, previewPolyline, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
   )
 
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
@@ -961,7 +1105,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const handlePointerLeave = useCallback(() => {
     onCursorMove(null)
-  }, [onCursorMove])
+    const polyline = polylineRef.current
+    if (polyline && polyline.pointerId === null) {
+      polyline.pending = null
+      previewPolyline()
+    }
+  }, [onCursorMove, previewPolyline])
 
   const cursor =
     tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'

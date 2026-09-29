@@ -7,12 +7,22 @@ import { BLACK, WHITE } from '../core/color'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
 
+vi.mock('../core/shapes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../core/shapes')>()
+  return { ...actual, renderShape: vi.fn(actual.renderShape) }
+})
+import { renderShape } from '../core/shapes'
+import type { ShapeKind } from '../core/shapes'
+
+type SetupTool = 'brush' | 'shape' | 'select' | 'zoom'
+
 function setup(
-  tool: 'brush' | 'shape' | 'select' | 'zoom',
+  tool: SetupTool,
   width = 20,
   height = 20,
   transparentSelection = false,
   selectionShape: 'rectangle' | 'freeform' = 'rectangle',
+  shapeKind: ShapeKind = 'rectangle',
 ) {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
@@ -22,16 +32,17 @@ function setup(
   const onSelectionChange = vi.fn()
   const onZoomClick = vi.fn()
 
-  const { container } = render(
+  const element = (props: { tool: SetupTool; shapeKind: ShapeKind }) => (
     <PaintCanvas
       ref={ref}
       initialWidth={width}
       initialHeight={height}
-      tool={tool}
+      tool={props.tool}
       primary={BLACK}
       secondary={WHITE}
       brushSize={1}
       shapeFill="outline"
+      shapeKind={props.shapeKind}
       zoom={1}
       showGrid={false}
       onHistoryChange={onHistoryChange}
@@ -42,8 +53,11 @@ function setup(
       onZoomClick={onZoomClick}
       transparentSelection={transparentSelection}
       selectionShape={selectionShape}
-    />,
+    />
   )
+  const { container, rerender } = render(element({ tool, shapeKind }))
+  const setProps = (props: { tool?: SetupTool; shapeKind?: ShapeKind }) =>
+    rerender(element({ tool: props.tool ?? tool, shapeKind: props.shapeKind ?? shapeKind }))
 
   const canvas = container.querySelector('canvas')
   if (!canvas) throw new Error('canvas not rendered')
@@ -51,7 +65,7 @@ function setup(
     ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, container, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick }
+  return { ref, canvas, container, setProps, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick }
 }
 
 describe('PaintCanvas', () => {
@@ -473,6 +487,180 @@ describe('PaintCanvas', () => {
       fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 12, clientY: 11 })
       fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 12, clientY: 11 })
       expect(ref.current?.getSelection()).toEqual({ ...rotated, x: (rotated?.x ?? 0) + 2, y: (rotated?.y ?? 0) + 1 })
+    })
+  })
+
+  describe('freehand and polyline shapes', () => {
+    const black = [0, 0, 0, 255]
+    const white = [255, 255, 255, 255]
+
+    function spyPixels(canvas: HTMLCanvasElement, width: number) {
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      return (x: number, y: number) => {
+        const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+        return Array.from(image.data.slice((y * width + x) * 4, (y * width + x) * 4 + 4))
+      }
+    }
+
+    function down(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId, clientX: x, clientY: y })
+    }
+
+    function move(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number, buttons = 1) {
+      fireEvent.pointerMove(canvas, { buttons, pointerId, clientX: x, clientY: y })
+    }
+
+    function up(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      fireEvent.pointerUp(canvas, { button: 0, pointerId, clientX: x, clientY: y })
+    }
+
+    function click(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      down(canvas, pointerId, x, y)
+      up(canvas, pointerId, x, y)
+    }
+
+    function dragFirstSegment(canvas: HTMLCanvasElement) {
+      down(canvas, 1, 2, 2)
+      move(canvas, 1, 12, 2)
+      up(canvas, 1, 12, 2)
+    }
+
+    it('draws a freeform shape through every dragged point as one undo step', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      vi.mocked(renderShape).mockClear()
+      down(canvas, 1, 2, 2)
+      move(canvas, 1, 12, 2)
+      move(canvas, 1, 12, 12)
+      up(canvas, 1, 12, 12)
+      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
+        'freeform',
+        [{ x: 2, y: 2 }, { x: 12, y: 2 }, { x: 12, y: 12 }],
+      ])
+      expect(pixel(7, 2)).toEqual(black)
+      expect(pixel(12, 7)).toEqual(black)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      act(() => ref.current?.undo())
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+      expect(pixel(7, 2)).toEqual(white)
+    })
+
+    it('leaves no history for a freeform click without a drag', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
+      onHistoryChange.mockClear()
+      click(canvas, 1, 5, 5)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+
+    it('adds polyline vertices on click and finishes with Enter as one undo step', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragFirstSegment(canvas)
+      click(canvas, 2, 12, 12)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(pixel(7, 2)).toEqual(black)
+      expect(pixel(12, 7)).toEqual(black)
+      expect(pixel(7, 7)).toEqual(white)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      act(() => ref.current?.undo())
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+      expect(pixel(7, 2)).toEqual(white)
+      expect(pixel(12, 7)).toEqual(white)
+    })
+
+    it('finishes a polyline on double-click', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragFirstSegment(canvas)
+      click(canvas, 2, 12, 12)
+      click(canvas, 3, 12, 12)
+      expect(pixel(12, 7)).toEqual(black)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      click(canvas, 4, 2, 12)
+      expect(pixel(7, 12)).toEqual(white)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+    })
+
+    it('finishes a polyline on Escape, keeping what was drawn', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragFirstSegment(canvas)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(pixel(7, 2)).toEqual(black)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('previews the next segment while hovering but leaves it out when finished', () => {
+      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      dragFirstSegment(canvas)
+      move(canvas, 1, 12, 12, 0)
+      expect(pixel(12, 7)).toEqual(black)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(pixel(7, 2)).toEqual(black)
+      expect(pixel(12, 7)).toEqual(white)
+    })
+
+    it('ignores Enter typed into another text field', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      onHistoryChange.mockClear()
+      dragFirstSegment(canvas)
+      const input = document.createElement('textarea')
+      document.body.appendChild(input)
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      input.remove()
+    })
+
+    it('commits an unfinished polyline when the tool changes', () => {
+      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragFirstSegment(canvas)
+      click(canvas, 2, 12, 12)
+      setProps({ tool: 'brush' })
+      expect(pixel(7, 2)).toEqual(black)
+      expect(pixel(12, 7)).toEqual(black)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('commits an unfinished polyline with its own kind when the shape kind changes', () => {
+      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragFirstSegment(canvas)
+      click(canvas, 2, 12, 12)
+      setProps({ shapeKind: 'line' })
+      expect(pixel(12, 7)).toEqual(black)
+      expect(pixel(7, 7)).toEqual(white)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+    })
+
+    it('commits an unfinished polyline before undoing', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      dragFirstSegment(canvas)
+      act(() => ref.current?.undo())
+      expect(pixel(7, 2)).toEqual(white)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+      act(() => ref.current?.redo())
+      expect(pixel(7, 2)).toEqual(black)
+    })
+
+    it('drops a polyline that never got a second vertex', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      onHistoryChange.mockClear()
+      click(canvas, 1, 5, 5)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).not.toHaveBeenCalled()
     })
   })
 })
