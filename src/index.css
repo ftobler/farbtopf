@@ -695,6 +695,68 @@ textarea {
   cursor: grabbing;
 }
 
+.workspace-scrollbars {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.workspace-scrollbar {
+  position: absolute;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--border-strong) 45%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.workspace-scrollbar[data-visible="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.workspace-scrollbar[data-axis="x"] {
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  height: 7px;
+}
+
+.workspace-scrollbar[data-axis="y"] {
+  top: 4px;
+  bottom: 4px;
+  right: 4px;
+  width: 7px;
+}
+
+.workspace-scrollbar:hover {
+  background: color-mix(in srgb, var(--border-strong) 70%, transparent);
+}
+
+.workspace-scrollbar-thumb {
+  position: absolute;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.workspace-scrollbar[data-axis="x"] .workspace-scrollbar-thumb {
+  top: 0;
+  bottom: 0;
+  cursor: ew-resize;
+}
+
+.workspace-scrollbar[data-axis="y"] .workspace-scrollbar-thumb {
+  left: 0;
+  right: 0;
+  cursor: ns-resize;
+}
+
+.workspace-scrollbar:hover .workspace-scrollbar-thumb,
+.workspace-scrollbar[data-dragging="true"] .workspace-scrollbar-thumb {
+  background: var(--accent);
+}
+
 .canvas-frame {
   position: relative;
   flex: none;

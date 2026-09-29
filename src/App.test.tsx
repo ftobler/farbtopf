@@ -300,6 +300,14 @@ describe('App', () => {
     fireEvent.pointerUp(workspace, { pointerId: 7, clientX: 230, clientY: 210 })
   })
 
+  it('overlays the workspace with custom scrollbars', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    const scrollbars = container.querySelector('.workspace-scrollbars')
+    expect(scrollbars).toBeTruthy()
+    expect(workspace.contains(scrollbars)).toBe(true)
+  })
+
   it('shows the new image dialog with presets', () => {
     render(<App />)
     fireEvent.click(screen.getByText('File'))
