@@ -571,6 +571,25 @@ describe('custom color picker', () => {
     expect(screen.queryByRole('dialog', { name: 'Color picker' })).toBeNull()
   })
 
+  it('reserves a third palette row of ten empty custom slots', () => {
+    const { container } = render(<App />)
+    const row = container.querySelector('.swatches .custom-row') as HTMLElement
+    expect(row).toBeTruthy()
+    expect(row.querySelectorAll('.swatch-empty')).toHaveLength(10)
+    expect(row.querySelectorAll('.swatch.custom')).toHaveLength(0)
+  })
+
+  it('fills custom colors into the third row ahead of the empty slots', () => {
+    localStorage.setItem(CUSTOM_COLORS_KEY, JSON.stringify(['#abcdef', '#123456']))
+    const { container } = render(<App />)
+    const row = container.querySelector('.swatches .custom-row') as HTMLElement
+    const slots = [...row.children]
+    expect(slots).toHaveLength(10)
+    expect(slots[0].getAttribute('aria-label')).toBe('Custom color #abcdef')
+    expect(slots[1].getAttribute('aria-label')).toBe('Custom color #123456')
+    expect(row.querySelectorAll('.swatch-empty')).toHaveLength(8)
+  })
+
   it('adds a custom swatch and persists it', () => {
     render(<App />)
     openPicker()

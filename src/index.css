@@ -905,10 +905,17 @@ textarea {
 }
 
 .swatches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.swatch-grid {
   display: grid;
   grid-auto-flow: column;
   grid-template-rows: repeat(2, 17px);
-  gap: 9px;
+  row-gap: 6px;
+  column-gap: 9px;
 }
 
 .swatch {
@@ -927,6 +934,21 @@ textarea {
 
 .swatch.custom {
   border-style: dashed;
+}
+
+.custom-row {
+  display: grid;
+  grid-template-columns: repeat(10, 17px);
+  column-gap: 9px;
+}
+
+.swatch-empty {
+  width: 17px;
+  height: 17px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
 }
 
 .color-picker {

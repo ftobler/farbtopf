@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toCss, toHex, parseColor } from '../core/color'
 import type { Rgba } from '../core/color'
+import { MAX_CUSTOM_COLORS } from '../core/customColors'
 import { ColorPicker } from './ColorPicker'
 import type { ColorSlot } from './ColorPicker'
 import { SwapIcon } from './icons'
@@ -70,36 +71,43 @@ export function ColorPalette({
       </div>
 
       <div className="swatches" role="listbox" aria-label="Color palette">
-        {palette.map((hex) => (
-          <button
-            key={hex}
-            type="button"
-            className="swatch"
-            style={{ background: hex }}
-            title={hex}
-            aria-label={`Color ${hex}`}
-            onClick={() => pick('primary', hex)}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              pick('secondary', hex)
-            }}
-          />
-        ))}
-        {customColors.map((hex) => (
-          <button
-            key={hex}
-            type="button"
-            className="swatch custom"
-            style={{ background: hex }}
-            title={hex}
-            aria-label={`Custom color ${hex}`}
-            onClick={() => pick('primary', hex)}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              pick('secondary', hex)
-            }}
-          />
-        ))}
+        <div className="swatch-grid">
+          {palette.map((hex) => (
+            <button
+              key={hex}
+              type="button"
+              className="swatch"
+              style={{ background: hex }}
+              title={hex}
+              aria-label={`Color ${hex}`}
+              onClick={() => pick('primary', hex)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                pick('secondary', hex)
+              }}
+            />
+          ))}
+        </div>
+        <div className="custom-row">
+          {customColors.map((hex) => (
+            <button
+              key={hex}
+              type="button"
+              className="swatch custom"
+              style={{ background: hex }}
+              title={hex}
+              aria-label={`Custom color ${hex}`}
+              onClick={() => pick('primary', hex)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                pick('secondary', hex)
+              }}
+            />
+          ))}
+          {Array.from({ length: Math.max(0, MAX_CUSTOM_COLORS - customColors.length) }, (_, index) => (
+            <span key={`empty-${index}`} className="swatch-empty" aria-hidden="true" />
+          ))}
+        </div>
       </div>
 
       <ColorPicker

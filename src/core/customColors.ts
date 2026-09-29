@@ -3,6 +3,9 @@ import type { Rgba } from './color'
 
 export const CUSTOM_COLORS_KEY = 'farbtopf.customColors'
 
+/** One palette row of custom slots; the oldest color drops out when a new one is added to a full row. */
+export const MAX_CUSTOM_COLORS = 10
+
 export function loadCustomColors(): string[] {
   try {
     if (typeof localStorage === 'undefined') return []
@@ -18,7 +21,7 @@ export function loadCustomColors(): string[] {
       const hex = toHexWithAlpha(color)
       if (!colors.includes(hex)) colors.push(hex)
     }
-    return colors
+    return colors.slice(-MAX_CUSTOM_COLORS)
   } catch {
     return []
   }
@@ -36,5 +39,5 @@ export function saveCustomColors(colors: readonly string[]): void {
 export function withCustomColor(colors: readonly string[], color: Rgba): string[] {
   const hex = toHexWithAlpha(color)
   if (colors.includes(hex)) return [...colors]
-  return [...colors, hex]
+  return [...colors, hex].slice(-MAX_CUSTOM_COLORS)
 }
