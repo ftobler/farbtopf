@@ -89,4 +89,9 @@ describe('color helpers', () => {
     expect(contrasting(BLACK)).toEqual(WHITE)
     expect(contrasting(WHITE)).toEqual(BLACK)
   })
+
+  it('picks the closer of black and white for mid greys', () => {
+    expect(contrasting(rgba(140, 140, 140))).toEqual(BLACK)
+    expect(contrasting(rgba(100, 100, 100))).toEqual(WHITE)
+  })
 })

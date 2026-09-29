@@ -144,5 +144,5 @@ export function luminance(color: Rgba): number {
 
 /** Returns black or white depending on which contrasts better. */
 export function contrasting(color: Rgba): Rgba {
-  return luminance(color) > 0.6 ? BLACK : WHITE
+  return luminance(color) > 0.5 ? BLACK : WHITE
 }
