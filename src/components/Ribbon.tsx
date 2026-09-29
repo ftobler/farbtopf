@@ -1,11 +1,12 @@
 import type { ComponentType } from 'react'
 import type { Rgba } from '../core/color'
 import type { SelectionShape } from '../core/selection'
-import { BRUSH_SIZES, TOOLS, isShapeTool, toolById } from '../core/tools'
+import { BRUSH_SIZES, TOOLS, toolById } from '../core/tools'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { ColorPalette } from './ColorPalette'
 import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
+import { ShapeGallery } from './ShapeGallery'
 import type { IconProps } from './icons'
 import {
   AirbrushIcon,
@@ -90,6 +91,8 @@ export function Ribbon({
   onBrushSizeChange,
   shapeFill,
   onShapeFillChange,
+  shapeKind,
+  onShapeKindChange,
   hasSelection,
   onCrop,
   onScale,
@@ -115,7 +118,6 @@ export function Ribbon({
 }: RibbonProps) {
   const utilityTools = TOOL_GRID.map(toolById)
   const brushTools = BRUSH_TOOLS.map(toolById)
-  const shapeTools = TOOLS.filter((definition) => isShapeTool(definition.id))
 
   const renderTool = (definition: (typeof TOOLS)[number]) => {
     const Icon = TOOL_ICONS[definition.id]
@@ -355,66 +357,70 @@ export function Ribbon({
 
       <section className="ribbon-group">
         <div className="ribbon-group-items">
-          {shapeTools.map(renderTool)}
-          <Dropdown title="Shape style" trigger={<span>{SHAPE_FILL_LABELS[shapeFill]}</span>}>
-            {(close) => (
-              <>
-                {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => (
-                  <MenuItem
-                    key={fill}
-                    checked={fill === shapeFill}
-                    onClick={() => {
-                      onShapeFillChange(fill)
-                      close()
-                    }}
-                  >
-                    {SHAPE_FILL_LABELS[fill]}
-                  </MenuItem>
-                ))}
-              </>
-            )}
-          </Dropdown>
+          <ShapeGallery
+            active={tool === 'shape' ? shapeKind : null}
+            onSelect={(kind) => {
+              onShapeKindChange(kind)
+              onToolChange('shape')
+            }}
+          />
+          <div className="shape-options">
+            <Dropdown
+              title="Outline size"
+              ariaLabel="Size"
+              trigger={
+                <span className="size-preview" aria-hidden="true">
+                  <span
+                    className="size-dot"
+                    style={{ width: Math.min(brushSize, 24), height: Math.min(brushSize, 24) }}
+                  />
+                </span>
+              }
+            >
+              {(close) => (
+                <div className="size-menu">
+                  {BRUSH_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      className="size-option"
+                      aria-pressed={size === brushSize}
+                      onClick={() => {
+                        onBrushSizeChange(size)
+                        close()
+                      }}
+                    >
+                      <span className="size-line" style={{ height: Math.max(1, size) }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Dropdown>
+            <Dropdown
+              title="Fill"
+              ariaLabel="Fill"
+              trigger={<span>{SHAPE_FILL_LABELS[shapeFill]}</span>}
+            >
+              {(close) => (
+                <>
+                  {(Object.keys(SHAPE_FILL_LABELS) as ShapeFill[]).map((fill) => (
+                    <MenuItem
+                      key={fill}
+                      checked={fill === shapeFill}
+                      onClick={() => {
+                        onShapeFillChange(fill)
+                        close()
+                      }}
+                    >
+                      {SHAPE_FILL_LABELS[fill]}
+                    </MenuItem>
+                  ))}
+                </>
+              )}
+            </Dropdown>
+          </div>
         </div>
         <div className="ribbon-group-label">Shapes</div>
-      </section>
-
-      <div className="ribbon-separator" />
-
-      <section className="ribbon-group">
-        <div className="ribbon-group-items">
-          <Dropdown
-            title="Size"
-            ariaLabel="Size"
-            trigger={
-              <span className="size-preview" aria-hidden="true">
-                <span
-                  className="size-dot"
-                  style={{ width: Math.min(brushSize, 24), height: Math.min(brushSize, 24) }}
-                />
-              </span>
-            }
-          >
-            {(close) => (
-              <div className="size-menu">
-                {BRUSH_SIZES.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    className="size-option"
-                    aria-pressed={size === brushSize}
-                    onClick={() => {
-                      onBrushSizeChange(size)
-                      close()
-                    }}
-                  >
-                    <span className="size-line" style={{ height: Math.max(1, size) }} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </Dropdown>
-        </div>
-        <div className="ribbon-group-label">Size</div>
       </section>
 
       <div className="ribbon-separator" />

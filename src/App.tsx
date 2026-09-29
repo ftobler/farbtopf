@@ -19,6 +19,9 @@ import { ZOOM_LEVELS, nextZoom } from './core/zoom'
 import { useTheme } from './hooks/useTheme'
 import { downloadDataUrl, readFileAsDataUrl } from './render/image'
 
+/** Single-key shortcuts that pick a specific shape. */
+const SHAPE_SHORTCUTS: Record<string, ShapeKind> = { l: 'line', r: 'rectangle', o: 'ellipse' }
+
 function fitZoom(width: number, height: number): number {
   const availableWidth = Math.max(200, window.innerWidth - 96)
   const availableHeight = Math.max(200, window.innerHeight - 280)
@@ -324,6 +327,12 @@ function App() {
       }
       if (lower === 'g') {
         setShowGrid((value) => !value)
+        return
+      }
+      const shortcutShape = SHAPE_SHORTCUTS[lower]
+      if (shortcutShape) {
+        setShapeKind(shortcutShape)
+        setTool('shape')
         return
       }
       const match = TOOLS.find((definition) => definition.shortcut.toLowerCase() === lower)

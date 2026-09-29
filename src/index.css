@@ -214,6 +214,46 @@ textarea {
   color: var(--accent);
 }
 
+.shape-gallery {
+  display: grid;
+  grid-template-columns: repeat(7, 20px);
+  grid-auto-rows: 20px;
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.shape-gallery-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.shape-gallery-button:hover {
+  background: var(--hover);
+}
+
+.shape-gallery-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shape-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 4px;
+}
+
 .dropdown {
   position: relative;
 }

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App'
+import { SHAPES } from './core/shapes'
 import { ZOOM_LEVELS } from './core/zoom'
 
 describe('App', () => {
@@ -24,9 +25,11 @@ describe('App', () => {
     const topbar = container.querySelector('.topbar')
     expect(topbar).toBeTruthy()
 
-    for (const label of ['Clipboard', 'Image', 'Tools', 'Shapes', 'Size', 'Colors']) {
+    for (const label of ['Clipboard', 'Image', 'Tools', 'Shapes', 'Colors']) {
       expect(screen.getByText(label)).toBeTruthy()
     }
+    const labels = [...document.querySelectorAll('.ribbon-group-label')].map((label) => label.textContent)
+    expect(labels).not.toContain('Size')
 
     const paste = screen.getByRole('button', { name: 'Paste' })
     expect(topbar?.contains(paste)).toBe(true)
@@ -235,5 +238,74 @@ describe('App', () => {
     expect(statusbar?.contains(screen.getByRole('button', { name: 'Toggle pixel grid' }))).toBe(
       true,
     )
+  })
+
+  const shapesGroup = () =>
+    [...document.querySelectorAll('.ribbon-group')].find(
+      (group) => group.querySelector('.ribbon-group-label')?.textContent === 'Shapes',
+    ) as HTMLElement
+
+  it('shows every shape in a gallery box inside the shapes group', () => {
+    render(<App />)
+    const group = shapesGroup()
+    expect(group).toBeTruthy()
+    const gallery = group.querySelector('.shape-gallery') as HTMLElement
+    expect(gallery).toBeTruthy()
+    const buttons = within(gallery).getAllByRole('button')
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual(SHAPES.map((shape) => shape.label))
+    expect(buttons.map((button) => button.getAttribute('title'))).toEqual(SHAPES.map((shape) => shape.label))
+    expect(buttons.every((button) => button.querySelector('svg path'))).toBe(true)
+  })
+
+  it('selects a shape from the gallery and activates the shape tool', () => {
+    render(<App />)
+    const star = screen.getByRole('button', { name: 'Five-point star' })
+    expect(star.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(star)
+    expect(star.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Rectangle' }).getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    expect(star.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('stacks the size dropdown above the fill dropdown in the shapes group', () => {
+    render(<App />)
+    const group = shapesGroup()
+    const size = screen.getByRole('button', { name: 'Size' })
+    const fill = screen.getByRole('button', { name: 'Fill' })
+    expect(group.contains(size)).toBe(true)
+    expect(group.contains(fill)).toBe(true)
+    expect(size.getAttribute('title')).toBe('Outline size')
+    const stack = size.closest('.shape-options')
+    expect(stack).toBeTruthy()
+    expect(stack?.contains(fill)).toBe(true)
+    expect(size.compareDocumentPosition(fill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const gallery = group.querySelector('.shape-gallery')!
+    expect(gallery.compareDocumentPosition(stack!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('changes the shape fill from the fill dropdown', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Fill' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Filled' }))
+    expect(screen.getByRole('button', { name: 'Fill' }).textContent).toContain('Filled')
+  })
+
+  it('selects line, rectangle and ellipse shapes with L, R and O', () => {
+    render(<App />)
+    for (const [key, name] of [
+      ['r', 'Rectangle'],
+      ['l', 'Line'],
+      ['o', 'Ellipse'],
+    ]) {
+      fireEvent.keyDown(window, { key })
+      expect(screen.getByRole('button', { name }).getAttribute('aria-pressed')).toBe('true')
+    }
+  })
+
+  it('selects the shape tool with U', () => {
+    render(<App />)
+    fireEvent.keyDown(window, { key: 'u' })
+    expect(screen.getByRole('button', { name: 'Rectangle' }).getAttribute('aria-pressed')).toBe('true')
   })
 })
