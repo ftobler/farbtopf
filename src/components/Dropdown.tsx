@@ -11,6 +11,11 @@ export interface DropdownProps {
   showChevron?: boolean
   triggerClassName?: string
   active?: boolean
+  /**
+   * Makes this a split button: the icon part runs `onAction` directly and only
+   * the arrow part opens the menu.
+   */
+  onAction?: () => void
 }
 
 export function Dropdown({
@@ -22,6 +27,7 @@ export function Dropdown({
   showChevron = true,
   triggerClassName,
   active,
+  onAction,
 }: DropdownProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -44,19 +50,48 @@ export function Dropdown({
 
   return (
     <div className="dropdown" ref={rootRef}>
-      <button
-        type="button"
-        className={triggerClassName ?? 'dropdown-trigger'}
-        title={title}
-        aria-label={ariaLabel}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-pressed={active === undefined ? undefined : active}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {trigger}
-        {showChevron ? <ChevronIcon size={14} /> : null}
-      </button>
+      {onAction ? (
+        <div className={`split-button ${triggerClassName ?? 'dropdown-trigger'}`}>
+          <button
+            type="button"
+            className="split-button-action"
+            title={title}
+            aria-label={ariaLabel}
+            aria-pressed={active === undefined ? undefined : active}
+            onClick={() => {
+              setOpen(false)
+              onAction()
+            }}
+          >
+            {trigger}
+          </button>
+          <button
+            type="button"
+            className="split-button-arrow"
+            title={title ? `${title} options` : undefined}
+            aria-label={ariaLabel ? `${ariaLabel} options` : undefined}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            onClick={() => setOpen((value) => !value)}
+          >
+            <ChevronIcon size={14} />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={triggerClassName ?? 'dropdown-trigger'}
+          title={title}
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-pressed={active === undefined ? undefined : active}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {trigger}
+          {showChevron ? <ChevronIcon size={14} /> : null}
+        </button>
+      )}
       {open ? (
         <div className={`dropdown-menu dropdown-${align}`} role="menu">
           {children(() => setOpen(false))}
