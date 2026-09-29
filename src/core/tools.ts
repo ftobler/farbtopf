@@ -12,6 +12,7 @@ export type ToolId =
   | 'rectangle'
   | 'ellipse'
   | 'text'
+  | 'zoom'
 
 export type ToolGroup = 'freehand' | 'shape' | 'utility'
 
@@ -33,6 +34,7 @@ export const TOOLS: readonly ToolDef[] = [
   { id: 'fill', label: 'Fill with color', shortcut: 'F', group: 'utility' },
   { id: 'picker', label: 'Color picker', shortcut: 'K', group: 'utility' },
   { id: 'text', label: 'Text', shortcut: 'T', group: 'utility' },
+  { id: 'zoom', label: 'Zoom', shortcut: 'Z', group: 'utility' },
   { id: 'line', label: 'Line', shortcut: 'L', group: 'shape' },
   { id: 'rectangle', label: 'Rectangle', shortcut: 'R', group: 'shape' },
   { id: 'ellipse', label: 'Ellipse', shortcut: 'O', group: 'shape' },

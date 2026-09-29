@@ -114,6 +114,32 @@ describe('App', () => {
     expect(cells.map((cell) => [...grid!.children].indexOf(cell!))).toEqual([0, 1, 2, 3])
   })
 
+  it('arranges the tools in two rows of three', () => {
+    render(<App />)
+    const names = ['Pencil', 'Fill with color', 'Text', 'Eraser', 'Color picker', 'Zoom']
+    const buttons = names.map((name) => screen.getByRole('button', { name }))
+    const grid = buttons[0].closest('.tool-grid')
+    expect(grid).toBeTruthy()
+    expect([...grid!.children]).toEqual(buttons)
+    expect(grid!.closest('.ribbon-group')?.querySelector('.ribbon-group-label')?.textContent).toBe('Tools')
+  })
+
+  it('keeps brush and airbrush in a brushes group', () => {
+    render(<App />)
+    const brush = screen.getByRole('button', { name: 'Brush' })
+    const airbrush = screen.getByRole('button', { name: 'Airbrush' })
+    const group = brush.closest('.ribbon-group')
+    expect(group?.contains(airbrush)).toBe(true)
+    expect(group?.querySelector('.ribbon-group-label')?.textContent).toBe('Brushes')
+  })
+
+  it('selects the zoom tool', () => {
+    render(<App />)
+    const zoom = screen.getByRole('button', { name: 'Zoom' })
+    fireEvent.click(zoom)
+    expect(zoom.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')

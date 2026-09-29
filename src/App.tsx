@@ -432,6 +432,7 @@ function App() {
           onPickColor={handlePickColor}
           onSizeChange={onSizeChange}
           onSelectionChange={setHasSelection}
+          onZoomClick={(direction) => setZoom((value) => nextZoom(value, direction))}
           transparentSelection={transparentSelection}
           selectionShape={selectionShape}
         />

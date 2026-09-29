@@ -180,6 +180,10 @@ textarea {
   gap: 2px;
 }
 
+.tool-grid {
+  grid-template-columns: repeat(3, auto);
+}
+
 .icon-button-large {
   width: 48px;
   height: 66px;

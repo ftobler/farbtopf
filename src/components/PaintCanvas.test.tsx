@@ -8,7 +8,7 @@ import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
 
 function setup(
-  tool: 'brush' | 'rectangle' | 'select',
+  tool: 'brush' | 'rectangle' | 'select' | 'zoom',
   width = 20,
   height = 20,
   transparentSelection = false,
@@ -20,6 +20,7 @@ function setup(
   const onPickColor = vi.fn()
   const onSizeChange = vi.fn()
   const onSelectionChange = vi.fn()
+  const onZoomClick = vi.fn()
 
   const { container } = render(
     <PaintCanvas
@@ -38,6 +39,7 @@ function setup(
       onPickColor={onPickColor}
       onSizeChange={onSizeChange}
       onSelectionChange={onSelectionChange}
+      onZoomClick={onZoomClick}
       transparentSelection={transparentSelection}
       selectionShape={selectionShape}
     />,
@@ -49,12 +51,23 @@ function setup(
     ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, container, onHistoryChange, onSizeChange, onSelectionChange }
+  return { ref, canvas, container, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick }
 }
 
 describe('PaintCanvas', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('zooms in on left click and out on right click with the zoom tool', () => {
+    const { canvas, onZoomClick, onHistoryChange } = setup('zoom')
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
+    expect(onZoomClick).toHaveBeenLastCalledWith(1)
+    fireEvent.pointerDown(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
+    expect(onZoomClick).toHaveBeenLastCalledWith(-1)
+    expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
   })
 
   it('records history when a freehand stroke is drawn', () => {

@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import type { Rgba } from '../core/color'
 import type { SelectionShape } from '../core/selection'
-import { BRUSH_SIZES, TOOLS, isShapeTool } from '../core/tools'
+import { BRUSH_SIZES, TOOLS, isShapeTool, toolById } from '../core/tools'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { ColorPalette } from './ColorPalette'
 import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
@@ -17,6 +17,7 @@ import {
   FillIcon,
   FlipIcon,
   LineIcon,
+  MagnifierIcon,
   PasteIcon,
   PencilIcon,
   PickerIcon,
@@ -39,7 +40,12 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
   line: LineIcon,
   rectangle: RectangleIcon,
   ellipse: EllipseIcon,
+  zoom: MagnifierIcon,
 }
+
+/** Tools group, in reading order: two rows of three. */
+const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'eraser', 'picker', 'zoom']
+const BRUSH_TOOLS: ToolId[] = ['brush', 'airbrush']
 
 const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
   outline: 'Outline',
@@ -108,9 +114,8 @@ export function Ribbon({
   onInvertSelection,
   onDeleteSelection,
 }: RibbonProps) {
-  const freehandTools = TOOLS.filter(
-    (definition) => !isShapeTool(definition.id) && definition.id !== 'select',
-  )
+  const utilityTools = TOOL_GRID.map(toolById)
+  const brushTools = BRUSH_TOOLS.map(toolById)
   const shapeTools = TOOLS.filter((definition) => isShapeTool(definition.id))
 
   const renderTool = (definition: (typeof TOOLS)[number]) => {
@@ -334,8 +339,17 @@ export function Ribbon({
       <div className="ribbon-separator" />
 
       <section className="ribbon-group">
-        <div className="ribbon-group-items">{freehandTools.map(renderTool)}</div>
+        <div className="ribbon-group-items button-grid tool-grid">{utilityTools.map(renderTool)}</div>
         <div className="ribbon-group-label">Tools</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
+          <div className="button-stack">{brushTools.map(renderTool)}</div>
+        </div>
+        <div className="ribbon-group-label">Brushes</div>
       </section>
 
       <div className="ribbon-separator" />

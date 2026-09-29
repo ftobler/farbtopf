@@ -77,6 +77,8 @@ export interface PaintCanvasProps {
   onPickColor: (color: Rgba, slot: 'primary' | 'secondary') => void
   onSizeChange: (width: number, height: number) => void
   onSelectionChange?: (hasSelection: boolean) => void
+  /** Zoom tool click: 1 to zoom in (left button), -1 to zoom out (right button). */
+  onZoomClick?: (direction: 1 | -1) => void
   transparentSelection: boolean
   selectionShape?: SelectionShape
 }
@@ -305,6 +307,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onPickColor,
     onSizeChange,
     onSelectionChange = () => {},
+    onZoomClick = () => {},
     transparentSelection,
     selectionShape = 'rectangle',
   },
@@ -756,6 +759,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         updateSelection(clampRect(normalizeRect(point, point), size.width, size.height))
         return
       }
+      if (tool === 'zoom') {
+        onZoomClick(slot === 'secondary' ? -1 : 1)
+        return
+      }
       if (tool === 'picker') {
         onPickColor(doc().get(point.x, point.y), slot)
         return
@@ -801,7 +808,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, onPickColor, paint, primary, secondary, selectionShape, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, onPickColor, onZoomClick, paint, primary, secondary, selectionShape, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -972,7 +979,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [onCursorMove])
 
   const cursor =
-    tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
+    tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
 
   return (
     <div

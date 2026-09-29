@@ -205,6 +205,15 @@ export function TrashIcon(props: IconProps) {
   )
 }
 
+export function MagnifierIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="10" cy="10" r="6" />
+      <path d="M20 20l-5.5-5.5" />
+    </Svg>
+  )
+}
+
 export function ZoomInIcon(props: IconProps) {
   return (
     <Svg {...props}>
