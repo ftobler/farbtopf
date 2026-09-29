@@ -118,6 +118,21 @@ describe('PaintCanvas', () => {
     expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
   })
 
+  it('scales the canvas backing store with the device pixel ratio', () => {
+    const original = window.devicePixelRatio
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
+    try {
+      const { ref, canvas } = setup('brush', 20, 20)
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      act(() => ref.current?.newDocument(20, 20))
+      expect(canvas.width).toBe(40)
+      expect(canvas.height).toBe(40)
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { value: original, configurable: true })
+    }
+  })
+
   it('resizes the document and notifies the size change', () => {
     const { ref, onSizeChange } = setup('brush')
     act(() => ref.current?.resize(10, 30))

@@ -128,13 +128,110 @@ describe('App', () => {
     expect(grid!.closest('.ribbon-group')?.querySelector('.ribbon-group-label')?.textContent).toBe('Tools')
   })
 
-  it('keeps brush and airbrush in a brushes group', () => {
+  it('puts the brush kinds behind a single split button in the brushes group', () => {
     render(<App />)
     const brush = screen.getByRole('button', { name: 'Brush' })
-    const airbrush = screen.getByRole('button', { name: 'Airbrush' })
-    const group = brush.closest('.ribbon-group')
-    expect(group?.contains(airbrush)).toBe(true)
-    expect(group?.querySelector('.ribbon-group-label')?.textContent).toBe('Brushes')
+    expect(brush.closest('.dropdown-trigger-large')).toBeTruthy()
+    expect(brush.closest('.ribbon-group')?.querySelector('.ribbon-group-label')?.textContent).toBe('Brushes')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    const items = screen
+      .getAllByRole('menuitem')
+      .map((item) => item.querySelector('.menu-item-label')?.textContent)
+    expect(items).toEqual([
+      'Circle sharp',
+      'Circle blurred',
+      'Natural brush',
+      'Calligraphy pen',
+      'Highlighter pen',
+      'Selective blurring',
+      'Smudge',
+      'Liquify',
+    ])
+  })
+
+  it('selects a brush kind and activates the brush tool', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Smudge' }))
+    expect(screen.getByRole('button', { name: 'Brush' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    expect(screen.getByRole('menuitem', { name: 'Smudge' }).querySelector('svg')).toBeTruthy()
+  })
+
+  it('shows the text formatting controls only with the text tool', () => {
+    render(<App />)
+    expect(screen.queryByLabelText('Text size')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+    expect(screen.getByLabelText('Text size')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Italic' }))
+    expect(screen.getByRole('button', { name: 'Italic' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Font' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Georgia' }))
+    expect(screen.getByRole('button', { name: 'Font' }).textContent).toContain('Georgia')
+  })
+
+  it('shows icons in the file and edit menus', () => {
+    render(<App />)
+    fireEvent.click(screen.getByText('File'))
+    const fileItems = screen.getAllByRole('menuitem')
+    expect(fileItems.map((item) => item.querySelector('.menu-item-label')?.textContent)).toEqual([
+      'New',
+      'Open…',
+      'Save as PNG',
+      'Clear canvas',
+    ])
+    expect(fileItems.every((item) => item.querySelector('svg'))).toBe(true)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByText('Edit'))
+    const editItems = screen.getAllByRole('menuitem')
+    expect(editItems.map((item) => item.querySelector('.menu-item-label')?.textContent)).toEqual([
+      'Undo',
+      'Redo',
+      'Cut',
+      'Copy',
+      'Paste',
+    ])
+    expect(editItems.every((item) => item.querySelector('svg'))).toBe(true)
+  })
+
+  it('lists the view options and opens the zoom submenu', () => {
+    render(<App />)
+    fireEvent.click(screen.getByText('View'))
+    const topItems = screen
+      .getAllByRole('menuitem')
+      .map((item) => item.querySelector('.menu-item-label')?.textContent)
+    expect(topItems).toEqual(['Zoom', 'Pixel grid', 'Fullscreen', 'Miniature view'])
+
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: /^Zoom$/ }))
+    const openItems = screen
+      .getAllByRole('menuitem')
+      .map((item) => item.querySelector('.menu-item-label')?.textContent)
+    expect(openItems).toEqual([
+      'Zoom',
+      'Zoom in',
+      'Zoom out',
+      '100%',
+      'Fit to window',
+      'Pixel grid',
+      'Fullscreen',
+      'Miniature view',
+    ])
+  })
+
+  it('toggles the pixel grid from the view menu', () => {
+    render(<App />)
+    fireEvent.click(screen.getByText('View'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Pixel grid/ }))
+    expect(screen.getByRole('button', { name: 'Toggle pixel grid' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('shows the miniature view from the view menu', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByText('View'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Miniature view/ }))
+    expect(container.querySelector('.miniature-view')).toBeTruthy()
   })
 
   it('selects the zoom tool', () => {

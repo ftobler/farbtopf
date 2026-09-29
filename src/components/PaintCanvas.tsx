@@ -8,6 +8,8 @@ import {
 } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Bitmap } from '../core/bitmap'
+import { paintBrushStroke } from '../core/brushes'
+import type { BrushId } from '../core/brushes'
 import type { Rgba } from '../core/color'
 import { WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
@@ -33,7 +35,8 @@ import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
-import { fontSizeForBrush, renderText } from '../render/text'
+import { DEFAULT_TEXT_OPTIONS, renderText } from '../render/text'
+import type { TextOptions } from '../render/text'
 
 export interface PaintCanvasHandle {
   newDocument: (width: number, height: number) => void
@@ -83,6 +86,14 @@ export interface PaintCanvasProps {
   onZoomClick?: (direction: 1 | -1) => void
   transparentSelection: boolean
   selectionShape?: SelectionShape
+  /** Freehand brush style used by the brush tool. */
+  brush?: BrushId
+  /** Font, size and style used by the text tool. */
+  text?: TextOptions
+  /** Shows a small overview of the whole image in the corner of the workspace. */
+  showMiniature?: boolean
+  /** Called when the miniature view is dragged to move the visible area. */
+  onPanChange?: (pan: Point) => void
 }
 
 interface StrokeState {
@@ -341,10 +352,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onZoomClick = () => {},
     transparentSelection,
     selectionShape = 'rectangle',
+    brush = 'round',
+    text = DEFAULT_TEXT_OPTIONS,
+    showMiniature = false,
+    onPanChange,
   },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null)
+  const miniatureRef = useRef<HTMLCanvasElement | null>(null)
   const bitmapRef = useRef<Bitmap | null>(null)
   const historyRef = useRef(new History<Bitmap>(HISTORY_LIMIT))
   const strokeRef = useRef<StrokeState | null>(null)
@@ -361,6 +378,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const [mask, setMask] = useState<SelectionMask | null>(null)
   const [lasso, setLasso] = useState<Point[] | null>(null)
   const [hoverCursor, setHoverCursor] = useState<string | null>(null)
+  const [viewport, setViewport] = useState<Rect | null>(null)
 
   const doc = useCallback((): Bitmap => {
     if (!bitmapRef.current) {
@@ -374,7 +392,46 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (!canvas) return
     const context = canvas.getContext('2d')
     if (!context) return
-    context.putImageData(bitmap.toImageData(), 0, 0)
+
+    // Scale the backing store with the device pixel ratio so strokes stay crisp
+    // on high-density displays; the CSS size (and therefore the shown zoom)
+    // is untouched.
+    const ratio = window.devicePixelRatio || 1
+    const backingWidth = Math.max(1, Math.round(bitmap.width * ratio))
+    const backingHeight = Math.max(1, Math.round(bitmap.height * ratio))
+    if (canvas.width !== backingWidth) canvas.width = backingWidth
+    if (canvas.height !== backingHeight) canvas.height = backingHeight
+
+    const image = bitmap.toImageData()
+
+    const miniature = miniatureRef.current
+    if (miniature) {
+      if (miniature.width !== bitmap.width) miniature.width = bitmap.width
+      if (miniature.height !== bitmap.height) miniature.height = bitmap.height
+      miniature.getContext('2d')?.putImageData(image, 0, 0)
+    }
+
+    if (ratio === 1 || typeof context.drawImage !== 'function') {
+      context.putImageData(image, 0, 0)
+      return
+    }
+
+    let offscreen = offscreenRef.current
+    if (!offscreen) {
+      offscreen = document.createElement('canvas')
+      offscreenRef.current = offscreen
+    }
+    if (offscreen.width !== bitmap.width) offscreen.width = bitmap.width
+    if (offscreen.height !== bitmap.height) offscreen.height = bitmap.height
+    const offscreenContext = offscreen.getContext('2d')
+    if (!offscreenContext) {
+      context.putImageData(image, 0, 0)
+      return
+    }
+    offscreenContext.putImageData(image, 0, 0)
+    context.imageSmoothingEnabled = false
+    context.clearRect(0, 0, backingWidth, backingHeight)
+    context.drawImage(offscreen, 0, 0, backingWidth, backingHeight)
   }, [])
 
   const syncHistory = useCallback(() => {
@@ -476,12 +533,84 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [tool, commitFloating, updateSelection])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.width = size.width
-    canvas.height = size.height
     paint(doc())
   }, [size, paint, doc])
+
+  useEffect(() => {
+    if (showMiniature) paint(doc())
+  }, [showMiniature, paint, doc])
+
+  // The part of the image currently visible in the workspace, in image pixels.
+  useEffect(() => {
+    if (!showMiniature) return
+    const update = () => {
+      const canvas = canvasRef.current
+      const workspace = canvas?.closest('.workspace')
+      if (!canvas || !(workspace instanceof HTMLElement)) return
+      const canvasRect = canvas.getBoundingClientRect()
+      const workspaceRect = workspace.getBoundingClientRect()
+      if (canvasRect.width === 0 || canvasRect.height === 0) return
+      const left = (workspaceRect.left - canvasRect.left) / zoom
+      const top = (workspaceRect.top - canvasRect.top) / zoom
+      const width = workspaceRect.width / zoom
+      const height = workspaceRect.height / zoom
+      const x = Math.max(0, Math.min(size.width, left))
+      const y = Math.max(0, Math.min(size.height, top))
+      setViewport({
+        x,
+        y,
+        width: Math.max(0, Math.min(size.width - x, width - (x - left))),
+        height: Math.max(0, Math.min(size.height - y, height - (y - top))),
+      })
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [showMiniature, pan.x, pan.y, zoom, size.width, size.height])
+
+  const miniatureImagePoint = useCallback(
+    (clientX: number, clientY: number): Point | null => {
+      const miniature = miniatureRef.current
+      if (!miniature) return null
+      const rect = miniature.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return null
+      return {
+        x: ((clientX - rect.left) / rect.width) * size.width,
+        y: ((clientY - rect.top) / rect.height) * size.height,
+      }
+    },
+    [size.width, size.height],
+  )
+
+  const centerOn = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!onPanChange) return
+      const point = miniatureImagePoint(clientX, clientY)
+      if (!point) return
+      onPanChange({
+        x: (size.width / 2 - point.x) * zoom,
+        y: (size.height / 2 - point.y) * zoom,
+      })
+    },
+    [miniatureImagePoint, onPanChange, size.width, size.height, zoom],
+  )
+
+  const handleMiniatureDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      centerOn(event.clientX, event.clientY)
+    },
+    [centerOn],
+  )
+
+  const handleMiniatureMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.buttons === 0) return
+      centerOn(event.clientX, event.clientY)
+    },
+    [centerOn],
+  )
 
   const colorFor = useCallback(
     (slot: 'primary' | 'secondary') => (slot === 'secondary' ? secondary : primary),
@@ -562,10 +691,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setEditor(null)
       setSize({ width: bitmap.width, height: bitmap.height })
       onSizeChange(bitmap.width, bitmap.height)
+      paint(bitmap)
       updateSelection(null)
       syncHistory()
     },
-    [onSizeChange, syncHistory, updateSelection],
+    [onSizeChange, paint, syncHistory, updateSelection],
   )
 
   const applyBitmap = useCallback(
@@ -631,6 +761,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       toDataUrl() {
         finishPolyline()
+        const offscreen = offscreenRef.current
+        if (offscreen) return offscreen.toDataURL('image/png')
         return canvasRef.current?.toDataURL('image/png') ?? ''
       },
       getSize() {
@@ -780,14 +912,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
+    const scaleX = rect.width === 0 ? 1 : size.width / rect.width
+    const scaleY = rect.height === 0 ? 1 : size.height / rect.height
     return clampPoint(
       { x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY },
-      canvas.width,
-      canvas.height,
+      size.width,
+      size.height,
     )
-  }, [])
+  }, [size.width, size.height])
 
   const commitText = useCallback(() => {
     const current = editorRef.current
@@ -795,16 +927,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     editorRef.current = null
     setEditor(null)
     if (current.value.trim().length === 0) return
-    const rendered = renderText(current.value, {
-      fontSize: fontSizeForBrush(brushSize),
-      color: colorFor(current.slot),
-    })
+    const rendered = renderText(current.value, { ...text, color: colorFor(current.slot) })
     if (!rendered) return
     historyRef.current.record(doc().clone())
     blitAlpha(doc(), rendered, current.x, current.y)
     paint(doc())
     syncHistory()
-  }, [brushSize, colorFor, doc, paint, syncHistory])
+  }, [colorFor, doc, paint, syncHistory, text])
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -914,13 +1043,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         historyRef.current.record(base)
         stroke.recorded = true
         const color = strokeColorFor(tool, slot, primary, secondary)
+        const width = strokeWidthFor(tool, brushSize)
         if (tool === 'airbrush') spray(doc(), point, brushSize, color)
-        else stamp(doc(), point.x, point.y, strokeWidthFor(tool, brushSize), color, strokeShape(tool))
+        else if (tool === 'brush') paintBrushStroke(doc(), point, point, { size: width, color, brush })
+        else stamp(doc(), point.x, point.y, width, color, strokeShape(tool))
         paint(doc())
         syncHistory()
       }
     },
-    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitFloating, commitText, currentRect, doc, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -999,21 +1130,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         paint(preview)
       } else {
         const color = strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
+        const width = strokeWidthFor(stroke.tool, brushSize)
         if (stroke.tool === 'airbrush') spray(doc(), point, brushSize, color)
-        else
-          drawLine(
-            doc(),
-            stroke.last,
-            point,
-            strokeWidthFor(stroke.tool, brushSize),
-            color,
-            strokeShape(stroke.tool),
-          )
+        else if (stroke.tool === 'brush') paintBrushStroke(doc(), stroke.last, point, { size: width, color, brush })
+        else drawLine(doc(), stroke.last, point, width, color, strokeShape(stroke.tool))
         paint(doc())
       }
       stroke.last = point
     },
-    [brushSize, currentRect, doc, ensureFloating, onCursorMove, paint, previewPolyline, primary, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, currentRect, doc, ensureFloating, onCursorMove, paint, previewPolyline, primary, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -1064,10 +1189,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
     return {
-      x: ((clientX - rect.left) * canvas.width) / rect.width,
-      y: ((clientY - rect.top) * canvas.height) / rect.height,
+      x: rect.width === 0 ? 0 : ((clientX - rect.left) * size.width) / rect.width,
+      y: rect.height === 0 ? 0 : ((clientY - rect.top) * size.height) / rect.height,
     }
-  }, [])
+  }, [size.width, size.height])
 
   const handleRotateDown = useCallback(
     (event: ReactPointerEvent<HTMLSpanElement>) => {
@@ -1118,14 +1243,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
 
   return (
-    <div
-      className="canvas-frame"
-      style={{
-        width: size.width * zoom,
-        height: size.height * zoom,
-        transform: `translate(${pan.x}px, ${pan.y}px)`,
-      }}
-    >
+    <>
+      <div
+        className="canvas-frame"
+        style={{
+          width: size.width * zoom,
+          height: size.height * zoom,
+          transform: `translate(${pan.x}px, ${pan.y}px)`,
+        }}
+      >
       <canvas
         ref={canvasRef}
         className="paint-canvas"
@@ -1191,7 +1317,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           style={{
             left: editor.x * zoom,
             top: editor.y * zoom,
-            fontSize: fontSizeForBrush(brushSize) * zoom,
+            fontFamily: text.fontFamily,
+            fontSize: text.fontSize * zoom,
+            fontWeight: text.bold ? 700 : 400,
+            fontStyle: text.italic ? 'italic' : 'normal',
+            textDecoration: text.underline ? 'underline' : 'none',
             lineHeight: 1.25,
             color: toCss(colorFor(editor.slot)),
           }}
@@ -1213,6 +1343,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           onBlur={commitText}
         />
       ) : null}
-    </div>
+      </div>
+      {showMiniature ? (
+        <div
+          className="miniature-view"
+          role="group"
+          aria-label="Miniature view"
+          onPointerDown={handleMiniatureDown}
+          onPointerMove={handleMiniatureMove}
+        >
+          <canvas ref={miniatureRef} className="miniature-canvas" aria-hidden="true" />
+          {viewport ? (
+            <span
+              className="miniature-viewport"
+              aria-hidden="true"
+              style={{
+                left: `${(viewport.x / size.width) * 100}%`,
+                top: `${(viewport.y / size.height) * 100}%`,
+                width: `${(viewport.width / size.width) * 100}%`,
+                height: `${(viewport.height / size.height) * 100}%`,
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </>
   )
 })

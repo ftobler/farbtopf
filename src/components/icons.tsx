@@ -94,10 +94,9 @@ export function FillIcon(props: IconProps) {
 export function PickerIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="m14.5 5 4.5 4.5" />
-      <path d="M13 6.5 17.5 11" />
-      <path d="M9.5 9.5 16 3l1.5 1.5L11 11z" />
-      <path d="M11 11l-6 6c-.8.8-1 2.2-1 3 1 0 2.2-.2 3-1l6-6z" />
+      <path d="m2 22 1-1h3l9-9" />
+      <path d="M3 21v-3l9-9" />
+      <path d="m15 6 3.5-3.5a2.12 2.12 0 0 1 3 3L18 9l.5.5a2.12 2.12 0 0 1-3 3L9 6a2.12 2.12 0 0 1 3-3Z" />
     </Svg>
   )
 }
@@ -260,6 +259,26 @@ export function GridIcon(props: IconProps) {
     <Svg {...props}>
       <rect x="4" y="4" width="16" height="16" rx="1" />
       <path d="M4 10h16M4 15h16M10 4v16M15 4v16" />
+    </Svg>
+  )
+}
+
+export function FullscreenIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 9V5a1 1 0 0 1 1-1h4" />
+      <path d="M15 4h4a1 1 0 0 1 1 1v4" />
+      <path d="M20 15v4a1 1 0 0 1-1 1h-4" />
+      <path d="M9 20H5a1 1 0 0 1-1-1v-4" />
+    </Svg>
+  )
+}
+
+export function MiniatureIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+      <rect x="12.5" y="11.5" width="5.5" height="4.5" rx="0.6" />
     </Svg>
   )
 }

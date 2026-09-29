@@ -8,6 +8,7 @@ import { Ribbon } from './components/Ribbon'
 import { RotateDialog } from './components/RotateDialog'
 import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { StatusBar } from './components/StatusBar'
+import type { BrushId } from './core/brushes'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
 import type { SelectionShape } from './core/selection'
@@ -20,6 +21,8 @@ import { ZOOM_LEVELS, nextZoom } from './core/zoom'
 import { useCustomColors } from './hooks/useCustomColors'
 import { useTheme } from './hooks/useTheme'
 import { downloadDataUrl, readFileAsDataUrl } from './render/image'
+import { DEFAULT_TEXT_OPTIONS } from './render/text'
+import type { TextOptions } from './render/text'
 
 /** Single-key shortcuts that pick a specific shape. */
 const SHAPE_SHORTCUTS: Record<string, ShapeKind> = { l: 'line', r: 'rectangle', o: 'ellipse' }
@@ -55,6 +58,8 @@ function App() {
   const [primary, setPrimary] = useState<Rgba>(DEFAULT_PRIMARY)
   const [secondary, setSecondary] = useState<Rgba>(DEFAULT_SECONDARY)
   const [brushSize, setBrushSize] = useState(4)
+  const [brush, setBrush] = useState<BrushId>('round')
+  const [text, setText] = useState<TextOptions>(DEFAULT_TEXT_OPTIONS)
   const [shapeFill, setShapeFill] = useState<ShapeFill>('outline')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rectangle')
   const [zoom, setZoom] = useState(1)
@@ -74,6 +79,8 @@ function App() {
   const [hasSelection, setHasSelection] = useState(false)
   const [transparentSelection, setTransparentSelection] = useState(false)
   const [selectionShape, setSelectionShape] = useState<SelectionShape>('rectangle')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showMiniature, setShowMiniature] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -90,6 +97,12 @@ function App() {
 
   useEffect(() => {
     document.title = 'Farbtopf'
+  }, [])
+
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
   const handleNewDocument = useCallback(
@@ -193,6 +206,19 @@ function App() {
   const handleRedo = useCallback(() => canvasRef.current?.redo(), [])
   const handleClear = useCallback(() => canvasRef.current?.clear(), [])
 
+  const handleToggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.()
+    } else {
+      void document.documentElement.requestFullscreen?.()
+    }
+  }, [])
+
+  const handleZoomFit = useCallback(() => {
+    setZoom(fitZoom(canvasSize.width, canvasSize.height))
+    setPan({ x: 0, y: 0 })
+  }, [canvasSize.width, canvasSize.height])
+
   const handleCrop = useCallback(() => {
     canvasRef.current?.cropToSelection()
   }, [])
@@ -246,6 +272,10 @@ function App() {
     },
     [],
   )
+
+  const handleTextChange = useCallback((patch: Partial<TextOptions>) => {
+    setText((current) => ({ ...current, ...patch }))
+  }, [])
 
   const handleSwapColors = useCallback(() => {
     setPrimary(secondary)
@@ -361,6 +391,21 @@ function App() {
           handleSelectAll()
           return
         }
+        if (key === 'x') {
+          event.preventDefault()
+          void handleCutFromCanvas()
+          return
+        }
+        if (key === 'c') {
+          event.preventDefault()
+          void handleCopyFromCanvas()
+          return
+        }
+        if (key === 'v') {
+          event.preventDefault()
+          void handlePasteFromClipboard()
+          return
+        }
         return
       }
 
@@ -415,8 +460,11 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     brushSize,
+    handleCopyFromCanvas,
+    handleCutFromCanvas,
     handleDeleteSelection,
     handleOpenClick,
+    handlePasteFromClipboard,
     handleRedo,
     handleSave,
     handleSelectAll,
@@ -453,12 +501,24 @@ function App() {
         canUndo={canUndo}
         canRedo={canRedo}
         theme={theme}
+        zoom={zoom}
+        showGrid={showGrid}
+        isFullscreen={isFullscreen}
+        showMiniature={showMiniature}
         onNew={() => setNewDialogOpen(true)}
         onOpen={handleOpenClick}
         onSave={handleSave}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onClear={handleClear}
+        onCut={handleCutFromCanvas}
+        onCopy={handleCopyFromCanvas}
+        onPaste={handlePasteFromClipboard}
+        onZoomChange={setZoom}
+        onZoomFit={handleZoomFit}
+        onToggleGrid={() => setShowGrid((value) => !value)}
+        onToggleFullscreen={handleToggleFullscreen}
+        onToggleMiniature={() => setShowMiniature((value) => !value)}
         onToggleTheme={toggleTheme}
       />
 
@@ -499,6 +559,10 @@ function App() {
           onSelectAll={handleSelectAll}
           onInvertSelection={handleInvertSelection}
           onDeleteSelection={handleDeleteSelection}
+          brush={brush}
+          onBrushChange={setBrush}
+          text={text}
+          onTextChange={handleTextChange}
         />
       </div>
 
@@ -538,6 +602,10 @@ function App() {
           onZoomClick={(direction) => setZoom((value) => nextZoom(value, direction))}
           transparentSelection={transparentSelection}
           selectionShape={selectionShape}
+          brush={brush}
+          text={text}
+          showMiniature={showMiniature}
+          onPanChange={setPan}
         />
       </div>
 

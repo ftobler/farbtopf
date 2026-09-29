@@ -86,7 +86,7 @@ textarea {
 
 .menubar-menus {
   display: flex;
-  gap: 2px;
+  gap: 10px;
 }
 
 .menubar-actions {
@@ -182,6 +182,44 @@ textarea {
 
 .ribbon-group .color-palette {
   gap: 10px;
+}
+
+.text-options {
+  gap: 4px;
+}
+
+.text-option-value {
+  display: inline-block;
+  min-width: 48px;
+  text-align: left;
+}
+
+.text-size-input {
+  width: 54px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.text-format-glyph {
+  line-height: 1;
+  font-size: 15px;
+}
+
+.glyph-bold {
+  font-weight: 800;
+}
+
+.glyph-italic {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+}
+
+.glyph-underline {
+  text-decoration: underline;
 }
 
 .icon-button {
@@ -424,6 +462,28 @@ textarea {
   color: var(--accent);
 }
 
+.menu-item-icon {
+  color: var(--text-muted);
+}
+
+.menu-submenu {
+  position: relative;
+}
+
+.menu-item-arrow {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.menu-item-arrow svg {
+  transform: rotate(-90deg);
+}
+
+.menu-submenu-panel {
+  top: -5px;
+  left: calc(100% + 2px);
+}
+
 .menu-item-label {
   flex: 1;
 }
@@ -578,6 +638,7 @@ textarea {
 }
 
 .workspace {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
@@ -585,6 +646,38 @@ textarea {
   padding: 24px;
   overflow: hidden;
   background: var(--bg);
+}
+
+.miniature-view {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background-color: var(--checker-a);
+  box-shadow: var(--shadow);
+  cursor: grab;
+  touch-action: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.miniature-view:active {
+  cursor: grabbing;
+}
+
+.miniature-canvas {
+  display: block;
+  max-width: 180px;
+  max-height: 140px;
+}
+
+.miniature-viewport {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
 }
 
 .workspace.panning {
@@ -714,16 +807,16 @@ textarea {
   position: absolute;
   min-width: 72px;
   min-height: 1.25em;
-  padding: 0;
+  padding: 2px;
   margin: 0;
-  border: 1px dashed var(--accent);
+  border: none;
   background: transparent;
   color: inherit;
   font-family: var(--font);
   white-space: pre;
   resize: none;
   overflow: hidden;
-  outline: none;
+  outline: 1px dashed var(--accent);
 }
 
 .color-palette {

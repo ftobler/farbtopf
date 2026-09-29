@@ -107,9 +107,10 @@ export interface MenuItemProps {
   shortcut?: string
   disabled?: boolean
   checked?: boolean
+  icon?: ReactNode
 }
 
-export function MenuItem({ children, onClick, shortcut, disabled, checked }: MenuItemProps) {
+export function MenuItem({ children, onClick, shortcut, disabled, checked, icon }: MenuItemProps) {
   return (
     <button
       type="button"
@@ -118,10 +119,53 @@ export function MenuItem({ children, onClick, shortcut, disabled, checked }: Men
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="menu-item-check">{checked ? <CheckIcon size={14} /> : null}</span>
+      <span className={`menu-item-check${icon ? ' menu-item-icon' : ''}`}>
+        {icon ?? (checked ? <CheckIcon size={14} /> : null)}
+      </span>
       <span className="menu-item-label">{children}</span>
       {shortcut ? <span className="menu-item-shortcut">{shortcut}</span> : null}
     </button>
+  )
+}
+
+export interface MenuSubmenuProps {
+  children: (close: () => void) => ReactNode
+  label: ReactNode
+  icon?: ReactNode
+  disabled?: boolean
+}
+
+/** A menu item that reveals a nested flyout menu on hover, click or keyboard focus. */
+export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      className="menu-submenu"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        className="menu-item menu-submenu-trigger"
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className={`menu-item-check${icon ? ' menu-item-icon' : ''}`}>{icon}</span>
+        <span className="menu-item-label">{label}</span>
+        <span className="menu-item-arrow">
+          <ChevronIcon size={14} />
+        </span>
+      </button>
+      {open ? (
+        <div className="dropdown-menu menu-submenu-panel" role="menu">
+          {children(() => setOpen(false))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 

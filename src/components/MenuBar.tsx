@@ -1,16 +1,50 @@
-import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
-import { GitHubIcon, LogoIcon, MoonIcon, RedoIcon, SaveIcon, SunIcon, UndoIcon } from './icons'
+import { nextZoom } from '../core/zoom'
+import { Dropdown, MenuDivider, MenuItem, MenuSubmenu } from './Dropdown'
+import {
+  CopyIcon,
+  CutIcon,
+  FullscreenIcon,
+  GitHubIcon,
+  GridIcon,
+  LogoIcon,
+  MagnifierIcon,
+  MiniatureIcon,
+  MoonIcon,
+  NewIcon,
+  OpenIcon,
+  PasteIcon,
+  RedoIcon,
+  SaveIcon,
+  ScaleIcon,
+  SunIcon,
+  TrashIcon,
+  UndoIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from './icons'
 
 export interface MenuBarProps {
   canUndo: boolean
   canRedo: boolean
   theme: 'light' | 'dark'
+  zoom: number
+  showGrid: boolean
+  isFullscreen: boolean
+  showMiniature: boolean
   onNew: () => void
   onOpen: () => void
   onSave: () => void
   onUndo: () => void
   onRedo: () => void
   onClear: () => void
+  onCut: () => void
+  onCopy: () => void
+  onPaste: () => void
+  onZoomChange: (zoom: number) => void
+  onZoomFit: () => void
+  onToggleGrid: () => void
+  onToggleFullscreen: () => void
+  onToggleMiniature: () => void
   onToggleTheme: () => void
 }
 
@@ -18,12 +52,24 @@ export function MenuBar({
   canUndo,
   canRedo,
   theme,
+  zoom,
+  showGrid,
+  isFullscreen,
+  showMiniature,
   onNew,
   onOpen,
   onSave,
   onUndo,
   onRedo,
   onClear,
+  onCut,
+  onCopy,
+  onPaste,
+  onZoomChange,
+  onZoomFit,
+  onToggleGrid,
+  onToggleFullscreen,
+  onToggleMiniature,
   onToggleTheme,
 }: MenuBarProps) {
   return (
@@ -37,6 +83,7 @@ export function MenuBar({
           {(close) => (
             <>
               <MenuItem
+                icon={<NewIcon size={16} />}
                 shortcut="Ctrl+N"
                 onClick={() => {
                   onNew()
@@ -46,6 +93,7 @@ export function MenuBar({
                 New
               </MenuItem>
               <MenuItem
+                icon={<OpenIcon size={16} />}
                 shortcut="Ctrl+O"
                 onClick={() => {
                   onOpen()
@@ -55,6 +103,7 @@ export function MenuBar({
                 Open…
               </MenuItem>
               <MenuItem
+                icon={<SaveIcon size={16} />}
                 shortcut="Ctrl+S"
                 onClick={() => {
                   onSave()
@@ -65,6 +114,7 @@ export function MenuBar({
               </MenuItem>
               <MenuDivider />
               <MenuItem
+                icon={<TrashIcon size={16} />}
                 onClick={() => {
                   onClear()
                   close()
@@ -80,6 +130,7 @@ export function MenuBar({
           {(close) => (
             <>
               <MenuItem
+                icon={<UndoIcon size={16} />}
                 shortcut="Ctrl+Z"
                 disabled={!canUndo}
                 onClick={() => {
@@ -90,6 +141,7 @@ export function MenuBar({
                 Undo
               </MenuItem>
               <MenuItem
+                icon={<RedoIcon size={16} />}
                 shortcut="Ctrl+Y"
                 disabled={!canRedo}
                 onClick={() => {
@@ -99,12 +151,125 @@ export function MenuBar({
               >
                 Redo
               </MenuItem>
+              <MenuDivider />
+              <MenuItem
+                icon={<CutIcon size={16} />}
+                shortcut="Ctrl+X"
+                onClick={() => {
+                  onCut()
+                  close()
+                }}
+              >
+                Cut
+              </MenuItem>
+              <MenuItem
+                icon={<CopyIcon size={16} />}
+                shortcut="Ctrl+C"
+                onClick={() => {
+                  onCopy()
+                  close()
+                }}
+              >
+                Copy
+              </MenuItem>
+              <MenuItem
+                icon={<PasteIcon size={16} />}
+                shortcut="Ctrl+V"
+                onClick={() => {
+                  onPaste()
+                  close()
+                }}
+              >
+                Paste
+              </MenuItem>
             </>
           )}
         </Dropdown>
 
         <Dropdown trigger="View" showChevron={false} triggerClassName="menubar-button">
-          {() => null}
+          {(close) => (
+            <>
+              <MenuSubmenu label="Zoom" icon={<MagnifierIcon size={16} />}>
+                {(closeSub) => (
+                  <>
+                    <MenuItem
+                      icon={<ZoomInIcon size={16} />}
+                      onClick={() => {
+                        onZoomChange(nextZoom(zoom, 1))
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Zoom in
+                    </MenuItem>
+                    <MenuItem
+                      icon={<ZoomOutIcon size={16} />}
+                      onClick={() => {
+                        onZoomChange(nextZoom(zoom, -1))
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Zoom out
+                    </MenuItem>
+                    <MenuItem
+                      icon={<MagnifierIcon size={16} />}
+                      checked={zoom === 1}
+                      onClick={() => {
+                        onZoomChange(1)
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      100%
+                    </MenuItem>
+                    <MenuItem
+                      icon={<ScaleIcon size={16} />}
+                      onClick={() => {
+                        onZoomFit()
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Fit to window
+                    </MenuItem>
+                  </>
+                )}
+              </MenuSubmenu>
+              <MenuDivider />
+              <MenuItem
+                icon={<GridIcon size={16} />}
+                shortcut="G"
+                checked={showGrid}
+                onClick={() => {
+                  onToggleGrid()
+                  close()
+                }}
+              >
+                Pixel grid
+              </MenuItem>
+              <MenuItem
+                icon={<FullscreenIcon size={16} />}
+                checked={isFullscreen}
+                onClick={() => {
+                  onToggleFullscreen()
+                  close()
+                }}
+              >
+                Fullscreen
+              </MenuItem>
+              <MenuItem
+                icon={<MiniatureIcon size={16} />}
+                checked={showMiniature}
+                onClick={() => {
+                  onToggleMiniature()
+                  close()
+                }}
+              >
+                Miniature view
+              </MenuItem>
+            </>
+          )}
         </Dropdown>
 
         <div className="menubar-separator" role="separator" />
