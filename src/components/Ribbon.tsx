@@ -162,7 +162,8 @@ export function Ribbon({
             title="Select"
             ariaLabel="Select"
             active={tool === 'select'}
-            trigger={<SelectIcon size={18} />}
+            triggerClassName="dropdown-trigger dropdown-trigger-large"
+            trigger={<SelectIcon size={28} />}
           >
             {(close) => (
               <>
@@ -188,6 +189,14 @@ export function Ribbon({
               </>
             )}
           </Dropdown>
+        </div>
+        <div className="ribbon-group-label">Selection</div>
+      </section>
+
+      <div className="ribbon-separator" />
+
+      <section className="ribbon-group">
+        <div className="ribbon-group-items">
           <button
             type="button"
             className="icon-button"

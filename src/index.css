@@ -222,6 +222,15 @@ textarea {
   cursor: pointer;
 }
 
+.dropdown-trigger-large {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  width: 48px;
+  height: 66px;
+  padding: 0;
+}
+
 .dropdown-trigger:hover {
   background: var(--hover);
 }

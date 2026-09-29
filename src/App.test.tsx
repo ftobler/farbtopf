@@ -53,6 +53,18 @@ describe('App', () => {
     expect(stack?.previousElementSibling).toBe(copy)
   })
 
+  it('puts a large select button in its own group between clipboard and image', () => {
+    render(<App />)
+    const select = screen.getByRole('button', { name: 'Select' })
+    expect(select.classList.contains('dropdown-trigger-large')).toBe(true)
+
+    const group = select.closest('.ribbon-group')
+    expect(group?.querySelector('.ribbon-group-label')?.textContent).toBe('Selection')
+
+    const labels = [...document.querySelectorAll('.ribbon-group-label')].map((label) => label.textContent)
+    expect(labels.slice(0, 3)).toEqual(['Clipboard', 'Selection', 'Image'])
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')
