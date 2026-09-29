@@ -38,6 +38,21 @@ describe('App', () => {
     expect(topbar?.contains(copy)).toBe(true)
   })
 
+  it('shows copy as a large button beside a stack of cut and paste', () => {
+    render(<App />)
+    const copy = screen.getByRole('button', { name: 'Copy' })
+    const cut = screen.getByRole('button', { name: 'Cut' })
+    const paste = screen.getByRole('button', { name: 'Paste' })
+
+    expect(copy.classList.contains('icon-button-large')).toBe(true)
+
+    const stack = cut.parentElement
+    expect(stack?.classList.contains('button-stack')).toBe(true)
+    expect(paste.parentElement).toBe(stack)
+    expect([...(stack?.children ?? [])]).toEqual([cut, paste])
+    expect(stack?.previousElementSibling).toBe(copy)
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')

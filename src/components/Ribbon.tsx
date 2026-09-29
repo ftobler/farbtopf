@@ -123,31 +123,33 @@ export function Ribbon({
         <div className="ribbon-group-items">
           <button
             type="button"
-            className="icon-button"
-            title="Cut"
-            aria-label="Cut"
-            onClick={onCut}
-          >
-            <CutIcon size={18} />
-          </button>
-          <button
-            type="button"
-            className="icon-button"
+            className="icon-button icon-button-large"
             title="Copy"
             aria-label="Copy"
             onClick={onCopy}
           >
-            <CopyIcon size={18} />
+            <CopyIcon size={28} />
           </button>
-          <button
-            type="button"
-            className="icon-button"
-            title="Paste from clipboard"
-            aria-label="Paste"
-            onClick={onPaste}
-          >
-            <PasteIcon size={18} />
-          </button>
+          <div className="button-stack">
+            <button
+              type="button"
+              className="icon-button"
+              title="Cut"
+              aria-label="Cut"
+              onClick={onCut}
+            >
+              <CutIcon size={18} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              title="Paste from clipboard"
+              aria-label="Paste"
+              onClick={onPaste}
+            >
+              <PasteIcon size={18} />
+            </button>
+          </div>
         </div>
         <div className="ribbon-group-label">Clipboard</div>
       </section>
