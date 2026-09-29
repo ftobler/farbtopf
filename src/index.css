@@ -291,6 +291,61 @@ textarea {
   color: var(--accent);
 }
 
+.split-button.dropdown-trigger {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+.split-button.dropdown-trigger:hover {
+  background: transparent;
+  border-color: var(--border);
+}
+
+.split-button-action,
+.split-button-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.split-button-action {
+  width: 30px;
+}
+
+.split-button-arrow {
+  width: 16px;
+}
+
+.dropdown-trigger-large .split-button-action {
+  width: auto;
+  flex: 1;
+}
+
+.dropdown-trigger-large .split-button-arrow {
+  width: auto;
+  height: 18px;
+  flex: none;
+}
+
+.split-button-action:hover,
+.split-button-arrow:hover,
+.split-button-arrow[aria-expanded="true"] {
+  background: var(--hover);
+}
+
+.split-button-action[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);

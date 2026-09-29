@@ -62,6 +62,8 @@ function App() {
   const [showScaleDialog, setShowScaleDialog] = useState(false)
   const [showRotateDialog, setShowRotateDialog] = useState(false)
   const [customRotation, setCustomRotation] = useState(0)
+  const [lastRotation, setLastRotation] = useState(90)
+  const [lastFlip, setLastFlip] = useState<'horizontal' | 'vertical'>('horizontal')
   const [hasSelection, setHasSelection] = useState(false)
   const [transparentSelection, setTransparentSelection] = useState(false)
   const [selectionShape, setSelectionShape] = useState<SelectionShape>('rectangle')
@@ -210,10 +212,12 @@ function App() {
   )
 
   const handleFlip = useCallback((axis: 'horizontal' | 'vertical') => {
+    setLastFlip(axis)
     canvasRef.current?.flip(axis)
   }, [])
 
   const handleRotate = useCallback((degrees: number) => {
+    setLastRotation(degrees)
     canvasRef.current?.rotate(degrees)
   }, [])
 
@@ -405,6 +409,8 @@ function App() {
           onScale={() => setShowScaleDialog(true)}
           onFlip={handleFlip}
           onRotate={handleRotate}
+          lastRotation={lastRotation}
+          lastFlip={lastFlip}
           onCustomRotate={() => setShowRotateDialog(true)}
           onPaste={handlePasteFromClipboard}
           onCut={handleCutFromCanvas}

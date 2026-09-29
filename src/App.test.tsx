@@ -59,7 +59,7 @@ describe('App', () => {
   it('puts a large select button in its own group between clipboard and image', () => {
     render(<App />)
     const select = screen.getByRole('button', { name: 'Select' })
-    expect(select.classList.contains('dropdown-trigger-large')).toBe(true)
+    expect(select.closest('.dropdown-trigger-large')).toBeTruthy()
 
     const group = select.closest('.ribbon-group')
     expect(group?.querySelector('.ribbon-group-label')?.textContent).toBe('Selection')
@@ -70,7 +70,7 @@ describe('App', () => {
 
   it('lists the selection commands in the select menu', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
     const items = screen
       .getAllByRole('menuitem')
       .map((item) => item.querySelector('.menu-item-label')?.textContent)
@@ -88,10 +88,10 @@ describe('App', () => {
   it('switches to the select tool with a free-form shape', () => {
     render(<App />)
     const select = screen.getByRole('button', { name: 'Select' })
-    fireEvent.click(select)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Free-form selection' }))
     expect(select.getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(select)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
     const freeform = screen.getByRole('menuitem', { name: 'Free-form selection' })
     expect(freeform.querySelector('svg')).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Rectangular selection' }).querySelector('svg')).toBeNull()
@@ -100,7 +100,7 @@ describe('App', () => {
   it('select all activates the select tool', () => {
     render(<App />)
     const select = screen.getByRole('button', { name: 'Select' })
-    fireEvent.click(select)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
     expect(select.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
@@ -184,16 +184,55 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Rotate' })).toBeTruthy()
   })
 
-  it('lists the flip modes', () => {
+  it('selects the remembered selection shape from the select icon', () => {
+    render(<App />)
+    const select = screen.getByRole('button', { name: 'Select' })
+    fireEvent.click(select)
+    expect(select.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Free-form selection' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    fireEvent.click(select)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    expect(screen.getByRole('menuitem', { name: 'Free-form selection' }).querySelector('svg')).toBeTruthy()
+  })
+
+  it('rotates right from the rotate icon and repeats the last rotation', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate 180°' }))
+    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate left 90°' }))
+    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+  })
+
+  it('flips from the flip icon without opening the menu', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Flip' }))
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('lists the flip modes', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Flip options' }))
     expect(screen.getByText('Flip horizontal')).toBeTruthy()
     expect(screen.getByText('Flip vertical')).toBeTruthy()
   })
 
   it('lists the rotate modes', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
     const items = screen.getAllByRole('menuitem').map((item) => item.textContent)
     expect(items).toEqual([
       'Rotate right 90°',
@@ -205,7 +244,7 @@ describe('App', () => {
 
   it('opens the custom rotation dialog and applies an angle', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Custom rotation…' }))
     expect(screen.getByRole('dialog', { name: 'Rotate' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText(/Degrees/), { target: { value: '30' } })
@@ -215,7 +254,7 @@ describe('App', () => {
 
   it('cancels the custom rotation dialog', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Custom rotation…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -223,7 +262,7 @@ describe('App', () => {
 
   it('does not apply an invalid custom rotation', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Custom rotation…' }))
     fireEvent.change(screen.getByLabelText(/Degrees/), { target: { value: '' } })
     const apply = screen.getByRole('button', { name: 'Apply' }) as HTMLButtonElement

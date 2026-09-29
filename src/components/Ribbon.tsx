@@ -25,6 +25,7 @@ import {
   RotateIcon,
   ScaleIcon,
   SelectIcon,
+  FreeformSelectIcon,
   TextIcon,
 } from './icons'
 
@@ -65,6 +66,9 @@ export interface RibbonProps {
   onScale: () => void
   onFlip: (axis: 'horizontal' | 'vertical') => void
   onRotate: (degrees: number) => void
+  /** Repeated by the rotate and flip icons; the arrows open the menus. */
+  lastRotation: number
+  lastFlip: 'horizontal' | 'vertical'
   onCustomRotate: () => void
   onPaste: () => void
   onCut: () => void
@@ -98,6 +102,8 @@ export function Ribbon({
   onScale,
   onFlip,
   onRotate,
+  lastRotation,
+  lastFlip,
   onCustomRotate,
   onPaste,
   onCut,
@@ -182,7 +188,8 @@ export function Ribbon({
             ariaLabel="Select"
             active={tool === 'select'}
             triggerClassName="dropdown-trigger dropdown-trigger-large"
-            trigger={<SelectIcon size={28} />}
+            trigger={selectionShape === 'freeform' ? <FreeformSelectIcon size={28} /> : <SelectIcon size={28} />}
+            onAction={() => onToolChange('select')}
           >
             {(close) => (
               <>
@@ -264,7 +271,12 @@ export function Ribbon({
           >
             <CropIcon size={18} />
           </button>
-          <Dropdown title="Rotate" ariaLabel="Rotate" trigger={<RotateIcon size={18} />}>
+          <Dropdown
+            title="Rotate"
+            ariaLabel="Rotate"
+            trigger={<RotateIcon size={18} />}
+            onAction={() => onRotate(lastRotation)}
+          >
             {(close) => (
               <>
                 <MenuItem
@@ -311,7 +323,12 @@ export function Ribbon({
           >
             <ScaleIcon size={18} />
           </button>
-          <Dropdown title="Flip" ariaLabel="Flip" trigger={<FlipIcon size={18} />}>
+          <Dropdown
+            title="Flip"
+            ariaLabel="Flip"
+            trigger={<FlipIcon size={18} />}
+            onAction={() => onFlip(lastFlip)}
+          >
             {(close) => (
               <>
                 <MenuItem

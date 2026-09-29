@@ -282,6 +282,17 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
+export function FreeformSelectIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path
+        d="M6 5.5c3-2 8.5-2 12 .5s2 7-2 8.5-5.5 0-6.5 2.5-2.5 3.5-4.5 2S4 13 3.8 10.5 4 7 6 5.5Z"
+        strokeDasharray="3 3"
+      />
+    </Svg>
+  )
+}
+
 export function SelectIcon(props: IconProps) {
   return (
     <Svg {...props}>
