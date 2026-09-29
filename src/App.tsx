@@ -205,7 +205,7 @@ function App() {
     canvasRef.current?.flip(axis)
   }, [])
 
-  const handleRotate = useCallback((degrees: 90 | 180 | 270) => {
+  const handleRotate = useCallback((degrees: number) => {
     canvasRef.current?.rotate(degrees)
   }, [])
 

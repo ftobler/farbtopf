@@ -58,7 +58,7 @@ export interface RibbonProps {
   onCrop: () => void
   onScale: () => void
   onFlip: (axis: 'horizontal' | 'vertical') => void
-  onRotate: (degrees: 90 | 180 | 270) => void
+  onRotate: (degrees: number) => void
   onPaste: () => void
   onCut: () => void
   onCopy: () => void

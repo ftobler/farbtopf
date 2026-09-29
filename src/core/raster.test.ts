@@ -17,6 +17,8 @@ import {
   rotate90,
   rotate180,
   rotate270,
+  rotateBy,
+  rotatedSize,
   scale,
   stamp,
 } from './raster'
@@ -333,5 +335,42 @@ describe('flip and rotate', () => {
     expect(ccw.get(0, 0)).toEqual(C)
     expect(ccw.get(0, 1)).toEqual(B)
     expect(ccw.get(0, 2)).toEqual(A)
+  })
+})
+
+describe('rotateBy', () => {
+  function sample(): Bitmap {
+    const src = new Bitmap(3, 2, WHITE)
+    src.set(0, 0, BLACK)
+    src.set(2, 1, RED_OPAQUE)
+    return src
+  }
+
+  it('matches the exact quarter turns', () => {
+    expect(rotateBy(sample(), 90).data).toEqual(rotate90(sample()).data)
+    expect(rotateBy(sample(), -90).data).toEqual(rotate270(sample()).data)
+    expect(rotateBy(sample(), 180).data).toEqual(rotate180(sample()).data)
+    expect(rotateBy(sample(), 360).data).toEqual(sample().data)
+  })
+
+  it('grows to the bounding box of the rotated image', () => {
+    expect(rotatedSize(10, 10, 45)).toEqual({ width: 15, height: 15 })
+    expect(rotatedSize(10, 4, 0)).toEqual({ width: 10, height: 4 })
+    expect(rotatedSize(10, 4, 90)).toEqual({ width: 4, height: 10 })
+    const out = rotateBy(new Bitmap(10, 10, BLACK), 45)
+    expect(out.width).toBe(15)
+    expect(out.height).toBe(15)
+  })
+
+  it('keeps the centre and fills uncovered corners with the given colour', () => {
+    const out = rotateBy(new Bitmap(10, 10, BLACK), 45, WHITE)
+    expect(out.get(7, 7)).toEqual(BLACK)
+    expect(out.get(0, 0)).toEqual(WHITE)
+  })
+
+  it('leaves uncovered corners transparent without a fill', () => {
+    const out = rotateBy(new Bitmap(10, 10, BLACK), 30)
+    expect(out.get(0, 0).a).toBe(0)
+    expect(out.get(Math.floor(out.width / 2), Math.floor(out.height / 2))).toEqual(BLACK)
   })
 })

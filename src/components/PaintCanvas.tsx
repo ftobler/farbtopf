@@ -23,9 +23,7 @@ import {
   flipHorizontal,
   flipVertical,
   floodFill,
-  rotate90,
-  rotate180,
-  rotate270,
+  rotateBy,
   scale,
   stamp,
 } from '../core/raster'
@@ -47,7 +45,8 @@ export interface PaintCanvasHandle {
   toDataUrl: () => string
   getSize: () => { width: number; height: number }
   flip: (axis: 'horizontal' | 'vertical') => void
-  rotate: (degrees: 90 | 180 | 270) => void
+  /** Rotates the image clockwise by any angle; the canvas grows to fit and new corners take the secondary colour. */
+  rotate: (degrees: number) => void
   resize: (width: number, height: number) => void
   cropToSelection: () => void
   getSelection: () => Rect | null
@@ -457,9 +456,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       rotate(degrees) {
         commitFloating()
-        applyBitmap(
-          degrees === 90 ? rotate90(doc()) : degrees === 180 ? rotate180(doc()) : rotate270(doc()),
-        )
+        updateSelection(null)
+        applyBitmap(rotateBy(doc(), degrees, secondary))
       },
       resize(width, height) {
         commitFloating()

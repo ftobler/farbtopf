@@ -371,3 +371,46 @@ export function rotate270(source: Bitmap): Bitmap {
   }
   return result
 }
+
+function normalizeDegrees(degrees: number): number {
+  return ((degrees % 360) + 360) % 360
+}
+
+/** Size of the box that holds a `width`×`height` image rotated by `degrees`. */
+export function rotatedSize(width: number, height: number, degrees: number): { width: number; height: number } {
+  const radians = (normalizeDegrees(degrees) * Math.PI) / 180
+  const cos = Math.abs(Math.cos(radians))
+  const sin = Math.abs(Math.sin(radians))
+  return {
+    width: Math.max(1, Math.ceil(width * cos + height * sin - 1e-9)),
+    height: Math.max(1, Math.ceil(width * sin + height * cos - 1e-9)),
+  }
+}
+
+/**
+ * Rotates a bitmap clockwise by any angle around its centre, growing to fit.
+ * Uncovered corners take `fill`, or stay transparent without one. Quarter turns
+ * are exact; other angles use nearest-neighbour sampling.
+ */
+export function rotateBy(source: Bitmap, degrees: number, fill: Rgba | null = null): Bitmap {
+  const angle = normalizeDegrees(degrees)
+  if (angle === 0) return source.clone()
+  if (angle === 90) return rotate90(source)
+  if (angle === 180) return rotate180(source)
+  if (angle === 270) return rotate270(source)
+  const { width, height } = rotatedSize(source.width, source.height, angle)
+  const result = new Bitmap(width, height, fill ?? undefined)
+  const radians = (angle * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  for (let y = 0; y < height; y += 1) {
+    const dy = y + 0.5 - height / 2
+    for (let x = 0; x < width; x += 1) {
+      const dx = x + 0.5 - width / 2
+      const sx = Math.floor(dx * cos + dy * sin + source.width / 2)
+      const sy = Math.floor(-dx * sin + dy * cos + source.height / 2)
+      if (source.contains(sx, sy)) result.set(x, y, source.get(sx, sy))
+    }
+  }
+  return result
+}
