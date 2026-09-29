@@ -12,6 +12,7 @@ import {
   rgba,
   toCss,
   toHex,
+  toHexWithAlpha,
 } from './color'
 
 describe('parseColor', () => {
@@ -46,6 +47,16 @@ describe('toHex / toCss', () => {
 
   it('formats translucent colors', () => {
     expect(toCss(rgba(1, 2, 3, 128))).toBe('rgba(1, 2, 3, 0.502)')
+  })
+})
+
+describe('toHexWithAlpha', () => {
+  it('omits the alpha channel when opaque', () => {
+    expect(toHexWithAlpha(rgba(12, 34, 56))).toBe('#0c2238')
+  })
+
+  it('keeps the alpha channel when translucent', () => {
+    expect(toHexWithAlpha(rgba(12, 34, 56, 128))).toBe('#0c223880')
   })
 })
 

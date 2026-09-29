@@ -68,6 +68,13 @@ export function toHex(color: Rgba): string {
   return `#${hex2(color.r)}${hex2(color.g)}${hex2(color.b)}`
 }
 
+/** Like `toHex`, but appends the alpha channel when it is not fully opaque. */
+export function toHexWithAlpha(color: Rgba): string {
+  const base = toHex(color)
+  if (color.a >= 255) return base
+  return `${base}${hex2(color.a)}`
+}
+
 export function toCss(color: Rgba): string {
   if (color.a >= 255) return `rgb(${color.r}, ${color.g}, ${color.b})`
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${(color.a / 255).toFixed(3)})`

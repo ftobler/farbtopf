@@ -76,9 +76,12 @@ export interface RibbonProps {
   primary: Rgba
   secondary: Rgba
   palette: readonly string[]
+  customColors: readonly string[]
   onPrimaryChange: (color: Rgba) => void
   onSecondaryChange: (color: Rgba) => void
   onSwap: () => void
+  onAddCustomColor: (color: Rgba) => void
+  onRemoveCustomColor: (hex: string) => void
   transparentSelection: boolean
   onTransparentSelectionChange: (value: boolean) => void
   selectionShape: SelectionShape
@@ -111,9 +114,12 @@ export function Ribbon({
   primary,
   secondary,
   palette,
+  customColors,
   onPrimaryChange,
   onSecondaryChange,
   onSwap,
+  onAddCustomColor,
+  onRemoveCustomColor,
   transparentSelection,
   onTransparentSelectionChange,
   selectionShape,
@@ -448,9 +454,12 @@ export function Ribbon({
             primary={primary}
             secondary={secondary}
             palette={palette}
+            customColors={customColors}
             onPrimaryChange={onPrimaryChange}
             onSecondaryChange={onSecondaryChange}
             onSwap={onSwap}
+            onAddCustomColor={onAddCustomColor}
+            onRemoveCustomColor={onRemoveCustomColor}
           />
         </div>
         <div className="ribbon-group-label">Colors</div>

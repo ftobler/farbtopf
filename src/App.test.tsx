@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { SHAPES } from './core/shapes'
+import { CUSTOM_COLORS_KEY } from './core/customColors'
 import { ZOOM_LEVELS } from './core/zoom'
 
 describe('App', () => {
@@ -360,5 +361,99 @@ describe('App', () => {
     render(<App />)
     fireEvent.keyDown(window, { key: 'u' })
     expect(screen.getByRole('button', { name: 'Rectangle' }).getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('custom color picker', () => {
+  const primary = () => screen.getByLabelText('Primary color') as HTMLInputElement
+  const secondary = () => screen.getByLabelText('Secondary color') as HTMLInputElement
+  const openPicker = () => fireEvent.click(screen.getByRole('button', { name: 'Custom colors' }))
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('renders the picker trigger to the right of the swatch grid', () => {
+    const { container } = render(<App />)
+    const swatches = container.querySelector('.swatches') as HTMLElement
+    const trigger = screen.getByRole('button', { name: 'Custom colors' })
+    expect(swatches.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('updates the primary color from the hex input', () => {
+    render(<App />)
+    openPicker()
+    expect(screen.getByRole('dialog', { name: 'Color picker' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Hex color'), { target: { value: '#123456' } })
+    expect(primary().value).toBe('#123456')
+  })
+
+  it('ignores an invalid hex value', () => {
+    render(<App />)
+    openPicker()
+    fireEvent.change(screen.getByLabelText('Hex color'), { target: { value: 'nope' } })
+    expect(primary().value).toBe('#000000')
+  })
+
+  it('updates the color from the RGB inputs', () => {
+    render(<App />)
+    openPicker()
+    fireEvent.change(screen.getByLabelText('Red'), { target: { value: '10' } })
+    fireEvent.change(screen.getByLabelText('Green'), { target: { value: '20' } })
+    fireEvent.change(screen.getByLabelText('Blue'), { target: { value: '30' } })
+    expect(primary().value).toBe('#0a141e')
+  })
+
+  it('applies the picked color to the secondary slot', () => {
+    render(<App />)
+    openPicker()
+    fireEvent.click(screen.getByRole('button', { name: 'Secondary' }))
+    fireEvent.change(screen.getByLabelText('Hex color'), { target: { value: '#00ff00' } })
+    expect(secondary().value).toBe('#00ff00')
+    expect(primary().value).toBe('#000000')
+  })
+
+  it('closes the picker on Escape', () => {
+    render(<App />)
+    openPicker()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Color picker' })).toBeNull()
+  })
+
+  it('adds a custom swatch and persists it', () => {
+    render(<App />)
+    openPicker()
+    fireEvent.change(screen.getByLabelText('Hex color'), { target: { value: '#abcdef' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add custom color' }))
+    expect(screen.getByRole('button', { name: 'Custom color #abcdef' })).toBeTruthy()
+    expect(JSON.parse(localStorage.getItem(CUSTOM_COLORS_KEY) ?? '[]')).toEqual(['#abcdef'])
+  })
+
+  it('reloads custom swatches on remount', () => {
+    const first = render(<App />)
+    openPicker()
+    fireEvent.change(screen.getByLabelText('Hex color'), { target: { value: '#abcdef' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add custom color' }))
+    first.unmount()
+    render(<App />)
+    expect(screen.getByRole('button', { name: 'Custom color #abcdef' })).toBeTruthy()
+  })
+
+  it('picks custom swatches with click and context menu', () => {
+    localStorage.setItem(CUSTOM_COLORS_KEY, JSON.stringify(['#abcdef']))
+    render(<App />)
+    const swatch = screen.getByRole('button', { name: 'Custom color #abcdef' })
+    fireEvent.contextMenu(swatch)
+    expect(secondary().value).toBe('#abcdef')
+    fireEvent.click(swatch)
+    expect(primary().value).toBe('#abcdef')
+  })
+
+  it('removes a custom swatch from the picker', () => {
+    localStorage.setItem(CUSTOM_COLORS_KEY, JSON.stringify(['#abcdef']))
+    render(<App />)
+    openPicker()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove custom color #abcdef' }))
+    expect(screen.queryByRole('button', { name: 'Custom color #abcdef' })).toBeNull()
   })
 })

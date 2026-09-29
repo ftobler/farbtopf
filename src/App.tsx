@@ -16,6 +16,7 @@ import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
 import { TOOLS, BRUSH_SIZES, toolById } from './core/tools'
 import type { ShapeFill, ToolId } from './core/tools'
 import { ZOOM_LEVELS, nextZoom } from './core/zoom'
+import { useCustomColors } from './hooks/useCustomColors'
 import { useTheme } from './hooks/useTheme'
 import { downloadDataUrl, readFileAsDataUrl } from './render/image'
 
@@ -45,6 +46,7 @@ function App() {
   const messageTimer = useRef<number | null>(null)
 
   const { theme, toggleTheme } = useTheme()
+  const customColors = useCustomColors()
 
   const [tool, setTool] = useState<ToolId>('brush')
   const [primary, setPrimary] = useState<Rgba>(DEFAULT_PRIMARY)
@@ -418,9 +420,12 @@ function App() {
           primary={primary}
           secondary={secondary}
           palette={DEFAULT_PALETTE}
+          customColors={customColors.colors}
           onPrimaryChange={setPrimary}
           onSecondaryChange={setSecondary}
           onSwap={handleSwapColors}
+          onAddCustomColor={customColors.add}
+          onRemoveCustomColor={customColors.remove}
           transparentSelection={transparentSelection}
           onTransparentSelectionChange={setTransparentSelection}
           selectionShape={selectionShape}
