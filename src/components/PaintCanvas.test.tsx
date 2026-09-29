@@ -743,6 +743,17 @@ describe('PaintCanvas', () => {
       fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
     }
 
+    function fullGesture(element: Element) {
+      fireEvent.pointerDown(element, { button: 0, pointerId: 9 })
+      fireEvent.mouseDown(element, { button: 0 })
+    }
+
+    async function flushOutsideListener() {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+
     it('opens a resizable text box with eight handles and a formatting toolbar', () => {
       const { canvas, container } = setup('text', 200, 200)
       expect(container.querySelector('.text-editor')).toBeNull()
@@ -773,7 +784,9 @@ describe('PaintCanvas', () => {
       const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
       fireEvent.change(textarea, { target: { value: 'hi' } })
 
-      fireEvent.click(within(container).getByRole('button', { name: 'Bold' }))
+      const bold = within(container).getByRole('button', { name: 'Bold' })
+      fullGesture(bold)
+      fireEvent.click(bold)
       expect(onTextChange).toHaveBeenCalledWith({ bold: true })
       expect(container.querySelector('.text-editor')).not.toBeNull()
       expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
@@ -781,6 +794,64 @@ describe('PaintCanvas', () => {
       fireEvent.pointerDown(canvas, { button: 0, pointerId: 3, clientX: 30, clientY: 30 })
       expect(container.querySelector('.text-editor')).toBeNull()
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('ignores the compatibility mousedown that follows the opening pointerdown', () => {
+      const { canvas, container } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      fireEvent.mouseDown(canvas, { button: 0 })
+      expect(container.querySelector('.text-editor')).not.toBeNull()
+    })
+
+    it('keeps the editor open and records no history for gestures on the toolbar, format buttons and font menu', async () => {
+      const { canvas, container, onHistoryChange, onTextChange } = setup('text', 200, 200)
+      openEditor(canvas, 20, 20)
+      await flushOutsideListener()
+      onHistoryChange.mockClear()
+
+      fullGesture(within(container).getByLabelText('Text size'))
+
+      const bold = within(container).getByRole('button', { name: 'Bold' })
+      fullGesture(bold)
+      fireEvent.click(bold)
+
+      const italic = within(container).getByRole('button', { name: 'Italic' })
+      fullGesture(italic)
+      fireEvent.click(italic)
+      expect(onTextChange).toHaveBeenCalledWith({ italic: true })
+
+      const font = within(container).getByRole('button', { name: 'Font' })
+      fullGesture(font)
+      fireEvent.click(font)
+      const georgia = within(container).getByRole('menuitem', { name: 'Georgia' })
+      fullGesture(georgia)
+      fireEvent.click(georgia)
+      expect(onTextChange).toHaveBeenCalledWith({ fontFamily: expect.stringContaining('Georgia') })
+
+      expect(container.querySelector('.text-editor')).not.toBeNull()
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+
+    it('commits exactly once when the mousedown lands outside the editor', async () => {
+      const { canvas, container, onHistoryChange } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'hi' } })
+      await flushOutsideListener()
+      onHistoryChange.mockClear()
+
+      fireEvent.mouseDown(document.body)
+
+      expect(container.querySelector('.text-editor')).toBeNull()
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('opens the font menu upward when there is no room below', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      openEditor(canvas, 180, 180)
+      fireEvent.click(within(container).getByRole('button', { name: 'Font' }))
+      expect(container.querySelector('.dropdown-menu')?.classList.contains('dropdown-up')).toBe(true)
     })
   })
 })

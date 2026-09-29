@@ -8,6 +8,8 @@ export interface DropdownProps {
   title?: string
   ariaLabel?: string
   align?: 'start' | 'end'
+  /** Opens the menu below the trigger (default) or above it when space is tight. */
+  placement?: 'down' | 'up'
   showChevron?: boolean
   triggerClassName?: string
   active?: boolean
@@ -24,6 +26,7 @@ export function Dropdown({
   title,
   ariaLabel,
   align = 'start',
+  placement = 'down',
   showChevron = true,
   triggerClassName,
   active,
@@ -93,7 +96,10 @@ export function Dropdown({
         </button>
       )}
       {open ? (
-        <div className={`dropdown-menu dropdown-${align}`} role="menu">
+        <div
+          className={`dropdown-menu dropdown-${align}${placement === 'up' ? ' dropdown-up' : ''}`}
+          role="menu"
+        >
           {children(() => setOpen(false))}
         </div>
       ) : null}

@@ -44,7 +44,7 @@ import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
-import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, renderText } from '../render/text'
+import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
 
@@ -192,6 +192,8 @@ const DEFAULT_TEXT_WIDTH = 200
 const TEXT_TOOLBAR_WIDTH = 300
 const TEXT_TOOLBAR_HEIGHT = 40
 const TEXT_TOOLBAR_GAP = 8
+/** Roughly the height of the font menu; used to decide if it fits below. */
+const TEXT_MENU_HEIGHT = 240
 
 /** The points handed to `renderShape`: the dragged box, or the whole freehand trail. */
 function shapePoints(stroke: StrokeState, end: Point): Point[] {
@@ -1049,7 +1051,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           x: point.x,
           y: point.y,
           width: Math.max(MIN_TEXT_SIZE, Math.min(DEFAULT_TEXT_WIDTH, size.width - point.x)),
-          height: Math.max(MIN_TEXT_SIZE, Math.round(text.fontSize * 1.25) + 4),
+          height: Math.max(MIN_TEXT_SIZE, Math.round(text.fontSize * TEXT_LINE_HEIGHT) + 4),
           value: '',
           slot,
         }
@@ -1361,8 +1363,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     textResizeRef.current = null
   }, [])
 
+  const editorOpen = editor !== null
+
   useEffect(() => {
-    if (!editor) return
+    if (!editorOpen) return
     const handleOutside = (event: MouseEvent) => {
       const target = event.target as Node | null
       if (!target) return
@@ -1371,9 +1375,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (textOverlayRef.current?.contains(target)) return
       commitText()
     }
-    document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [editor, commitText])
+    // Attach one tick later so the browser's compatibility `mousedown` for the
+    // pointerdown that opened the editor cannot immediately commit it.
+    const timer = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleOutside)
+    }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('mousedown', handleOutside)
+    }
+  }, [editorOpen, commitText])
 
   const textToolbarPosition = editor
     ? (() => {
@@ -1391,6 +1402,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return { left, top }
       })()
     : null
+
+  // Open the font menu upward when it would otherwise be clipped by the
+  // workspace bottom, preferring whichever side has more room.
+  const textMenuPlacement: 'up' | 'down' =
+    editor && textToolbarPosition
+      ? (() => {
+          const frameHeight = size.height * zoom
+          const toolbarBottom = textToolbarPosition.top + TEXT_TOOLBAR_HEIGHT
+          const roomBelow = frameHeight - toolbarBottom
+          const roomAbove = textToolbarPosition.top
+          return roomBelow < TEXT_MENU_HEIGHT && roomAbove > roomBelow ? 'up' : 'down'
+        })()
+      : 'down'
 
   const cursor =
     tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
@@ -1474,6 +1498,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           <Dropdown
             title="Font"
             ariaLabel="Font"
+            placement={textMenuPlacement}
             trigger={<span className="text-option-value">{fontLabel(text.fontFamily)}</span>}
           >
             {(close) => (
@@ -1551,7 +1576,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             fontWeight: text.bold ? 700 : 400,
             fontStyle: text.italic ? 'italic' : 'normal',
             textDecoration: text.underline ? 'underline' : 'none',
-            lineHeight: 1.25,
+            lineHeight: TEXT_LINE_HEIGHT,
             color: toCss(colorFor(editor.slot)),
           }}
           onChange={(event) => {

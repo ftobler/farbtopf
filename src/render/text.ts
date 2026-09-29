@@ -31,6 +31,12 @@ export const FONT_FAMILIES: readonly { label: string; value: string }[] = [
   { label: 'Comic Sans MS', value: '"Comic Sans MS", "Comic Sans", cursive' },
 ]
 
+/**
+ * Line advance as a multiple of the font size. Kept in one place so the live
+ * textarea and the committed bitmap agree to the pixel.
+ */
+export const TEXT_LINE_HEIGHT = 1.25
+
 export const DEFAULT_TEXT_OPTIONS: TextOptions = {
   fontFamily: TEXT_FONT_STACK,
   fontSize: 24,
@@ -103,7 +109,7 @@ function wrapLines(text: string, maxWidth: number, measure: Measure): string[] {
  * so the committed text lines up with the live textarea.
  */
 export function renderText(text: string, options: TextRenderOptions): Bitmap | null {
-  const { color, padding = 2, lineHeight = 1.25 } = options
+  const { color, padding = 2, lineHeight = TEXT_LINE_HEIGHT } = options
 
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
@@ -121,10 +127,10 @@ export function renderText(text: string, options: TextRenderOptions): Bitmap | n
       ? text.split('\n')
       : ['']
   const widest = Math.max(1, ...lines.map((line) => context.measureText(line).width))
-  const lineHeightPx = Math.ceil(options.fontSize * lineHeight)
+  const lineHeightPx = options.fontSize * lineHeight
   const naturalWidth = Math.ceil(widest) + padding * 2
   const width = wraps ? Math.max(1, Math.min(Math.ceil(maxWidth), naturalWidth)) : naturalWidth
-  const height = lineHeightPx * lines.length + padding * 2
+  const height = Math.ceil(lineHeightPx * lines.length + padding * 2)
 
   canvas.width = width
   canvas.height = height

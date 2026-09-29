@@ -37,4 +37,23 @@ describe('Dropdown', () => {
     expect(screen.getByRole('menuitem', { name: 'Rotate 180°' })).toBeTruthy()
     expect(onAction).not.toHaveBeenCalled()
   })
+
+  it('opens downward by default and upward when placement is up', () => {
+    const { unmount } = render(
+      <Dropdown title="Font" ariaLabel="Font" trigger={<span>F</span>}>
+        {() => <MenuItem>Georgia</MenuItem>}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Font' }))
+    expect(screen.getByRole('menu').classList.contains('dropdown-up')).toBe(false)
+    unmount()
+
+    render(
+      <Dropdown title="Font" ariaLabel="Font" placement="up" trigger={<span>F</span>}>
+        {() => <MenuItem>Georgia</MenuItem>}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Font' }))
+    expect(screen.getByRole('menu').classList.contains('dropdown-up')).toBe(true)
+  })
 })
