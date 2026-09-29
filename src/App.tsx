@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { ContextMenu } from './components/ContextMenu'
 import { MenuBar } from './components/MenuBar'
+import { MenuDivider, MenuItem, MenuSubmenu } from './components/Dropdown'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
@@ -81,6 +83,7 @@ function App() {
   const [selectionShape, setSelectionShape] = useState<SelectionShape>('rectangle')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showMiniature, setShowMiniature] = useState(false)
+  const [contextMenu, setContextMenu] = useState<Point | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -236,6 +239,17 @@ function App() {
   const handleDeleteSelection = useCallback(() => {
     canvasRef.current?.deleteSelection()
   }, [])
+
+  const handleInvertColors = useCallback(() => {
+    canvasRef.current?.invertColors()
+  }, [])
+
+  const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setContextMenu({ x: event.clientX, y: event.clientY })
+  }, [])
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   const handleScaleApply = useCallback(
     (width: number, height: number) => {
@@ -577,6 +591,7 @@ function App() {
           if (event.button === 1) event.preventDefault()
         }}
         onAuxClick={(event) => event.preventDefault()}
+        onContextMenu={handleContextMenu}
       >
         <PaintCanvas
           ref={canvasRef}
@@ -659,6 +674,158 @@ function App() {
           onCancel={() => setShowRotateDialog(false)}
           onApply={handleCustomRotateApply}
         />
+      ) : null}
+
+      {contextMenu ? (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+        >
+          {(close) => (
+            <>
+              <MenuItem
+                shortcut="Ctrl+X"
+                onClick={() => {
+                  void handleCutFromCanvas()
+                  close()
+                }}
+              >
+                Cut
+              </MenuItem>
+              <MenuItem
+                shortcut="Ctrl+C"
+                onClick={() => {
+                  void handleCopyFromCanvas()
+                  close()
+                }}
+              >
+                Copy
+              </MenuItem>
+              <MenuItem
+                shortcut="Ctrl+V"
+                onClick={() => {
+                  void handlePasteFromClipboard()
+                  close()
+                }}
+              >
+                Paste
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem
+                disabled={!hasSelection}
+                onClick={() => {
+                  handleCrop()
+                  close()
+                }}
+              >
+                Crop
+              </MenuItem>
+              <MenuItem
+                shortcut="Ctrl+A"
+                onClick={() => {
+                  handleSelectAll()
+                  close()
+                }}
+              >
+                Select all
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  handleInvertSelection()
+                  close()
+                }}
+              >
+                Invert selection
+              </MenuItem>
+              <MenuItem
+                shortcut="Del"
+                disabled={!hasSelection}
+                onClick={() => {
+                  handleDeleteSelection()
+                  close()
+                }}
+              >
+                Delete
+              </MenuItem>
+              <MenuDivider />
+              <MenuSubmenu label="Rotate">
+                {(closeSub) => (
+                  <>
+                    <MenuItem
+                      onClick={() => {
+                        handleRotate(270)
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Rotate left 90°
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleRotate(90)
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Rotate right 90°
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleRotate(180)
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Rotate 180°
+                    </MenuItem>
+                  </>
+                )}
+              </MenuSubmenu>
+              <MenuSubmenu label="Flip">
+                {(closeSub) => (
+                  <>
+                    <MenuItem
+                      onClick={() => {
+                        handleFlip('horizontal')
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Flip horizontal
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleFlip('vertical')
+                        closeSub()
+                        close()
+                      }}
+                    >
+                      Flip vertical
+                    </MenuItem>
+                  </>
+                )}
+              </MenuSubmenu>
+              <MenuDivider />
+              <MenuItem
+                onClick={() => {
+                  setShowScaleDialog(true)
+                  close()
+                }}
+              >
+                Resize
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  handleInvertColors()
+                  close()
+                }}
+              >
+                Invert color
+              </MenuItem>
+            </>
+          )}
+        </ContextMenu>
       ) : null}
 
       {message ? <div className="toast">{message}</div> : null}

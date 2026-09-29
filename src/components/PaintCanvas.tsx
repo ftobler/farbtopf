@@ -22,6 +22,7 @@ import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
 import {
+  blit,
   blitAlpha,
   crop,
   drawLine,
@@ -29,10 +30,12 @@ import {
   flipHorizontal,
   flipVertical,
   floodFill,
+  invertColors as invertBitmap,
   rotateBy,
   scale,
   stamp,
 } from '../core/raster'
+import { MAX_CANVAS } from '../core/palette'
 import type { BrushShape } from '../core/raster'
 import { applyMask, fillSelection, invertSelection, isSelected, polygonSelection } from '../core/selection'
 import type { SelectionMask, SelectionShape } from '../core/selection'
@@ -61,6 +64,13 @@ export interface PaintCanvasHandle {
    */
   rotate: (degrees: number) => void
   resize: (width: number, height: number) => void
+  /**
+   * Re-sizes the document to `rect` without scaling its pixels. Content is kept
+   * at its image position; new area is white and anything outside is cropped.
+   */
+  resizeCanvas: (rect: Rect) => void
+  /** Inverts the colours of the whole document. */
+  invertColors: () => void
   cropToSelection: () => void
   getSelection: () => Rect | null
   clearSelection: () => void
@@ -164,6 +174,21 @@ interface SelectDrag {
   handle?: SelectionHandle
   origin?: Rect
   rotation?: RotationStart
+}
+
+interface CanvasResizeDrag {
+  pointerId: number
+  handle: SelectionHandle
+  /** The document as it was when the drag started; every preview rebuilds from it. */
+  source: Bitmap
+  /** Screen position of the frame's top-left when the drag started. */
+  frameLeft: number
+  frameTop: number
+  startWidth: number
+  startHeight: number
+  startPan: Point
+  /** The pre-resize snapshot is pushed once, on the first move. */
+  recorded: boolean
 }
 
 const HISTORY_LIMIT = 80
@@ -377,6 +402,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const selectionRef = useRef<Rect | null>(null)
   const maskRef = useRef<SelectionMask | null>(null)
   const selectRef = useRef<SelectDrag | null>(null)
+  const canvasResizeRef = useRef<CanvasResizeDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
   const polylineRef = useRef<PolylineState | null>(null)
   const [polylineActive, setPolylineActive] = useState(false)
@@ -718,6 +744,31 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [doc, onSizeChange, paint, syncHistory],
   )
 
+  /** Builds the document described by `rect`, keeping content at its image position. */
+  const resizeTo = useCallback((source: Bitmap, rect: Rect): Bitmap => {
+    const width = Math.max(1, Math.round(rect.width))
+    const height = Math.max(1, Math.round(rect.height))
+    const next = new Bitmap(width, height, WHITE)
+    blit(next, source, -Math.round(rect.x), -Math.round(rect.y))
+    return next
+  }, [])
+
+  const applyCanvasResize = useCallback(
+    (rect: Rect) => {
+      finishPolyline()
+      commitFloating()
+      const source = doc()
+      const next = resizeTo(source, rect)
+      historyRef.current.record(source.clone())
+      bitmapRef.current = next
+      setSize({ width: next.width, height: next.height })
+      onSizeChange(next.width, next.height)
+      paint(next)
+      syncHistory()
+    },
+    [commitFloating, doc, finishPolyline, onSizeChange, paint, resizeTo, syncHistory],
+  )
+
   useImperativeHandle(
     ref,
     () => ({
@@ -810,6 +861,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         applyBitmap(scale(doc(), width, height))
       },
+      resizeCanvas(rect) {
+        applyCanvasResize(rect)
+      },
+      invertColors() {
+        finishPolyline()
+        commitFloating()
+        applyBitmap(invertBitmap(doc()))
+      },
       cropToSelection() {
         finishPolyline()
         commitFloating()
@@ -897,6 +956,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }),
     [
       applyBitmap,
+      applyCanvasResize,
       applyRotation,
       beginRotation,
       commitFloating,
@@ -953,6 +1013,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       event.preventDefault()
       const point = toPoint(event)
       const slot: 'primary' | 'secondary' = event.button === 2 ? 'secondary' : 'primary'
+
+      // A right-click opens the workspace context menu. Only tools that leave no
+      // stroke behind (zoom, picker) react to it, so no half-started stroke exists.
+      if (event.button === 2 && tool !== 'zoom' && tool !== 'picker') return
 
       if (tool === 'select') {
         event.preventDefault()
@@ -1254,6 +1318,89 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     selectRef.current = null
   }, [])
 
+  const handleCanvasResizeDown = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>, handle: SelectionHandle) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      const frame = event.currentTarget.closest('.canvas-frame')
+      if (!(frame instanceof HTMLElement)) return
+      const rect = frame.getBoundingClientRect()
+      finishPolyline()
+      commitFloating()
+      const source = doc().clone()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      canvasResizeRef.current = {
+        pointerId: event.pointerId,
+        handle,
+        source,
+        frameLeft: rect.left,
+        frameTop: rect.top,
+        startWidth: source.width,
+        startHeight: source.height,
+        startPan: pan,
+        recorded: false,
+      }
+    },
+    [commitFloating, doc, finishPolyline, pan],
+  )
+
+  const handleCanvasResizeMove = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>) => {
+      const drag = canvasResizeRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      event.stopPropagation()
+      const scale = zoom || 1
+      let left = 0
+      let top = 0
+      let right = drag.startWidth
+      let bottom = drag.startHeight
+      if (drag.handle.includes('w')) left = Math.round((event.clientX - drag.frameLeft) / scale)
+      if (drag.handle.includes('e')) right = Math.round((event.clientX - drag.frameLeft) / scale)
+      if (drag.handle.includes('n')) top = Math.round((event.clientY - drag.frameTop) / scale)
+      if (drag.handle.includes('s')) bottom = Math.round((event.clientY - drag.frameTop) / scale)
+      if (drag.handle.includes('w')) left = clamp(left, right - MAX_CANVAS, right - 1)
+      else if (drag.handle.includes('e')) right = clamp(right, left + 1, left + MAX_CANVAS)
+      if (drag.handle.includes('n')) top = clamp(top, bottom - MAX_CANVAS, bottom - 1)
+      else if (drag.handle.includes('s')) bottom = clamp(bottom, top + 1, top + MAX_CANVAS)
+
+      if (!drag.recorded) {
+        historyRef.current.record(drag.source.clone())
+        drag.recorded = true
+        syncHistory()
+      }
+
+      const next = resizeTo(drag.source, { x: left, y: top, width: right - left, height: bottom - top })
+      bitmapRef.current = next
+      setSize({ width: next.width, height: next.height })
+      onSizeChange(next.width, next.height)
+      paint(next)
+
+      // Keep the edge opposite the dragged handle pinned on screen.
+      if (onPanChange) {
+        let px = drag.startPan.x
+        let py = drag.startPan.y
+        if (drag.handle.includes('w')) px = drag.startPan.x + (left * scale) / 2
+        else if (drag.handle.includes('e')) px = drag.startPan.x + ((right - drag.startWidth) * scale) / 2
+        if (drag.handle.includes('n')) py = drag.startPan.y + (top * scale) / 2
+        else if (drag.handle.includes('s')) py = drag.startPan.y + ((bottom - drag.startHeight) * scale) / 2
+        onPanChange({ x: px, y: py })
+      }
+    },
+    [onPanChange, onSizeChange, paint, resizeTo, syncHistory, zoom],
+  )
+
+  const handleCanvasResizeUp = useCallback(
+    (event: ReactPointerEvent<HTMLSpanElement>) => {
+      const drag = canvasResizeRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      event.stopPropagation()
+      canvasResizeRef.current = null
+      syncHistory()
+    },
+    [syncHistory],
+  )
+
   const handlePointerLeave = useCallback(() => {
     onCursorMove(null)
     const polyline = polylineRef.current
@@ -1367,6 +1514,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           onBlur={commitText}
         />
       ) : null}
+      <div className="canvas-resize-handles">
+        {SELECTION_HANDLES.map((handle) => (
+          <span
+            key={handle}
+            className={`canvas-resize-handle canvas-resize-handle-${handle}`}
+            title="Resize canvas"
+            onPointerDown={(event) => handleCanvasResizeDown(event, handle)}
+            onPointerMove={handleCanvasResizeMove}
+            onPointerUp={handleCanvasResizeUp}
+            onPointerCancel={handleCanvasResizeUp}
+          />
+        ))}
+      </div>
       </div>
       {showMiniature ? (
         <div

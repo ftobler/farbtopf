@@ -735,4 +735,84 @@ describe('PaintCanvas', () => {
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     })
   })
+
+  describe('canvas resize handles', () => {
+    function mockFrame(container: HTMLElement, width: number, height: number) {
+      const frame = container.querySelector('.canvas-frame') as HTMLElement
+      frame.getBoundingClientRect = () =>
+        ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
+      return frame
+    }
+
+    function dragHandle(container: HTMLElement, id: string, pointerId: number, x: number, y: number) {
+      const element = container.querySelector(`.canvas-resize-handle-${id}`) as HTMLElement
+      element.setPointerCapture = vi.fn()
+      fireEvent.pointerDown(element, { button: 0, pointerId, clientX: x, clientY: y })
+      fireEvent.pointerMove(element, { pointerId, clientX: x, clientY: y })
+      fireEvent.pointerUp(element, { pointerId, clientX: x, clientY: y })
+      return element
+    }
+
+    it('renders eight resize handles around the canvas', () => {
+      const { container } = setup('brush')
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+    })
+
+    it('resizes the document from a corner handle', () => {
+      const { ref, container, onSizeChange } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'se', 9, 30, 25)
+      expect(ref.current?.getSize()).toEqual({ width: 30, height: 25 })
+      expect(onSizeChange).toHaveBeenLastCalledWith(30, 25)
+    })
+
+    it('resizes the document from a side handle without touching the other axis', () => {
+      const { ref, container, onSizeChange } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'e', 9, 35, 10)
+      expect(ref.current?.getSize()).toEqual({ width: 35, height: 20 })
+      expect(onSizeChange).toHaveBeenLastCalledWith(35, 20)
+    })
+
+    it('extends the canvas to the left of the original origin', () => {
+      const { ref, container } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'nw', 9, -5, -5)
+      expect(ref.current?.getSize()).toEqual({ width: 25, height: 25 })
+    })
+
+    it('enforces a minimum size of one pixel', () => {
+      const { ref, container } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'e', 9, -50, 10)
+      expect(ref.current?.getSize()).toEqual({ width: 1, height: 20 })
+    })
+
+    it('makes a canvas resize undoable', () => {
+      const { ref, container, onHistoryChange } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      onHistoryChange.mockClear()
+      dragHandle(container, 'se', 9, 40, 40)
+      expect(ref.current?.getSize()).toEqual({ width: 40, height: 40 })
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      act(() => ref.current?.undo())
+      expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+    })
+
+    it('resizeCanvas extends the canvas keeping content at its image position', () => {
+      const { ref, canvas } = setup('brush', 10, 10)
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      const doc = new Bitmap(10, 10, WHITE)
+      doc.set(0, 0, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      act(() => ref.current?.resizeCanvas({ x: -2, y: -2, width: 14, height: 14 }))
+      expect(ref.current?.getSize()).toEqual({ width: 14, height: 14 })
+      const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+      const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 14 + x) * 4, (y * 14 + x) * 4 + 4))
+      expect(pixel(0, 0)).toEqual([255, 255, 255, 255])
+      expect(pixel(2, 2)).toEqual([0, 0, 0, 255])
+    })
+  })
 })
