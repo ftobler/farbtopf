@@ -17,10 +17,12 @@ import {
 } from '../core/brushes'
 import type { BrushId, CoverageMask } from '../core/brushes'
 import type { Rgba } from '../core/color'
-import { WHITE, colorsEqual, toCss } from '../core/color'
+import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
+import { compositeLayers, drawOver, moveItem } from '../core/layers'
+import type { Layer, LayerInfo } from '../core/layers'
 import {
   blitAlpha,
   crop,
@@ -69,6 +71,14 @@ export interface PaintCanvasHandle {
   deleteSelection: () => void
   getSelectionDataUrl: () => string | null
   cutSelection: () => void
+  /** Adds a transparent layer above the active one and makes it active. */
+  addLayer: () => void
+  /** Removes a layer; the last remaining layer is kept. */
+  deleteLayer: (index: number) => void
+  /** Moves a layer within the stack; index 0 is the bottom-most layer. */
+  moveLayer: (from: number, to: number) => void
+  /** Makes a layer the one the tools draw on. */
+  selectLayer: (index: number) => void
 }
 
 export interface PaintCanvasProps {
@@ -100,6 +110,14 @@ export interface PaintCanvasProps {
   showMiniature?: boolean
   /** Called when the miniature view is dragged to move the visible area. */
   onPanChange?: (pan: Point) => void
+  /** Reports the layer stack (bottom first) and the index of the active layer. */
+  onLayersChange?: (layers: LayerInfo[], active: number) => void
+}
+
+/** An undo step: the whole layer stack and which layer was active. */
+interface DocSnapshot {
+  layers: Layer[]
+  active: number
 }
 
 interface StrokeState {
@@ -364,6 +382,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     text = DEFAULT_TEXT_OPTIONS,
     showMiniature = false,
     onPanChange,
+    onLayersChange,
   },
   ref,
 ) {
@@ -371,7 +390,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const offscreenRef = useRef<HTMLCanvasElement | null>(null)
   const miniatureRef = useRef<HTMLCanvasElement | null>(null)
   const bitmapRef = useRef<Bitmap | null>(null)
-  const historyRef = useRef(new History<Bitmap>(HISTORY_LIMIT))
+  const historyRef = useRef(new History<DocSnapshot>(HISTORY_LIMIT))
+  /** The layer stack, bottom first. The active entry's bitmap may be stale: `bitmapRef` holds the live one. */
+  const layersRef = useRef<Layer[]>([])
+  const activeRef = useRef(0)
+  const layerCountRef = useRef(1)
+  /** The layers below and above the active one, pre-flattened so painting only blends three bitmaps. */
+  const stackRef = useRef<{ below: Bitmap | null; above: Bitmap | null }>({ below: null, above: null })
   const strokeRef = useRef<StrokeState | null>(null)
   const editorRef = useRef<TextEditorState | null>(null)
   const selectionRef = useRef<Rect | null>(null)
@@ -410,7 +435,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (canvas.width !== backingWidth) canvas.width = backingWidth
     if (canvas.height !== backingHeight) canvas.height = backingHeight
 
-    const image = bitmap.toImageData()
+    const { below, above } = stackRef.current
+    let shown = bitmap
+    if (below || above) {
+      shown = below ? below.clone() : new Bitmap(bitmap.width, bitmap.height)
+      drawOver(shown, bitmap)
+      if (above) drawOver(shown, above)
+    }
+    const image = shown.toImageData()
 
     const miniature = miniatureRef.current
     if (miniature) {
@@ -441,6 +473,51 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     context.clearRect(0, 0, backingWidth, backingHeight)
     context.drawImage(offscreen, 0, 0, backingWidth, backingHeight)
   }, [])
+
+  const layers = useCallback((): Layer[] => {
+    if (layersRef.current.length === 0) layersRef.current = [{ id: 1, name: 'Background', bitmap: doc() }]
+    return layersRef.current
+  }, [doc])
+
+  /** The layer stack with the live bitmap of the active layer. */
+  const currentLayers = useCallback(
+    (): Layer[] => layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: doc() } : layer)),
+    [doc, layers],
+  )
+
+  /** Records an undo step; `before` is the active layer's bitmap as it was before the change. */
+  const recordHistory = useCallback(
+    (before: Bitmap) => {
+      const stack = layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: before } : layer))
+      historyRef.current.record({ layers: stack, active: activeRef.current })
+    },
+    [layers],
+  )
+
+  /** What erasing leaves behind: the secondary colour on the bottom layer, transparency above it. */
+  const eraseColor = useCallback(() => (activeRef.current === 0 ? secondary : TRANSPARENT), [secondary])
+
+  const publishLayers = useCallback(() => {
+    onLayersChange?.(layers().map(({ id, name }) => ({ id, name })), activeRef.current)
+  }, [layers, onLayersChange])
+
+  /** Replaces the layer stack; the active layer's bitmap becomes the live paint surface. */
+  const setLayers = useCallback(
+    (next: Layer[], active: number) => {
+      layersRef.current = next
+      activeRef.current = active
+      bitmapRef.current = next[active].bitmap
+      const flatten = (stack: Layer[]) => compositeLayers(stack.map((layer) => layer.bitmap))
+      stackRef.current = { below: flatten(next.slice(0, active)), above: flatten(next.slice(active + 1)) }
+      paint(next[active].bitmap)
+      publishLayers()
+    },
+    [paint, publishLayers],
+  )
+
+  useEffect(() => {
+    publishLayers()
+  }, [publishLayers])
 
   const syncHistory = useCallback(() => {
     const history = historyRef.current
@@ -482,15 +559,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const selectionMask = maskRef.current
       const region = extractRegion(original, rect, transparentSelection ? secondary : null)
       const bitmap = selectionMask ? applyMask(region, selectionMask) : region
-      historyRef.current.record(original.clone())
-      fillSelection(base, rect, selectionMask, secondary)
+      recordHistory(original.clone())
+      fillSelection(base, rect, selectionMask, eraseColor())
       bitmapRef.current = base
       const floating: FloatingSelection = { source: bitmap, bitmap, x: rect.x, y: rect.y, base }
       floatingRef.current = floating
       syncHistory()
       return floating
     },
-    [doc, secondary, syncHistory, transparentSelection],
+    [doc, eraseColor, recordHistory, secondary, syncHistory, transparentSelection],
   )
 
   const beginRotation = useCallback((): RotationStart | null => {
@@ -657,13 +734,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       paint(doc())
       return
     }
-    historyRef.current.record(polyline.base)
+    recordHistory(polyline.base)
     const final = polyline.base.clone()
     renderShape(final, polyline.kind, polyline.points, polyline.slot)
     bitmapRef.current = final
     paint(final)
     syncHistory()
-  }, [doc, paint, renderShape, syncHistory])
+  }, [doc, paint, recordHistory, renderShape, syncHistory])
 
   const finishPolylineRef = useRef(finishPolyline)
   useEffect(() => {
@@ -692,30 +769,60 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (bitmap: Bitmap) => {
       polylineRef.current = null
       setPolylineActive(false)
-      bitmapRef.current = bitmap
-      historyRef.current = new History<Bitmap>(HISTORY_LIMIT)
+      historyRef.current = new History<DocSnapshot>(HISTORY_LIMIT)
       editorRef.current = null
       floatingRef.current = null
       setEditor(null)
       setSize({ width: bitmap.width, height: bitmap.height })
       onSizeChange(bitmap.width, bitmap.height)
-      paint(bitmap)
+      layerCountRef.current = 1
+      setLayers([{ id: 1, name: 'Background', bitmap }], 0)
       updateSelection(null)
       syncHistory()
     },
-    [onSizeChange, paint, syncHistory, updateSelection],
+    [onSizeChange, setLayers, syncHistory, updateSelection],
   )
 
-  const applyBitmap = useCallback(
-    (next: Bitmap) => {
-      historyRef.current.record(doc().clone())
-      bitmapRef.current = next
-      setSize({ width: next.width, height: next.height })
-      onSizeChange(next.width, next.height)
-      paint(next)
+  const restore = useCallback(
+    (snapshot: DocSnapshot) => {
+      const { width, height } = snapshot.layers[0].bitmap
+      setSize({ width, height })
+      onSizeChange(width, height)
+      setLayers([...snapshot.layers], snapshot.active)
       syncHistory()
     },
-    [doc, onSizeChange, paint, syncHistory],
+    [onSizeChange, setLayers, syncHistory],
+  )
+
+  /** Applies a whole-image operation to every layer as one undo step. */
+  const applyToLayers = useCallback(
+    (transform: (bitmap: Bitmap, bottom: boolean) => Bitmap) => {
+      recordHistory(doc().clone())
+      const next = currentLayers().map((layer, index) => ({ ...layer, bitmap: transform(layer.bitmap, index === 0) }))
+      const { width, height } = next[0].bitmap
+      setSize({ width, height })
+      onSizeChange(width, height)
+      setLayers(next, activeRef.current)
+      syncHistory()
+    },
+    [currentLayers, doc, onSizeChange, recordHistory, setLayers, syncHistory],
+  )
+
+  /** Settles pending edits before the layer stack changes. */
+  const settle = useCallback(() => {
+    finishPolyline()
+    commitFloating()
+    updateSelection(null)
+  }, [commitFloating, finishPolyline, updateSelection])
+
+  /** Changes the layer stack as one undo step. */
+  const changeLayers = useCallback(
+    (next: Layer[], active: number) => {
+      recordHistory(doc().clone())
+      setLayers(next, active)
+      syncHistory()
+    },
+    [doc, recordHistory, setLayers, syncHistory],
   )
 
   useImperativeHandle(
@@ -733,9 +840,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       clear() {
         finishPolyline()
         commitFloating()
-        const history = historyRef.current
-        history.record(doc().clone())
-        doc().fill(WHITE)
+        recordHistory(doc().clone())
+        doc().fill(activeRef.current === 0 ? WHITE : TRANSPARENT)
         paint(doc())
         syncHistory()
       },
@@ -745,13 +851,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           commitFloating()
           updateSelection(null)
         }
-        const previous = historyRef.current.undo(doc())
-        if (!previous) return
-        bitmapRef.current = previous
-        setSize({ width: previous.width, height: previous.height })
-        onSizeChange(previous.width, previous.height)
-        paint(previous)
-        syncHistory()
+        const previous = historyRef.current.undo({ layers: currentLayers(), active: activeRef.current })
+        if (previous) restore(previous)
       },
       redo() {
         finishPolyline()
@@ -759,13 +860,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           commitFloating()
           updateSelection(null)
         }
-        const next = historyRef.current.redo(doc())
-        if (!next) return
-        bitmapRef.current = next
-        setSize({ width: next.width, height: next.height })
-        onSizeChange(next.width, next.height)
-        paint(next)
-        syncHistory()
+        const next = historyRef.current.redo({ layers: currentLayers(), active: activeRef.current })
+        if (next) restore(next)
       },
       toDataUrl() {
         finishPolyline()
@@ -792,7 +888,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           )
           return
         }
-        applyBitmap(mirror(doc()))
+        applyToLayers((bitmap) => mirror(bitmap))
       },
       rotate(degrees) {
         finishPolyline()
@@ -803,29 +899,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (floating) floating.source = floating.bitmap
           return
         }
-        applyBitmap(rotateBy(doc(), degrees, secondary))
+        applyToLayers((bitmap, bottom) => rotateBy(bitmap, degrees, bottom ? secondary : null))
       },
       resize(width, height) {
         finishPolyline()
         commitFloating()
-        applyBitmap(scale(doc(), width, height))
+        applyToLayers((bitmap) => scale(bitmap, width, height))
       },
       cropToSelection() {
         finishPolyline()
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
-        const cropped = crop(doc(), rect)
         const selectionMask = maskRef.current
-        if (selectionMask) {
+        applyToLayers((bitmap, bottom) => {
+          const cropped = crop(bitmap, rect)
+          if (!selectionMask) return cropped
           const local = { x: 0, y: 0, width: rect.width, height: rect.height }
           for (let y = 0; y < rect.height; y += 1) {
             for (let x = 0; x < rect.width; x += 1) {
-              if (!isSelected(local, selectionMask, x, y)) cropped.set(x, y, secondary)
+              if (!isSelected(local, selectionMask, x, y)) cropped.set(x, y, bottom ? secondary : TRANSPARENT)
             }
           }
-        }
-        applyBitmap(cropped)
+          return cropped
+        })
         updateSelection(null)
       },
       getSelection() {
@@ -859,8 +956,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (!rect) return
-        historyRef.current.record(doc().clone())
-        fillSelection(doc(), rect, maskRef.current, secondary)
+        recordHistory(doc().clone())
+        fillSelection(doc(), rect, maskRef.current, eraseColor())
         paint(doc())
         syncHistory()
         updateSelection(null)
@@ -889,22 +986,61 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
-        historyRef.current.record(doc().clone())
-        fillSelection(doc(), rect, maskRef.current, secondary)
+        recordHistory(doc().clone())
+        fillSelection(doc(), rect, maskRef.current, eraseColor())
         paint(doc())
         syncHistory()
       },
+      addLayer() {
+        settle()
+        layerCountRef.current += 1
+        const { width, height } = doc()
+        const layer = { id: layerCountRef.current, name: `Layer ${layerCountRef.current}`, bitmap: new Bitmap(width, height) }
+        const next = [...currentLayers()]
+        next.splice(activeRef.current + 1, 0, layer)
+        changeLayers(next, activeRef.current + 1)
+      },
+      deleteLayer(index) {
+        const stack = currentLayers()
+        if (stack.length < 2 || !stack[index]) return
+        settle()
+        const active = activeRef.current
+        const next = stack.filter((_, i) => i !== index)
+        changeLayers(next, index < active || (index === active && active > 0) ? active - 1 : active)
+      },
+      moveLayer(from, to) {
+        const stack = currentLayers()
+        if (!stack[from] || from === to) return
+        settle()
+        const activeId = stack[activeRef.current].id
+        const next = moveItem(stack, from, to)
+        changeLayers(next, next.findIndex((layer) => layer.id === activeId))
+      },
+      selectLayer(index) {
+        const stack = currentLayers()
+        if (!stack[index] || index === activeRef.current) return
+        settle()
+        // The newly active bitmap is painted in place, so it must not be shared with any undo step.
+        stack[index] = { ...stack[index], bitmap: stack[index].bitmap.clone() }
+        setLayers(stack, index)
+      },
     }),
     [
-      applyBitmap,
+      applyToLayers,
+      changeLayers,
+      currentLayers,
+      restore,
+      settle,
+      setLayers,
+      recordHistory,
       applyRotation,
       beginRotation,
       commitFloating,
       currentRect,
       doc,
       ensureFloating,
+      eraseColor,
       finishPolyline,
-      onSizeChange,
       paint,
       renderPreview,
       resetDocument,
@@ -937,11 +1073,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (current.value.trim().length === 0) return
     const rendered = renderText(current.value, { ...text, color: colorFor(current.slot) })
     if (!rendered) return
-    historyRef.current.record(doc().clone())
+    recordHistory(doc().clone())
     blitAlpha(doc(), rendered, current.x, current.y)
     paint(doc())
     syncHistory()
-  }, [colorFor, doc, paint, syncHistory, text])
+  }, [colorFor, doc, recordHistory, paint, syncHistory, text])
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -983,13 +1119,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return
       }
       if (tool === 'picker') {
-        onPickColor(doc().get(point.x, point.y), slot)
+        const flat = compositeLayers(currentLayers().map((layer) => layer.bitmap)) ?? doc()
+        onPickColor(flat.get(point.x, point.y), slot)
         return
       }
       if (tool === 'fill') {
         const color = colorFor(slot)
         if (colorsEqual(doc().get(point.x, point.y), color)) return
-        historyRef.current.record(doc().clone())
+        recordHistory(doc().clone())
         floodFill(doc(), point, color)
         paint(doc())
         syncHistory()
@@ -1048,9 +1185,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (isShapeTool(tool)) {
         paint(base)
       } else {
-        historyRef.current.record(base)
+        recordHistory(base)
         stroke.recorded = true
-        const color = strokeColorFor(tool, slot, primary, secondary)
+        const color = tool === 'eraser' ? eraseColor() : strokeColorFor(tool, slot, primary, secondary)
         const width = strokeWidthFor(tool, brushSize)
         if (tool === 'airbrush') {
           spray(doc(), point, brushSize, color)
@@ -1068,7 +1205,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitFloating, commitText, currentRect, doc, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -1137,7 +1274,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (!stroke || stroke.pointerId !== event.pointerId) return
       if (isShapeTool(stroke.tool)) {
         if (!stroke.recorded) {
-          historyRef.current.record(stroke.base.clone())
+          recordHistory(stroke.base.clone())
           stroke.recorded = true
           syncHistory()
         }
@@ -1146,7 +1283,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         renderShape(preview, stroke.kind, shapePoints(stroke, point), stroke.slot)
         paint(preview)
       } else {
-        const color = strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
+        const color = stroke.tool === 'eraser' ? eraseColor() : strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         const width = strokeWidthFor(stroke.tool, brushSize)
         if (stroke.tool === 'airbrush') {
           spray(doc(), point, brushSize, color)
@@ -1162,7 +1299,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brush, brushSize, currentRect, doc, ensureFloating, onCursorMove, paint, previewPolyline, primary, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewPolyline, primary, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(

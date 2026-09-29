@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { MenuBar } from './components/MenuBar'
+import { LayersPanel } from './components/LayersPanel'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
@@ -11,6 +12,7 @@ import { StatusBar } from './components/StatusBar'
 import type { BrushId } from './core/brushes'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
+import type { LayerInfo } from './core/layers'
 import type { SelectionShape } from './core/selection'
 import type { ShapeKind } from './core/shapes'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
@@ -81,6 +83,8 @@ function App() {
   const [selectionShape, setSelectionShape] = useState<SelectionShape>('rectangle')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showMiniature, setShowMiniature] = useState(false)
+  const [showLayers, setShowLayers] = useState(false)
+  const [layers, setLayers] = useState<{ list: LayerInfo[]; active: number }>({ list: [], active: 0 })
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -281,6 +285,10 @@ function App() {
     setPrimary(secondary)
     setSecondary(primary)
   }, [primary, secondary])
+
+  const handleLayersChange = useCallback((list: LayerInfo[], active: number) => {
+    setLayers({ list, active })
+  }, [])
 
   const onSizeChange = useCallback((width: number, height: number) => {
     setCanvasSize({ width, height })
@@ -505,6 +513,7 @@ function App() {
         showGrid={showGrid}
         isFullscreen={isFullscreen}
         showMiniature={showMiniature}
+        showLayers={showLayers}
         onNew={() => setNewDialogOpen(true)}
         onOpen={handleOpenClick}
         onSave={handleSave}
@@ -519,6 +528,7 @@ function App() {
         onToggleGrid={() => setShowGrid((value) => !value)}
         onToggleFullscreen={handleToggleFullscreen}
         onToggleMiniature={() => setShowMiniature((value) => !value)}
+        onToggleLayers={() => setShowLayers((value) => !value)}
         onToggleTheme={toggleTheme}
       />
 
@@ -606,7 +616,18 @@ function App() {
           text={text}
           showMiniature={showMiniature}
           onPanChange={setPan}
+          onLayersChange={handleLayersChange}
         />
+        {showLayers ? (
+          <LayersPanel
+            layers={layers.list}
+            active={layers.active}
+            onSelect={(index) => canvasRef.current?.selectLayer(index)}
+            onAdd={() => canvasRef.current?.addLayer()}
+            onDelete={(index) => canvasRef.current?.deleteLayer(index)}
+            onMove={(from, to) => canvasRef.current?.moveLayer(from, to)}
+          />
+        ) : null}
       </div>
 
       <StatusBar
