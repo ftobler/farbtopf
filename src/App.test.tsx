@@ -498,6 +498,24 @@ describe('App', () => {
     expect(menu!.style.flexDirection).toBe('column')
   })
 
+  it('starts on a size the dropdown can show and steps it with [ and ]', () => {
+    render(<App />)
+    const pressedSize = () => {
+      const trigger = screen.getByRole('button', { name: 'Size' })
+      fireEvent.click(trigger)
+      const option = document.querySelector<HTMLElement>('.size-option[aria-pressed="true"]')
+      const label = option?.querySelector('.size-label')?.textContent ?? null
+      fireEvent.click(trigger)
+      return label
+    }
+    const initial = pressedSize()
+    expect(initial).toBe('4 px')
+    fireEvent.keyDown(window, { key: ']' })
+    expect(pressedSize()).toBe('5 px')
+    fireEvent.keyDown(window, { key: '[' })
+    expect(pressedSize()).toBe('4 px')
+  })
+
   it('changes the shape fill from the fill dropdown', () => {
     render(<App />)
     const trigger = screen.getByRole('button', { name: 'Fill' })

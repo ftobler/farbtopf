@@ -62,4 +62,4 @@ export function toolById(id: ToolId): ToolDef {
   return found
 }
 
-export const BRUSH_SIZES = [1, 2, 3, 5, 8, 12, 20, 32] as const
+export const BRUSH_SIZES = [1, 2, 3, 4, 5, 8, 12, 20, 32] as const
