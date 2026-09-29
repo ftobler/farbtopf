@@ -8,6 +8,7 @@ import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { StatusBar } from './components/StatusBar'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
+import type { SelectionShape } from './core/selection'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
 import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
 import { TOOLS, BRUSH_SIZES, toolById } from './core/tools'
@@ -55,6 +56,7 @@ function App() {
   const [showScaleDialog, setShowScaleDialog] = useState(false)
   const [hasSelection, setHasSelection] = useState(false)
   const [transparentSelection, setTransparentSelection] = useState(false)
+  const [selectionShape, setSelectionShape] = useState<SelectionShape>('rectangle')
   const [message, setMessage] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
@@ -176,6 +178,20 @@ function App() {
     canvasRef.current?.cropToSelection()
   }, [])
 
+  const handleSelectAll = useCallback(() => {
+    setTool('select')
+    canvasRef.current?.selectAll()
+  }, [])
+
+  const handleInvertSelection = useCallback(() => {
+    setTool('select')
+    canvasRef.current?.invertSelection()
+  }, [])
+
+  const handleDeleteSelection = useCallback(() => {
+    canvasRef.current?.deleteSelection()
+  }, [])
+
   const handleScaleApply = useCallback(
     (width: number, height: number) => {
       canvasRef.current?.resize(width, height)
@@ -251,6 +267,11 @@ function App() {
           setNewDialogOpen(true)
           return
         }
+        if (key === 'a') {
+          event.preventDefault()
+          handleSelectAll()
+          return
+        }
         return
       }
 
@@ -277,6 +298,10 @@ function App() {
         canvasRef.current?.clearSelection()
         return
       }
+      if (event.key === 'Delete') {
+        handleDeleteSelection()
+        return
+      }
 
       const lower = event.key.toLowerCase()
       if (lower === 'x') {
@@ -295,9 +320,11 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     brushSize,
+    handleDeleteSelection,
     handleOpenClick,
     handleRedo,
     handleSave,
+    handleSelectAll,
     handleSwapColors,
     handleUndo,
     zoomIn,
@@ -364,6 +391,11 @@ function App() {
           onSwap={handleSwapColors}
           transparentSelection={transparentSelection}
           onTransparentSelectionChange={setTransparentSelection}
+          selectionShape={selectionShape}
+          onSelectionShapeChange={setSelectionShape}
+          onSelectAll={handleSelectAll}
+          onInvertSelection={handleInvertSelection}
+          onDeleteSelection={handleDeleteSelection}
         />
       </div>
 
@@ -388,6 +420,7 @@ function App() {
           onSizeChange={onSizeChange}
           onSelectionChange={setHasSelection}
           transparentSelection={transparentSelection}
+          selectionShape={selectionShape}
         />
       </div>
 

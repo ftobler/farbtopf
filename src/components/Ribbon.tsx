@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import type { Rgba } from '../core/color'
+import type { SelectionShape } from '../core/selection'
 import { BRUSH_SIZES, TOOLS, isShapeTool } from '../core/tools'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { ColorPalette } from './ColorPalette'
@@ -69,6 +70,11 @@ export interface RibbonProps {
   onSwap: () => void
   transparentSelection: boolean
   onTransparentSelectionChange: (value: boolean) => void
+  selectionShape: SelectionShape
+  onSelectionShapeChange: (shape: SelectionShape) => void
+  onSelectAll: () => void
+  onInvertSelection: () => void
+  onDeleteSelection: () => void
 }
 
 export function Ribbon({
@@ -94,6 +100,11 @@ export function Ribbon({
   onSwap,
   transparentSelection,
   onTransparentSelectionChange,
+  selectionShape,
+  onSelectionShapeChange,
+  onSelectAll,
+  onInvertSelection,
+  onDeleteSelection,
 }: RibbonProps) {
   const freehandTools = TOOLS.filter(
     (definition) => !isShapeTool(definition.id) && definition.id !== 'select',
@@ -168,15 +179,43 @@ export function Ribbon({
             {(close) => (
               <>
                 <MenuItem
-                  checked={tool === 'select'}
+                  checked={tool === 'select' && selectionShape === 'rectangle'}
                   onClick={() => {
+                    onSelectionShapeChange('rectangle')
                     onToolChange('select')
                     close()
                   }}
                 >
                   Rectangular selection
                 </MenuItem>
+                <MenuItem
+                  checked={tool === 'select' && selectionShape === 'freeform'}
+                  onClick={() => {
+                    onSelectionShapeChange('freeform')
+                    onToolChange('select')
+                    close()
+                  }}
+                >
+                  Free-form selection
+                </MenuItem>
                 <MenuDivider />
+                <MenuItem
+                  shortcut="Ctrl+A"
+                  onClick={() => {
+                    onSelectAll()
+                    close()
+                  }}
+                >
+                  Select all
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onInvertSelection()
+                    close()
+                  }}
+                >
+                  Invert selection
+                </MenuItem>
                 <MenuItem
                   checked={transparentSelection}
                   onClick={() => {
@@ -185,6 +224,16 @@ export function Ribbon({
                   }}
                 >
                   Transparent selection
+                </MenuItem>
+                <MenuItem
+                  shortcut="Del"
+                  disabled={!hasSelection}
+                  onClick={() => {
+                    onDeleteSelection()
+                    close()
+                  }}
+                >
+                  Clear selection
                 </MenuItem>
               </>
             )}

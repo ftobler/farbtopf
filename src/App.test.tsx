@@ -65,6 +65,44 @@ describe('App', () => {
     expect(labels.slice(0, 3)).toEqual(['Clipboard', 'Selection', 'Image'])
   })
 
+  it('lists the selection commands in the select menu', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    const items = screen
+      .getAllByRole('menuitem')
+      .map((item) => item.querySelector('.menu-item-label')?.textContent)
+    expect(items).toEqual([
+      'Rectangular selection',
+      'Free-form selection',
+      'Select all',
+      'Invert selection',
+      'Transparent selection',
+      'Clear selection',
+    ])
+    expect(screen.getByRole('separator')).toBeTruthy()
+  })
+
+  it('switches to the select tool with a free-form shape', () => {
+    render(<App />)
+    const select = screen.getByRole('button', { name: 'Select' })
+    fireEvent.click(select)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Free-form selection' }))
+    expect(select.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(select)
+    const freeform = screen.getByRole('menuitem', { name: 'Free-form selection' })
+    expect(freeform.querySelector('svg')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Rectangular selection' }).querySelector('svg')).toBeNull()
+  })
+
+  it('select all activates the select tool', () => {
+    render(<App />)
+    const select = screen.getByRole('button', { name: 'Select' })
+    fireEvent.click(select)
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
+    expect(select.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
+  })
+
   it('places save, undo and redo in the menubar', () => {
     const { container } = render(<App />)
     const menubar = container.querySelector('.menubar')

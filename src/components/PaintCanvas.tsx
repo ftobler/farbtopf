@@ -30,6 +30,8 @@ import {
   stamp,
 } from '../core/raster'
 import type { BrushShape } from '../core/raster'
+import { applyMask, fillSelection, invertSelection, isSelected, polygonSelection } from '../core/selection'
+import type { SelectionMask, SelectionShape } from '../core/selection'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { bitmapFromDataUrl } from '../render/image'
@@ -50,6 +52,9 @@ export interface PaintCanvasHandle {
   cropToSelection: () => void
   getSelection: () => Rect | null
   clearSelection: () => void
+  selectAll: () => void
+  invertSelection: () => void
+  deleteSelection: () => void
   getSelectionDataUrl: () => string | null
   cutSelection: () => void
 }
@@ -70,6 +75,7 @@ export interface PaintCanvasProps {
   onSizeChange: (width: number, height: number) => void
   onSelectionChange?: (hasSelection: boolean) => void
   transparentSelection: boolean
+  selectionShape?: SelectionShape
 }
 
 interface StrokeState {
@@ -101,8 +107,9 @@ interface FloatingSelection {
 
 interface SelectDrag {
   pointerId: number
-  mode: 'marquee' | 'move' | 'resize'
+  mode: 'marquee' | 'lasso' | 'move' | 'resize'
   start: Point
+  points?: Point[]
   handle?: SelectionHandle
   origin?: Rect
 }
@@ -204,6 +211,29 @@ function resizeRect(origin: Rect, handle: SelectionHandle, point: Point, width: 
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
+function MaskOutline({ mask }: { mask: SelectionMask }) {
+  const outlineRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const canvas = outlineRef.current
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context) return
+    const { width, height, data } = mask
+    const at = (x: number, y: number) => x >= 0 && y >= 0 && x < width && y < height && data[y * width + x] === 1
+    const outline = new Bitmap(width, height)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (!at(x, y)) continue
+        if (at(x - 1, y) && at(x + 1, y) && at(x, y - 1) && at(x, y + 1)) continue
+        outline.set(x, y, (x + y) % 4 < 2 ? { r: 0, g: 0, b: 0, a: 220 } : { r: 255, g: 255, b: 255, a: 220 })
+      }
+    }
+    context.putImageData(outline.toImageData(), 0, 0)
+  }, [mask])
+
+  return <canvas ref={outlineRef} className="selection-mask" width={mask.width} height={mask.height} />
+}
+
 function bitmapToDataUrl(bitmap: Bitmap): string {
   const canvas = document.createElement('canvas')
   canvas.width = bitmap.width
@@ -231,6 +261,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onSizeChange,
     onSelectionChange = () => {},
     transparentSelection,
+    selectionShape = 'rectangle',
   },
   ref,
 ) {
@@ -240,11 +271,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const strokeRef = useRef<StrokeState | null>(null)
   const editorRef = useRef<TextEditorState | null>(null)
   const selectionRef = useRef<Rect | null>(null)
+  const maskRef = useRef<SelectionMask | null>(null)
   const selectRef = useRef<SelectDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [editor, setEditor] = useState<TextEditorState | null>(null)
   const [selection, setSelection] = useState<Rect | null>(null)
+  const [mask, setMask] = useState<SelectionMask | null>(null)
+  const [lasso, setLasso] = useState<Point[] | null>(null)
   const [hoverCursor, setHoverCursor] = useState<string | null>(null)
 
   const doc = useCallback((): Bitmap => {
@@ -268,9 +302,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [onHistoryChange])
 
   const updateSelection = useCallback(
-    (rect: Rect | null) => {
+    (rect: Rect | null, nextMask: SelectionMask | null = null) => {
       selectionRef.current = rect
+      maskRef.current = rect ? nextMask : null
       setSelection(rect)
+      setMask(rect ? nextMask : null)
       onSelectionChange(rect !== null)
     },
     [onSelectionChange],
@@ -297,9 +333,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (floatingRef.current) return floatingRef.current
       const original = doc()
       const base = original.clone()
-      const bitmap = extractRegion(original, rect, transparentSelection ? secondary : null)
+      const selectionMask = maskRef.current
+      const region = extractRegion(original, rect, transparentSelection ? secondary : null)
+      const bitmap = selectionMask ? applyMask(region, selectionMask) : region
       historyRef.current.record(original.clone())
-      drawRect(base, rect, 1, secondary, true)
+      fillSelection(base, rect, selectionMask, secondary)
       bitmapRef.current = base
       const floating: FloatingSelection = { source: bitmap, bitmap, x: rect.x, y: rect.y, base }
       floatingRef.current = floating
@@ -431,7 +469,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
-        applyBitmap(crop(doc(), rect))
+        const cropped = crop(doc(), rect)
+        const selectionMask = maskRef.current
+        if (selectionMask) {
+          const local = { x: 0, y: 0, width: rect.width, height: rect.height }
+          for (let y = 0; y < rect.height; y += 1) {
+            for (let x = 0; x < rect.width; x += 1) {
+              if (!isSelected(local, selectionMask, x, y)) cropped.set(x, y, secondary)
+            }
+          }
+        }
+        applyBitmap(cropped)
         updateSelection(null)
       },
       getSelection() {
@@ -439,6 +487,33 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       clearSelection() {
         commitFloating()
+        updateSelection(null)
+      },
+      selectAll() {
+        commitFloating()
+        updateSelection({ x: 0, y: 0, width: doc().width, height: doc().height })
+      },
+      invertSelection() {
+        commitFloating()
+        const inverted = invertSelection(selectionRef.current, maskRef.current, doc().width, doc().height)
+        updateSelection(inverted?.rect ?? null, inverted?.mask ?? null)
+      },
+      deleteSelection() {
+        const floating = floatingRef.current
+        if (floating) {
+          floatingRef.current = null
+          bitmapRef.current = floating.base
+          paint(floating.base)
+          syncHistory()
+          updateSelection(null)
+          return
+        }
+        const rect = selectionRef.current
+        if (!rect) return
+        historyRef.current.record(doc().clone())
+        fillSelection(doc(), rect, maskRef.current, secondary)
+        paint(doc())
+        syncHistory()
         updateSelection(null)
       },
       getSelectionDataUrl() {
@@ -452,20 +527,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             width: floating.bitmap.width,
             height: floating.bitmap.height,
           })
-          return bitmapToDataUrl(region)
+          return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
         }
         const rect = selectionRef.current
         if (!rect) return null
-        return bitmapToDataUrl(crop(doc(), rect))
+        const region = crop(doc(), rect)
+        return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
       },
       cutSelection() {
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
         historyRef.current.record(doc().clone())
-        for (let y = rect.y; y < rect.y + rect.height; y += 1) {
-          for (let x = rect.x; x < rect.x + rect.width; x += 1) doc().set(x, y, WHITE)
-        }
+        fillSelection(doc(), rect, maskRef.current, secondary)
         paint(doc())
         syncHistory()
       },
@@ -477,6 +551,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       onSizeChange,
       paint,
       resetDocument,
+      secondary,
       size.width,
       size.height,
       syncHistory,
@@ -574,6 +649,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           return
         }
         commitFloating()
+        if (selectionShape === 'freeform') {
+          selectRef.current = { pointerId: event.pointerId, mode: 'lasso', start: point, points: [point] }
+          updateSelection(null)
+          setLasso([point])
+          return
+        }
         selectRef.current = { pointerId: event.pointerId, mode: 'marquee', start: point }
         updateSelection(clampRect(normalizeRect(point, point), size.width, size.height))
         return
@@ -623,7 +704,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, onPickColor, paint, primary, secondary, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brushSize, colorFor, commitFloating, commitText, currentRect, doc, onPickColor, paint, primary, secondary, selectionShape, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -643,6 +724,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           updateSelection(clampRect(normalizeRect(drag.start, point), size.width, size.height))
           return
         }
+        if (drag.mode === 'lasso') {
+          drag.points = [...(drag.points ?? []), point]
+          setLasso(drag.points)
+          return
+        }
         const origin = drag.origin
         if (!origin) return
         const floating = ensureFloating(origin)
@@ -652,7 +738,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           floating.x = x
           floating.y = y
           renderPreview()
-          updateSelection({ x, y, width: floating.bitmap.width, height: floating.bitmap.height })
+          updateSelection({ x, y, width: floating.bitmap.width, height: floating.bitmap.height }, maskRef.current)
           return
         }
         if (drag.mode === 'resize' && drag.handle) {
@@ -661,7 +747,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           floating.x = next.x
           floating.y = next.y
           renderPreview()
-          updateSelection(next)
+          updateSelection(next, maskRef.current)
           return
         }
         return
@@ -704,6 +790,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           const rect = clampRect(normalizeRect(drag.start, toPoint(event)), size.width, size.height)
           if (rect.width < 2 && rect.height < 2) updateSelection(null)
           else updateSelection(rect)
+        }
+        if (drag.mode === 'lasso') {
+          const traced = polygonSelection(drag.points ?? [], size.width, size.height)
+          updateSelection(traced?.rect ?? null, traced?.mask ?? null)
+          setLasso(null)
         }
         selectRef.current = null
         return
@@ -764,10 +855,23 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             height: selection.height * zoom,
           }}
         >
+          {mask ? <MaskOutline mask={mask} /> : null}
           {SELECTION_HANDLES.map((handle) => (
             <span key={handle} className={`selection-handle selection-handle-${handle}`} />
           ))}
         </div>
+      ) : null}
+      {lasso ? (
+        <svg
+          className="lasso-overlay"
+          aria-hidden="true"
+          width={size.width * zoom}
+          height={size.height * zoom}
+        >
+          <polyline
+            points={lasso.map((point) => `${(point.x + 0.5) * zoom},${(point.y + 0.5) * zoom}`).join(' ')}
+          />
+        </svg>
       ) : null}
       {editor ? (
         <textarea
