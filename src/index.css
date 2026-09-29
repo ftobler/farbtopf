@@ -78,6 +78,12 @@ textarea {
   flex: none;
 }
 
+.menubar-logo {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
 .menubar-menus {
   display: flex;
   gap: 2px;
@@ -172,6 +178,10 @@ textarea {
   background: transparent;
   color: var(--text);
   cursor: pointer;
+}
+
+.github-link {
+  text-decoration: none;
 }
 
 .button-grid {

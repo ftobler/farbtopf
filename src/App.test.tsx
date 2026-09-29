@@ -157,6 +157,14 @@ describe('App', () => {
     expect(menubar?.contains(screen.getByRole('button', { name: 'Redo' }))).toBe(true)
   })
 
+  it('links to the GitHub repository from the menubar', () => {
+    const { container } = render(<App />)
+    const menubar = container.querySelector('.menubar')
+    const link = screen.getByRole('link', { name: 'GitHub repository' })
+    expect(link.getAttribute('href')).toBe('https://github.com/ftobler/farbtopf')
+    expect(menubar?.contains(link)).toBe(true)
+  })
+
   it('switches the active tool on click', () => {
     render(<App />)
     const pencil = screen.getByRole('button', { name: 'Pencil' })

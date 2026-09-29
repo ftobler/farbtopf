@@ -23,6 +23,25 @@ function Svg({ size = 20, children, ...rest }: IconProps) {
   )
 }
 
+export function LogoIcon({ size = 22, ...rest }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" {...rest}>
+      <rect x="16" y="24" width="32" height="27" rx="7" fill="#fdfdfd" />
+      <rect x="13" y="20" width="38" height="9" rx="4.5" fill="#ffd23f" />
+      <circle cx="25" cy="16" r="5.5" fill="#ff5a5f" />
+      <circle cx="35" cy="14" r="4.5" fill="#34c759" />
+      <circle cx="44" cy="17" r="4" fill="#4cc2ff" />
+      <path
+        d="M25 38c2-3 4.5-3 6.5 0s4.5 3 6.5 0 4-2.6 5.5-.4"
+        stroke="#0b6fce"
+        strokeWidth={2.6}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export function PencilIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -254,6 +273,14 @@ export function MoonIcon(props: IconProps) {
   return (
     <Svg {...props}>
       <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+    </Svg>
+  )
+}
+
+export function GitHubIcon(props: IconProps) {
+  return (
+    <Svg fill="currentColor" stroke="none" {...props}>
+      <path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.12 2.91.85.09-.66.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.36 9.36 0 0 1 2.5-.34c.85 0 1.71.12 2.5.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z" />
     </Svg>
   )
 }

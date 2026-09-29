@@ -1,5 +1,5 @@
 import { Dropdown, MenuDivider, MenuItem } from './Dropdown'
-import { MoonIcon, RedoIcon, SaveIcon, SunIcon, UndoIcon } from './icons'
+import { GitHubIcon, LogoIcon, MoonIcon, RedoIcon, SaveIcon, SunIcon, UndoIcon } from './icons'
 
 export interface MenuBarProps {
   canUndo: boolean
@@ -28,6 +28,10 @@ export function MenuBar({
 }: MenuBarProps) {
   return (
     <header className="menubar">
+      <span className="menubar-logo">
+        <LogoIcon size={22} />
+      </span>
+
       <div className="menubar-menus">
         <Dropdown trigger="File" showChevron={false} triggerClassName="menubar-button">
           {(close) => (
@@ -133,6 +137,17 @@ export function MenuBar({
       </div>
 
       <div className="menubar-spacer" />
+
+      <a
+        className="icon-button github-link"
+        href="https://github.com/ftobler/farbtopf"
+        target="_blank"
+        rel="noreferrer"
+        title="View source on GitHub"
+        aria-label="GitHub repository"
+      >
+        <GitHubIcon size={18} />
+      </a>
 
       <button
         type="button"
