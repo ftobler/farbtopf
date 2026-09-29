@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { MenuBar } from './components/MenuBar'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
@@ -44,6 +45,8 @@ function App() {
   const canvasRef = useRef<PaintCanvasHandle | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const messageTimer = useRef<number | null>(null)
+  const workspaceRef = useRef<HTMLDivElement | null>(null)
+  const panRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null)
 
   const { theme, toggleTheme } = useTheme()
   const customColors = useCustomColors()
@@ -55,6 +58,8 @@ function App() {
   const [shapeFill, setShapeFill] = useState<ShapeFill>('outline')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rectangle')
   const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [panning, setPanning] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
@@ -91,6 +96,7 @@ function App() {
     (width: number, height: number) => {
       canvasRef.current?.newDocument(width, height)
       setZoom(fitZoom(width, height))
+      setPan({ x: 0, y: 0 })
       setNewDialogOpen(false)
       notify(`New ${width} × ${height} canvas`)
     },
@@ -106,6 +112,7 @@ function App() {
         if (size) {
           setCanvasSize(size)
           setZoom(fitZoom(size.width, size.height))
+          setPan({ x: 0, y: 0 })
         }
         setCursor(null)
         notify(`Opened ${file.name}`)
@@ -255,6 +262,65 @@ function App() {
 
   const zoomOut = useCallback(() => {
     setZoom((value) => nextZoom(value, -1))
+  }, [])
+
+  useEffect(() => {
+    const workspace = workspaceRef.current
+    if (!workspace) return
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return
+      event.preventDefault()
+      const target = nextZoom(zoom, event.deltaY < 0 ? 1 : -1)
+      if (target === zoom) return
+      const frame = workspace.querySelector('.canvas-frame')
+      if (frame) {
+        const workspaceRect = workspace.getBoundingClientRect()
+        const frameRect = frame.getBoundingClientRect()
+        const canvasX = (event.clientX - frameRect.left) / zoom
+        const canvasY = (event.clientY - frameRect.top) / zoom
+        const offsetX = (workspaceRect.width - canvasSize.width * target) / 2
+        const offsetY = (workspaceRect.height - canvasSize.height * target) / 2
+        setPan({
+          x: event.clientX - workspaceRect.left - offsetX - canvasX * target,
+          y: event.clientY - workspaceRect.top - offsetY - canvasY * target,
+        })
+      }
+      setZoom(target)
+    }
+    workspace.addEventListener('wheel', handleWheel, { passive: false })
+    return () => workspace.removeEventListener('wheel', handleWheel)
+  }, [zoom, canvasSize.width, canvasSize.height])
+
+  const handlePanDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 1) return
+      const workspace = workspaceRef.current
+      if (!workspace) return
+      event.preventDefault()
+      workspace.setPointerCapture?.(event.pointerId)
+      panRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        panX: pan.x,
+        panY: pan.y,
+      }
+      setPanning(true)
+    },
+    [pan.x, pan.y],
+  )
+
+  const handlePanMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current
+    if (!pan || pan.pointerId !== event.pointerId) return
+    setPan({ x: pan.panX + (event.clientX - pan.startX), y: pan.panY + (event.clientY - pan.startY) })
+  }, [])
+
+  const handlePanUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current
+    if (!pan || pan.pointerId !== event.pointerId) return
+    panRef.current = null
+    setPanning(false)
   }, [])
 
   useEffect(() => {
@@ -436,7 +502,18 @@ function App() {
         />
       </div>
 
-      <div className="workspace">
+      <div
+        className={`workspace${panning ? ' panning' : ''}`}
+        ref={workspaceRef}
+        onPointerDown={handlePanDown}
+        onPointerMove={handlePanMove}
+        onPointerUp={handlePanUp}
+        onPointerCancel={handlePanUp}
+        onMouseDown={(event) => {
+          if (event.button === 1) event.preventDefault()
+        }}
+        onAuxClick={(event) => event.preventDefault()}
+      >
         <PaintCanvas
           ref={canvasRef}
           initialWidth={DEFAULT_CANVAS.width}
@@ -448,6 +525,7 @@ function App() {
           shapeFill={shapeFill}
           shapeKind={shapeKind}
           zoom={zoom}
+          pan={pan}
           showGrid={showGrid}
           onHistoryChange={(undo, redo) => {
             setCanUndo(undo)

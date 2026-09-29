@@ -182,6 +182,26 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '100%' })).toBeTruthy()
   })
 
+  it('zooms with ctrl and the mouse wheel', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -100 })
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+    fireEvent.wheel(workspace, { ctrlKey: true, deltaY: 100 })
+    expect(screen.getByRole('button', { name: '100%' })).toBeTruthy()
+  })
+
+  it('pans the canvas while dragging with the middle mouse button', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    const frame = container.querySelector('.canvas-frame') as HTMLElement
+    workspace.setPointerCapture = () => {}
+    fireEvent.pointerDown(workspace, { button: 1, pointerId: 7, clientX: 200, clientY: 200 })
+    fireEvent.pointerMove(workspace, { pointerId: 7, clientX: 230, clientY: 210 })
+    expect(frame.style.transform).toBe('translate(30px, 10px)')
+    fireEvent.pointerUp(workspace, { pointerId: 7, clientX: 230, clientY: 210 })
+  })
+
   it('shows the new image dialog with presets', () => {
     render(<App />)
     fireEvent.click(screen.getByText('File'))

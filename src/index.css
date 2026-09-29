@@ -583,14 +583,17 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--bg);
+}
+
+.workspace.panning {
+  cursor: grabbing;
 }
 
 .canvas-frame {
   position: relative;
   flex: none;
-  margin: auto;
   background-color: var(--checker-a);
   background-image:
     linear-gradient(45deg, var(--checker-b) 25%, transparent 25%),

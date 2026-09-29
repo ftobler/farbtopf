@@ -72,6 +72,7 @@ export interface PaintCanvasProps {
   shapeFill: ShapeFill
   shapeKind?: ShapeKind
   zoom: number
+  pan?: { x: number; y: number }
   showGrid: boolean
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void
   onCursorMove: (point: Point | null) => void
@@ -330,6 +331,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     shapeFill,
     shapeKind = 'rectangle',
     zoom,
+    pan = { x: 0, y: 0 },
     showGrid,
     onHistoryChange,
     onCursorMove,
@@ -1118,7 +1120,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   return (
     <div
       className="canvas-frame"
-      style={{ width: size.width * zoom, height: size.height * zoom }}
+      style={{
+        width: size.width * zoom,
+        height: size.height * zoom,
+        transform: `translate(${pan.x}px, ${pan.y}px)`,
+      }}
     >
       <canvas
         ref={canvasRef}
