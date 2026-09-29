@@ -425,6 +425,10 @@ textarea {
   z-index: 50;
 }
 
+.context-menu {
+  position: fixed;
+}
+
 .dropdown-start {
   left: 0;
 }
@@ -496,6 +500,11 @@ textarea {
 .menu-submenu-panel {
   top: -5px;
   left: calc(100% + 2px);
+}
+
+.menu-submenu-panel-left {
+  left: auto;
+  right: calc(100% + 2px);
 }
 
 .menu-item-label {
@@ -855,6 +864,35 @@ textarea {
 .selection-handle-s { left: 50%; top: 100%; }
 .selection-handle-sw { left: 0; top: 100%; }
 .selection-handle-w { left: 0; top: 50%; }
+
+.canvas-resize-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.canvas-resize-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.canvas-resize-handle-nw { left: 0; top: 0; cursor: nwse-resize; }
+.canvas-resize-handle-n { left: 50%; top: 0; cursor: ns-resize; }
+.canvas-resize-handle-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.canvas-resize-handle-e { left: 100%; top: 50%; cursor: ew-resize; }
+.canvas-resize-handle-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.canvas-resize-handle-s { left: 50%; top: 100%; cursor: ns-resize; }
+.canvas-resize-handle-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.canvas-resize-handle-w { left: 0; top: 50%; cursor: ew-resize; }
 
 .selection-rotate-line {
   position: absolute;

@@ -351,6 +351,18 @@ export function scale(source: Bitmap, width: number, height: number): Bitmap {
   return result
 }
 
+/** Inverts the red, green and blue channels of every pixel, keeping alpha. */
+export function invertColors(source: Bitmap): Bitmap {
+  const result = new Bitmap(source.width, source.height)
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      const pixel = source.get(x, y)
+      result.set(x, y, { r: 255 - pixel.r, g: 255 - pixel.g, b: 255 - pixel.b, a: pixel.a })
+    }
+  }
+  return result
+}
+
 /** Mirrors a bitmap left-to-right, keeping the same dimensions. */
 export function flipHorizontal(source: Bitmap): Bitmap {
   const result = new Bitmap(source.width, source.height)

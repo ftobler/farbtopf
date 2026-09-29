@@ -15,7 +15,7 @@ vi.mock('../core/shapes', async (importOriginal) => {
 import { renderShape } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 
-type SetupTool = 'brush' | 'shape' | 'select' | 'zoom' | 'text'
+type SetupTool = 'brush' | 'shape' | 'select' | 'zoom' | 'text' | 'picker'
 
 function setup(
   tool: SetupTool,
@@ -78,7 +78,7 @@ function setup(
     ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
-  return { ref, canvas, container, setProps, onHistoryChange, onSizeChange, onSelectionChange, onZoomClick, onTextChange }
+  return { ref, canvas, container, setProps, onHistoryChange, onPickColor, onSizeChange, onSelectionChange, onZoomClick, onTextChange }
 }
 
 describe('PaintCanvas', () => {
@@ -86,15 +86,31 @@ describe('PaintCanvas', () => {
     vi.restoreAllMocks()
   })
 
-  it('zooms in on left click and out on right click with the zoom tool', () => {
+  it('zooms in on left click and ignores a right click with the zoom tool', () => {
     const { canvas, onZoomClick, onHistoryChange } = setup('zoom')
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
     expect(onZoomClick).toHaveBeenLastCalledWith(1)
     fireEvent.pointerDown(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
     fireEvent.pointerUp(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
-    expect(onZoomClick).toHaveBeenLastCalledWith(-1)
+    expect(onZoomClick).toHaveBeenCalledTimes(1)
     expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
+  })
+
+  it('never acts on a right click: no paint, no pick, no zoom', () => {
+    const { canvas, onZoomClick } = setup('brush', 20, 20)
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    context.putImageData.mockClear()
+    fireEvent.pointerDown(canvas, { button: 2, pointerId: 3, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 3, clientX: 5, clientY: 5 })
+    expect(context.putImageData).not.toHaveBeenCalled()
+    expect(onZoomClick).not.toHaveBeenCalled()
+
+    const picker = setup('picker', 20, 20)
+    fireEvent.pointerDown(picker.canvas, { button: 2, pointerId: 4, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(picker.canvas, { button: 2, pointerId: 4, clientX: 5, clientY: 5 })
+    expect(picker.onPickColor).not.toHaveBeenCalled()
   })
 
   it('records history when a freehand stroke is drawn', () => {
@@ -852,6 +868,118 @@ describe('PaintCanvas', () => {
       openEditor(canvas, 180, 180)
       fireEvent.click(within(container).getByRole('button', { name: 'Font' }))
       expect(container.querySelector('.dropdown-menu')?.classList.contains('dropdown-up')).toBe(true)
+    })
+  })
+
+  describe('canvas resize handles', () => {
+    function mockFrame(container: HTMLElement, width: number, height: number) {
+      const frame = container.querySelector('.canvas-frame') as HTMLElement
+      frame.getBoundingClientRect = () =>
+        ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }) as DOMRect
+      return frame
+    }
+
+    function dragHandle(container: HTMLElement, id: string, pointerId: number, x: number, y: number) {
+      const element = container.querySelector(`.canvas-resize-handle-${id}`) as HTMLElement
+      element.setPointerCapture = vi.fn()
+      fireEvent.pointerDown(element, { button: 0, pointerId, clientX: x, clientY: y })
+      fireEvent.pointerMove(element, { pointerId, clientX: x, clientY: y })
+      fireEvent.pointerUp(element, { pointerId, clientX: x, clientY: y })
+      return element
+    }
+
+    it('renders eight resize handles around the canvas', () => {
+      const { container } = setup('brush')
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+    })
+
+    it('hides the canvas resize handles while a selection is active', () => {
+      const { ref, container } = setup('select', 20, 20)
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+      act(() => ref.current?.selectAll())
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(0)
+      act(() => ref.current?.clearSelection())
+      expect(container.querySelectorAll('.canvas-resize-handle')).toHaveLength(8)
+    })
+
+    it('clears the selection after resizeCanvas', () => {
+      const { ref, onSelectionChange } = setup('select', 20, 20)
+      act(() => ref.current?.selectAll())
+      expect(ref.current?.getSelection()).not.toBeNull()
+      onSelectionChange.mockClear()
+      act(() => ref.current?.resizeCanvas({ x: 0, y: 0, width: 30, height: 30 }))
+      expect(ref.current?.getSelection()).toBeNull()
+      expect(onSelectionChange).toHaveBeenLastCalledWith(false)
+    })
+
+    it('clears a floating selection when resizing the canvas', () => {
+      const { ref, canvas } = setup('select', 30, 30)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+      fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+      expect(ref.current?.getSelection()).not.toBeNull()
+      act(() => ref.current?.resizeCanvas({ x: 0, y: 0, width: 40, height: 40 }))
+      expect(ref.current?.getSelection()).toBeNull()
+    })
+
+    it('resizes the document from a corner handle', () => {
+      const { ref, container, onSizeChange } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'se', 9, 30, 25)
+      expect(ref.current?.getSize()).toEqual({ width: 30, height: 25 })
+      expect(onSizeChange).toHaveBeenLastCalledWith(30, 25)
+    })
+
+    it('resizes the document from a side handle without touching the other axis', () => {
+      const { ref, container, onSizeChange } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'e', 9, 35, 10)
+      expect(ref.current?.getSize()).toEqual({ width: 35, height: 20 })
+      expect(onSizeChange).toHaveBeenLastCalledWith(35, 20)
+    })
+
+    it('extends the canvas to the left of the original origin', () => {
+      const { ref, container } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'nw', 9, -5, -5)
+      expect(ref.current?.getSize()).toEqual({ width: 25, height: 25 })
+    })
+
+    it('enforces a minimum size of one pixel', () => {
+      const { ref, container } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      dragHandle(container, 'e', 9, -50, 10)
+      expect(ref.current?.getSize()).toEqual({ width: 1, height: 20 })
+    })
+
+    it('makes a canvas resize undoable', () => {
+      const { ref, container, onHistoryChange } = setup('brush', 20, 20)
+      mockFrame(container, 20, 20)
+      onHistoryChange.mockClear()
+      dragHandle(container, 'se', 9, 40, 40)
+      expect(ref.current?.getSize()).toEqual({ width: 40, height: 40 })
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      act(() => ref.current?.undo())
+      expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+    })
+
+    it('resizeCanvas extends the canvas keeping content at its image position', () => {
+      const { ref, canvas } = setup('brush', 10, 10)
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      const doc = new Bitmap(10, 10, WHITE)
+      doc.set(0, 0, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      act(() => ref.current?.resizeCanvas({ x: -2, y: -2, width: 14, height: 14 }))
+      expect(ref.current?.getSize()).toEqual({ width: 14, height: 14 })
+      const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+      const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 14 + x) * 4, (y * 14 + x) * 4 + 4))
+      expect(pixel(0, 0)).toEqual([255, 255, 255, 255])
+      expect(pixel(2, 2)).toEqual([0, 0, 0, 255])
     })
   })
 })

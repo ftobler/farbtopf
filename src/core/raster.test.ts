@@ -14,6 +14,7 @@ import {
   flipHorizontal,
   flipVertical,
   floodFill,
+  invertColors,
   linePoints,
   rotate90,
   rotate180,
@@ -427,5 +428,22 @@ describe('stamp size 2', () => {
     const bitmap = new Bitmap(6, 6, WHITE)
     stamp(bitmap, 2, 2, 2, BLACK, 'round')
     expect(countColor(bitmap)).toBe(4)
+  })
+})
+
+describe('invertColors', () => {
+  it('inverts the RGB channels and keeps the dimensions', () => {
+    const source = new Bitmap(2, 1, WHITE)
+    source.set(1, 0, BLACK)
+    const result = invertColors(source)
+    expect(result.width).toBe(2)
+    expect(result.height).toBe(1)
+    expect(result.get(0, 0)).toEqual(BLACK)
+    expect(result.get(1, 0)).toEqual(WHITE)
+  })
+
+  it('keeps the alpha channel', () => {
+    const source = new Bitmap(1, 1, { r: 10, g: 20, b: 30, a: 40 })
+    expect(invertColors(source).get(0, 0)).toEqual({ r: 245, g: 235, b: 225, a: 40 })
   })
 })

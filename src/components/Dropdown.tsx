@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CheckIcon, ChevronIcon } from './icons'
 
@@ -144,6 +144,16 @@ export interface MenuSubmenuProps {
 /** A menu item that reveals a nested flyout menu on hover, click or keyboard focus. */
 export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProps) {
   const [open, setOpen] = useState(false)
+  const [openLeft, setOpenLeft] = useState(false)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  // Flip the flyout to the left when it would spill past the right viewport edge.
+  useLayoutEffect(() => {
+    if (!open) return
+    const panel = panelRef.current
+    if (!panel) return
+    setOpenLeft(panel.getBoundingClientRect().right > window.innerWidth)
+  }, [open])
 
   return (
     <div
@@ -167,7 +177,11 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
         </span>
       </button>
       {open ? (
-        <div className="dropdown-menu menu-submenu-panel" role="menu">
+        <div
+          ref={panelRef}
+          className={`dropdown-menu menu-submenu-panel${openLeft ? ' menu-submenu-panel-left' : ''}`}
+          role="menu"
+        >
           {children(() => setOpen(false))}
         </div>
       ) : null}
