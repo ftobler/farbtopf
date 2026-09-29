@@ -711,13 +711,13 @@ textarea {
 
 .layers-panel {
   position: absolute;
-  top: 12px;
+  top: 50%;
   /* Clear of the vertical workspace scrollbar. */
   right: 16px;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  width: 180px;
-  max-height: calc(100% - 200px);
+  max-height: calc(100% - 24px);
   min-height: 0;
   padding: 6px;
   background: var(--glass-bg);
@@ -729,13 +729,10 @@ textarea {
   z-index: 6;
 }
 
-.layers-title {
-  padding: 2px 6px 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
 .layers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
   min-height: 0;
   margin: 0;
@@ -745,15 +742,14 @@ textarea {
 }
 
 .layers-item {
-  padding: 6px 8px;
-  border-radius: 5px;
-  color: var(--text);
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
   user-select: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .layers-item:hover {
@@ -761,6 +757,7 @@ textarea {
 }
 
 .layers-item.active {
+  border-color: var(--accent);
   background: var(--accent-soft);
 }
 
@@ -768,9 +765,24 @@ textarea {
   opacity: 0.5;
 }
 
+/* Checkerboard behind the thumbnail so transparent areas read as empty. */
+.layers-thumbnail {
+  display: block;
+  image-rendering: pixelated;
+  background-color: var(--checker-a);
+  background-image:
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  border-radius: 3px;
+}
+
 .layers-actions {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: center;
+  gap: 2px;
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--border);

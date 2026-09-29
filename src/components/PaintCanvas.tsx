@@ -24,7 +24,7 @@ import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
-import { compositeLayers, drawOver, moveItem } from '../core/layers'
+import { compositeLayers, drawOver, moveItem, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
   blit,
@@ -571,8 +571,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const eraseColor = useCallback(() => (activeRef.current === 0 ? secondary : TRANSPARENT), [secondary])
 
   const publishLayers = useCallback(() => {
-    onLayersChange?.(layers().map(({ id, name }) => ({ id, name })), activeRef.current)
-  }, [layers, onLayersChange])
+    if (!onLayersChange) return
+    const stack = currentLayers().map(({ id, name, bitmap }) => ({ id, name, thumbnail: thumbnail(bitmap) }))
+    onLayersChange(stack, activeRef.current)
+  }, [currentLayers, onLayersChange])
 
   /** Replaces the layer stack; the active layer's bitmap becomes the live paint surface. */
   const setLayers = useCallback(
@@ -595,7 +597,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const syncHistory = useCallback(() => {
     const history = historyRef.current
     onHistoryChange(history.canUndo, history.canRedo)
-  }, [onHistoryChange])
+    publishLayers()
+  }, [onHistoryChange, publishLayers])
 
   const updateSelection = useCallback(
     (rect: Rect | null, nextMask: SelectionMask | null = null) => {
@@ -1458,10 +1461,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         bitmapRef.current = final
         paint(final)
         syncHistory()
+      } else if (stroke.recorded) {
+        // Freehand strokes paint in place; refresh the layer thumbnails once they are done.
+        publishLayers()
       }
       strokeRef.current = null
     },
-    [paint, previewPolyline, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
+    [paint, previewPolyline, publishLayers, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
   )
 
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {

@@ -1,12 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { Bitmap } from '../core/bitmap'
 import { LayersPanel } from './LayersPanel'
 
-const LAYERS = [
-  { id: 1, name: 'Background' },
-  { id: 2, name: 'Layer 2' },
-  { id: 3, name: 'Layer 3' },
-]
+const layer = (id: number, name: string) => ({ id, name, thumbnail: new Bitmap(8, 6) })
+const LAYERS = [layer(1, 'Background'), layer(2, 'Layer 2'), layer(3, 'Layer 3')]
 
 function setup(active = 1, layers = LAYERS) {
   const handlers = { onSelect: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn(), onMove: vi.fn() }
@@ -19,7 +17,17 @@ const rows = () => within(screen.getByRole('listbox', { name: 'Layers' })).getAl
 describe('LayersPanel', () => {
   it('lists the top-most layer first', () => {
     setup()
-    expect(rows().map((row) => row.textContent)).toEqual(['Layer 3', 'Layer 2', 'Background'])
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Layer 3', 'Layer 2', 'Background'])
+  })
+
+  it('shows each layer as a thumbnail image without a visible name', () => {
+    setup()
+    for (const row of rows()) {
+      expect(row.textContent).toBe('')
+      const thumbnail = row.querySelector('canvas')
+      expect(thumbnail?.getAttribute('width')).toBe('8')
+      expect(thumbnail?.getAttribute('height')).toBe('6')
+    }
   })
 
   it('marks the active layer', () => {
@@ -47,7 +55,7 @@ describe('LayersPanel', () => {
   })
 
   it('cannot delete the only layer', () => {
-    setup(0, [{ id: 1, name: 'Background' }])
+    setup(0, [layer(1, 'Background')])
     expect(screen.getByRole('button', { name: 'Delete layer' }).hasAttribute('disabled')).toBe(true)
   })
 

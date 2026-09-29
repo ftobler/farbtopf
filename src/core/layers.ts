@@ -1,5 +1,5 @@
 import { Bitmap } from './bitmap'
-import { blitAlpha } from './raster'
+import { blitAlpha, scale } from './raster'
 
 /** One paint surface of the document. Every layer has the size of the document. */
 export interface Layer {
@@ -11,7 +11,18 @@ export interface Layer {
 /** What the layers panel shows about a layer. */
 export interface LayerInfo {
   id: number
+  /** Not shown; used as the accessible label of the layer's thumbnail. */
   name: string
+  thumbnail: Bitmap
+}
+
+/** Largest edge of a layer thumbnail, in pixels. */
+export const THUMBNAIL_SIZE = 64
+
+/** A downscaled copy of `bitmap` whose longer edge is at most `size` pixels. */
+export function thumbnail(bitmap: Bitmap, size = THUMBNAIL_SIZE): Bitmap {
+  const factor = Math.min(1, size / Math.max(bitmap.width, bitmap.height))
+  return scale(bitmap, Math.max(1, Math.round(bitmap.width * factor)), Math.max(1, Math.round(bitmap.height * factor)))
 }
 
 /**

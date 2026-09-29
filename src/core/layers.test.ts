@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bitmap } from './bitmap'
 import { BLACK, TRANSPARENT, WHITE } from './color'
-import { compositeLayers, moveItem } from './layers'
+import { compositeLayers, moveItem, thumbnail } from './layers'
 
 describe('compositeLayers', () => {
   it('draws the bottom-most layer first', () => {
@@ -40,6 +40,26 @@ describe('compositeLayers', () => {
 
   it('returns null for an empty stack', () => {
     expect(compositeLayers([])).toBeNull()
+  })
+})
+
+describe('thumbnail', () => {
+  it('shrinks the longer edge to the thumbnail size, keeping the aspect ratio', () => {
+    const small = thumbnail(new Bitmap(200, 100), 64)
+    expect([small.width, small.height]).toEqual([64, 32])
+  })
+
+  it('never enlarges a small bitmap', () => {
+    const small = thumbnail(new Bitmap(10, 5), 64)
+    expect([small.width, small.height]).toEqual([10, 5])
+  })
+
+  it('keeps the picture', () => {
+    const source = new Bitmap(4, 4, WHITE)
+    for (let y = 0; y < 2; y += 1) for (let x = 0; x < 2; x += 1) source.set(x, y, BLACK)
+    const small = thumbnail(source, 2)
+    expect(small.get(0, 0)).toEqual(BLACK)
+    expect(small.get(1, 1)).toEqual(WHITE)
   })
 })
 
