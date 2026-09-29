@@ -169,6 +169,19 @@ function ColorPickerPanel({
           if (event.buttons === 0) return
           handleAreaPointer(event)
         }}
+        onKeyDown={(event) => {
+          const step = event.shiftKey ? 0.1 : 0.01
+          const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
+          let { s, v } = hsv
+          if (event.key === 'ArrowLeft') s = clamp01(s - step)
+          else if (event.key === 'ArrowRight') s = clamp01(s + step)
+          else if (event.key === 'ArrowUp') v = clamp01(v + step)
+          else if (event.key === 'ArrowDown') v = clamp01(v - step)
+          else return
+          event.preventDefault()
+          const next = { h: hsv.h, s, v }
+          emit({ ...hsvToRgb(next), a: alpha }, next)
+        }}
       >
         <span className="sv-cursor" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
       </div>
