@@ -8,8 +8,14 @@ import {
 } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Bitmap } from '../core/bitmap'
-import { paintBrushStroke } from '../core/brushes'
-import type { BrushId } from '../core/brushes'
+import {
+  HIGHLIGHTER_ALPHA,
+  compositeHighlighter,
+  createCoverageMask,
+  paintBrushStroke,
+  stampHighlighter,
+} from '../core/brushes'
+import type { BrushId, CoverageMask } from '../core/brushes'
 import type { Rgba } from '../core/color'
 import { WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
@@ -107,6 +113,8 @@ interface StrokeState {
   recorded: boolean
   /** Every pointer position of a freehand shape. */
   points: Point[]
+  /** Stroke-scoped coverage for the highlighter so overlaps stay one flat alpha. */
+  highlighter?: CoverageMask
 }
 
 /**
@@ -1044,9 +1052,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         stroke.recorded = true
         const color = strokeColorFor(tool, slot, primary, secondary)
         const width = strokeWidthFor(tool, brushSize)
-        if (tool === 'airbrush') spray(doc(), point, brushSize, color)
-        else if (tool === 'brush') paintBrushStroke(doc(), point, point, { size: width, color, brush })
-        else stamp(doc(), point.x, point.y, width, color, strokeShape(tool))
+        if (tool === 'airbrush') {
+          spray(doc(), point, brushSize, color)
+        } else if (tool === 'brush' && brush === 'highlighter') {
+          const mask = createCoverageMask(base.width, base.height)
+          stampHighlighter(mask, point, point, width)
+          stroke.highlighter = mask
+          bitmapRef.current = compositeHighlighter(base, mask, color, HIGHLIGHTER_ALPHA)
+        } else if (tool === 'brush') {
+          paintBrushStroke(doc(), point, point, { size: width, color, brush })
+        } else {
+          stamp(doc(), point.x, point.y, width, color, strokeShape(tool))
+        }
         paint(doc())
         syncHistory()
       }
@@ -1131,9 +1148,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       } else {
         const color = strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         const width = strokeWidthFor(stroke.tool, brushSize)
-        if (stroke.tool === 'airbrush') spray(doc(), point, brushSize, color)
-        else if (stroke.tool === 'brush') paintBrushStroke(doc(), stroke.last, point, { size: width, color, brush })
-        else drawLine(doc(), stroke.last, point, width, color, strokeShape(stroke.tool))
+        if (stroke.tool === 'airbrush') {
+          spray(doc(), point, brushSize, color)
+        } else if (stroke.tool === 'brush' && brush === 'highlighter' && stroke.highlighter) {
+          stampHighlighter(stroke.highlighter, stroke.last, point, width)
+          bitmapRef.current = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)
+        } else if (stroke.tool === 'brush') {
+          paintBrushStroke(doc(), stroke.last, point, { size: width, color, brush })
+        } else {
+          drawLine(doc(), stroke.last, point, width, color, strokeShape(stroke.tool))
+        }
         paint(doc())
       }
       stroke.last = point

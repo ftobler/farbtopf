@@ -86,9 +86,13 @@ function paintDisc(
   color: Rgba,
   falloff: 'hard' | 'soft',
 ): void {
+  // Round the dab centre to whole pixels once: Bitmap addresses its buffer with
+  // integer indices, so fractional coordinates would silently drop pixels.
+  const cx = Math.round(center.x)
+  const cy = Math.round(center.y)
   const size = Math.max(1, Math.round(radius * 2))
   if (size === 1) {
-    blendPixel(bitmap, Math.round(center.x), Math.round(center.y), color, 1)
+    blendPixel(bitmap, cx, cy, color, 1)
     return
   }
   const offset = Math.floor((size - 1) / 2)
@@ -99,13 +103,15 @@ function paintDisc(
       const dx = i - half
       const dy = j - half
       const distance = Math.hypot(dx, dy)
-      const x = center.x - offset + i
-      const y = center.y - offset + j
+      const x = cx - offset + i
+      const y = cy - offset + j
       if (falloff === 'hard') {
         if (size > 2 && distance > threshold) continue
         blendPixel(bitmap, x, y, color, 1)
       } else {
-        const coverage = Math.max(0, 1 - distance / (threshold + 1e-6))
+        // Mirror `stamp` in raster.ts: a 2px round dab is its 2x2 square,
+        // otherwise the circle test rejects every pixel.
+        const coverage = size <= 2 ? 1 : Math.max(0, 1 - distance / (threshold + 1e-6))
         if (coverage <= 0) continue
         blendPixel(bitmap, x, y, color, coverage * coverage)
       }
@@ -145,19 +151,93 @@ function paintCalligraphyDab(bitmap: Bitmap, center: Point, radius: number, colo
   }
 }
 
-function paintHighlighterDab(bitmap: Bitmap, center: Point, radius: number, color: Rgba): void {
-  const halfWidth = Math.max(1, radius * 1.6)
-  const halfHeight = Math.max(0.6, radius * 0.45)
-  const extent = Math.ceil(halfWidth) + 1
-  for (let y = Math.floor(center.y - extent); y <= Math.ceil(center.y + extent); y += 1) {
-    for (let x = Math.floor(center.x - extent); x <= Math.ceil(center.x + extent); x += 1) {
-      const dx = (x + 0.5 - center.x) / halfWidth
-      const dy = (y + 0.5 - center.y) / halfHeight
-      const distance = dx * dx + dy * dy
-      if (distance > 1) continue
-      blendPixel(bitmap, x, y, color, (1 - distance) ** 0.6 * 0.4)
+/**
+ * A single-channel coverage mask covering a whole highlighter stroke. Dabs are
+ * accumulated with `max` so overlapping stamps never darken each other, then the
+ * colour is composited over the untouched base exactly once.
+ */
+export interface CoverageMask {
+  width: number
+  height: number
+  data: Uint8Array
+}
+
+/** The flat transparency a highlighter stroke is drawn with. */
+export const HIGHLIGHTER_ALPHA = 0.4
+
+export function createCoverageMask(width: number, height: number): CoverageMask {
+  const w = Math.max(1, Math.floor(width))
+  const h = Math.max(1, Math.floor(height))
+  return { width: w, height: h, data: new Uint8Array(w * h) }
+}
+
+function setCoverage(mask: CoverageMask, x: number, y: number, value: number): void {
+  if (x < 0 || y < 0 || x >= mask.width || y >= mask.height) return
+  const index = y * mask.width + x
+  if (value > mask.data[index]) mask.data[index] = value
+}
+
+/**
+ * Stamps an upright capital-"I" nib into a coverage mask: a full-height vertical
+ * bar with short horizontal caps at the top and bottom. The caps are the full
+ * brush width; the bar is roughly a third as wide.
+ */
+function paintHighlighterDab(mask: CoverageMask, center: Point, radius: number): void {
+  const cx = Math.round(center.x)
+  const cy = Math.round(center.y)
+  const size = Math.max(1, Math.round(radius * 2))
+  if (size < 3) {
+    const offset = Math.floor((size - 1) / 2)
+    for (let j = 0; j < size; j += 1) {
+      for (let i = 0; i < size; i += 1) setCoverage(mask, cx - offset + i, cy - offset + j, 255)
+    }
+    return
+  }
+  const offset = Math.floor((size - 1) / 2)
+  const stemWidth = Math.max(1, Math.round(size / 3))
+  const capHeight = Math.max(1, Math.round(size / 4))
+  const stemStart = Math.floor((size - stemWidth) / 2)
+  for (let j = 0; j < size; j += 1) {
+    const cap = j < capHeight || j >= size - capHeight
+    for (let i = 0; i < size; i += 1) {
+      const inStem = i >= stemStart && i < stemStart + stemWidth
+      if (!cap && !inStem) continue
+      setCoverage(mask, cx - offset + i, cy - offset + j, 255)
     }
   }
+}
+
+/** Adds one highlighter segment to the stroke mask, overlapping dabs kept at max coverage. */
+export function stampHighlighter(mask: CoverageMask, from: Point, to: Point, size: number): void {
+  const radius = Math.max(0.5, size / 2)
+  for (const point of segmentPoints(from, to, Math.max(1, radius / 2))) {
+    paintHighlighterDab(mask, point, radius)
+  }
+}
+
+/**
+ * Composites the highlighter colour over `base` using the stroke mask. Because it
+ * always starts from `base`, overlapping parts of the stroke keep one flat alpha.
+ */
+export function compositeHighlighter(
+  base: Bitmap,
+  mask: CoverageMask,
+  color: Rgba,
+  alpha: number,
+): Bitmap {
+  const result = base.clone()
+  const strength = Math.max(0, Math.min(1, alpha))
+  if (strength <= 0) return result
+  const width = Math.min(base.width, mask.width)
+  const height = Math.min(base.height, mask.height)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const coverage = mask.data[y * mask.width + x] / 255
+      if (coverage <= 0) continue
+      blendPixel(result, x, y, color, strength * coverage)
+    }
+  }
+  return result
 }
 
 function averageColor(source: Bitmap, x: number, y: number, reach: number): Rgba {
@@ -168,6 +248,9 @@ function averageColor(source: Bitmap, x: number, y: number, reach: number): Rgba
   let count = 0
   for (let oy = -reach; oy <= reach; oy += 1) {
     for (let ox = -reach; ox <= reach; ox += 1) {
+      // Outside the canvas there are no real pixels; averaging transparent black
+      // in would darken the edges of a blur.
+      if (!source.contains(x + ox, y + oy)) continue
       const pixel = source.get(x + ox, y + oy)
       r += pixel.r
       g += pixel.g
@@ -176,6 +259,7 @@ function averageColor(source: Bitmap, x: number, y: number, reach: number): Rgba
       count += 1
     }
   }
+  if (count === 0) return source.get(x, y)
   return { r: r / count, g: g / count, b: b / count, a: a / count }
 }
 
@@ -225,35 +309,66 @@ function paintSmudgeDab(
       const falloff = 1 - distance / reach
       const sx = Math.round(x - ux * pull * falloff)
       const sy = Math.round(y - uy * pull * falloff)
+      // Sampling past the canvas edge would smudge toward transparent black.
+      if (!source.contains(sx, sy)) continue
       const pulled = source.get(sx, sy)
       bitmap.set(x, y, lerpColor(bitmap.get(x, y), pulled, Math.min(1, falloff * 0.8)))
     }
   }
 }
 
-function paintLiquifyDab(
+/** How far a liquify drag pushes pixels relative to the distance it travelled. */
+const LIQUIFY_STRENGTH = 0.6
+
+/** Distance from a point to a line segment. */
+function distanceToSegment(px: number, py: number, a: Point, b: Point): number {
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const apx = px - a.x
+  const apy = py - a.y
+  const denom = abx * abx + aby * aby
+  const t = denom === 0 ? 0 : Math.max(0, Math.min(1, (apx * abx + apy * aby) / denom))
+  return Math.hypot(apx - abx * t, apy - aby * t)
+}
+
+/**
+ * Pushes one segment of a liquify drag. The displacement is proportional to how
+ * far the pointer actually moved this segment (capped at the brush radius), so
+ * the distortion tracks the cursor instead of accelerating with every event.
+ * The whole capsule around the segment is affected, not just its end point, and
+ * because falloff only depends on the distance to the segment, splitting one
+ * drag into several segments accumulates to the same shift.
+ */
+function paintLiquifySegment(
   bitmap: Bitmap,
   source: Bitmap,
   from: Point,
   to: Point,
   radius: number,
 ): void {
-  const direction = { x: to.x - from.x, y: to.y - from.y }
-  const length = Math.hypot(direction.x, direction.y)
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const length = Math.hypot(dx, dy)
   if (length === 0) return
-  const ux = direction.x / length
-  const uy = direction.y / length
+  const ux = dx / length
+  const uy = dy / length
   const reach = Math.max(1, radius)
-  const extent = Math.ceil(reach) + 1
-  for (let y = Math.floor(to.y - extent); y <= Math.ceil(to.y + extent); y += 1) {
-    for (let x = Math.floor(to.x - extent); x <= Math.ceil(to.x + extent); x += 1) {
+  // Proportional to the distance moved, capped by the brush radius so a very
+  // fast flick cannot fling pixels across the canvas. A slow drag accumulates
+  // to the same total shift instead of accelerating with every event.
+  const shift = Math.min(length * LIQUIFY_STRENGTH, reach)
+  const minX = Math.floor(Math.min(from.x, to.x) - reach)
+  const maxX = Math.ceil(Math.max(from.x, to.x) + reach)
+  const minY = Math.floor(Math.min(from.y, to.y) - reach)
+  const maxY = Math.ceil(Math.max(from.y, to.y) + reach)
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
       if (!bitmap.contains(x, y)) continue
-      const distance = Math.hypot(x + 0.5 - to.x, y + 0.5 - to.y)
+      const distance = distanceToSegment(x + 0.5, y + 0.5, from, to)
       if (distance > reach) continue
       const falloff = (1 - distance / reach) ** 1.5
-      const shift = reach * 0.6 * falloff
-      const sx = Math.round(x - ux * shift)
-      const sy = Math.round(y - uy * shift)
+      const sx = Math.round(x - ux * shift * falloff)
+      const sy = Math.round(y - uy * shift * falloff)
       if (source.contains(sx, sy)) bitmap.set(x, y, source.get(sx, sy))
     }
   }
@@ -288,11 +403,12 @@ export function paintBrushStroke(bitmap: Bitmap, from: Point, to: Point, options
         paintCalligraphyDab(bitmap, point, radius, color)
       }
       return
-    case 'highlighter':
-      for (const point of segmentPoints(from, to, Math.max(1, radius / 2))) {
-        paintHighlighterDab(bitmap, point, radius, color)
-      }
+    case 'highlighter': {
+      const mask = createCoverageMask(bitmap.width, bitmap.height)
+      stampHighlighter(mask, from, to, options.size)
+      bitmap.data.set(compositeHighlighter(bitmap, mask, color, HIGHLIGHTER_ALPHA).data)
       return
+    }
     case 'blur': {
       const source = bitmap.clone()
       for (const point of segmentPoints(from, to, Math.max(1, radius / 2))) {
@@ -309,7 +425,7 @@ export function paintBrushStroke(bitmap: Bitmap, from: Point, to: Point, options
     }
     case 'liquify': {
       const source = bitmap.clone()
-      paintLiquifyDab(bitmap, source, from, to, radius)
+      paintLiquifySegment(bitmap, source, from, to, radius)
       return
     }
   }

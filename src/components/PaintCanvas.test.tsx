@@ -3,6 +3,7 @@ import { act, render } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Bitmap } from '../core/bitmap'
+import type { BrushId } from '../core/brushes'
 import { BLACK, WHITE } from '../core/color'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
@@ -23,6 +24,8 @@ function setup(
   transparentSelection = false,
   selectionShape: 'rectangle' | 'freeform' = 'rectangle',
   shapeKind: ShapeKind = 'rectangle',
+  brush: BrushId = 'round',
+  brushSize = 1,
 ) {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
@@ -32,7 +35,7 @@ function setup(
   const onSelectionChange = vi.fn()
   const onZoomClick = vi.fn()
 
-  const element = (props: { tool: SetupTool; shapeKind: ShapeKind }) => (
+  const element = (props: { tool: SetupTool; shapeKind: ShapeKind; brush: BrushId; brushSize: number }) => (
     <PaintCanvas
       ref={ref}
       initialWidth={width}
@@ -40,7 +43,7 @@ function setup(
       tool={props.tool}
       primary={BLACK}
       secondary={WHITE}
-      brushSize={1}
+      brushSize={props.brushSize}
       shapeFill="outline"
       shapeKind={props.shapeKind}
       zoom={1}
@@ -53,11 +56,19 @@ function setup(
       onZoomClick={onZoomClick}
       transparentSelection={transparentSelection}
       selectionShape={selectionShape}
+      brush={props.brush}
     />
   )
-  const { container, rerender } = render(element({ tool, shapeKind }))
-  const setProps = (props: { tool?: SetupTool; shapeKind?: ShapeKind }) =>
-    rerender(element({ tool: props.tool ?? tool, shapeKind: props.shapeKind ?? shapeKind }))
+  const { container, rerender } = render(element({ tool, shapeKind, brush, brushSize }))
+  const setProps = (props: { tool?: SetupTool; shapeKind?: ShapeKind; brush?: BrushId; brushSize?: number }) =>
+    rerender(
+      element({
+        tool: props.tool ?? tool,
+        shapeKind: props.shapeKind ?? shapeKind,
+        brush: props.brush ?? brush,
+        brushSize: props.brushSize ?? brushSize,
+      }),
+    )
 
   const canvas = container.querySelector('canvas')
   if (!canvas) throw new Error('canvas not rendered')
@@ -677,6 +688,51 @@ describe('PaintCanvas', () => {
       click(canvas, 1, 5, 5)
       fireEvent.keyDown(window, { key: 'Enter' })
       expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('brush engine', () => {
+    function spyPixels(canvas: HTMLCanvasElement, width: number) {
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      return (x: number, y: number) => {
+        const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+        return Array.from(image.data.slice((y * width + x) * 4, (y * width + x) * 4 + 4))
+      }
+    }
+
+    it('paints a contiguous round stroke across several pointer moves', () => {
+      const { canvas } = setup('brush', 20, 20, false, 'rectangle', 'rectangle', 'round', 5)
+      const pixel = spyPixels(canvas, 20)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 7, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 13, clientY: 10 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 13, clientY: 10 })
+      for (let x = 2; x <= 13; x += 1) {
+        expect(pixel(x, 10), `gap at x=${x}`).not.toEqual([255, 255, 255, 255])
+      }
+    })
+
+    it('paints with the soft brush at size 2', () => {
+      const { canvas } = setup('brush', 20, 20, false, 'rectangle', 'rectangle', 'soft', 2)
+      const pixel = spyPixels(canvas, 20)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 5, clientY: 5 })
+      expect(pixel(5, 5)).not.toEqual([255, 255, 255, 255])
+    })
+
+    it('keeps a highlighter stroke at one uniform alpha where segments overlap', () => {
+      const { canvas, onHistoryChange } = setup('brush', 20, 20, false, 'rectangle', 'rectangle', 'highlighter', 12)
+      const pixel = spyPixels(canvas, 20)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 8, clientY: 10 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 14, clientY: 10 })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 14, clientY: 10 })
+      const painted = pixel(5, 10)
+      expect(painted).not.toEqual([255, 255, 255, 255])
+      // A pixel overlapped by several dabs keeps the same colour as one dab.
+      expect(pixel(12, 10)).toEqual(painted)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     })
   })
 })
