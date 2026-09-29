@@ -78,6 +78,17 @@ describe('stamp', () => {
     stamp(bitmap, 2, 2, 3, BLACK, 'square')
     expect(countColor(bitmap)).toBe(9)
   })
+
+  it('grows monotonically with size, including even sizes', () => {
+    let previous = 0
+    for (let size = 1; size <= 8; size += 1) {
+      const bitmap = new Bitmap(size + 2, size + 2)
+      stamp(bitmap, Math.floor((size + 2) / 2), Math.floor((size + 2) / 2), size, BLACK, 'round')
+      const painted = countColor(bitmap)
+      expect(painted, `size ${size}`).toBeGreaterThan(previous)
+      previous = painted
+    }
+  })
 })
 
 describe('drawLine', () => {

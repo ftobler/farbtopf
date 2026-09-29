@@ -52,10 +52,15 @@ export function stamp(
     return
   }
   const offset = Math.floor((s - 1) / 2)
-  const threshold = s / 2 - 0.5
+  // Radius in pixel-centre space. Odd sizes centre on a pixel and use (s-1)/2,
+  // which keeps the size-3 brush a plus rather than a full square. Even sizes
+  // centre between pixels, so nudge the radius by a quarter pixel; otherwise
+  // every even size above two collapses back to a 2x2 block and the brush
+  // shrinks when the size is increased.
+  const threshold = s % 2 === 0 ? s / 2 - 0.25 : (s - 1) / 2
   for (let j = 0; j < s; j += 1) {
     for (let i = 0; i < s; i += 1) {
-      // A 2px round brush is its 2×2 square; the circle test would reject every pixel.
+      // A 2px round brush is its full 2×2 square.
       if (shape === 'round' && s > 2) {
         const dx = i - (s - 1) / 2
         const dy = j - (s - 1) / 2

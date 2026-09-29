@@ -97,7 +97,10 @@ function paintDisc(
   }
   const offset = Math.floor((size - 1) / 2)
   const half = (size - 1) / 2
-  const threshold = size / 2 - 0.5
+  // Mirror `stamp` in raster.ts: odd sizes centre on a pixel, even sizes centre
+  // between pixels and get a quarter-pixel radius nudge so they stay round and
+  // grow with the size instead of collapsing to a 2x2 block.
+  const threshold = size % 2 === 0 ? size / 2 - 0.25 : (size - 1) / 2
   for (let j = 0; j < size; j += 1) {
     for (let i = 0; i < size; i += 1) {
       const dx = i - half
@@ -109,8 +112,7 @@ function paintDisc(
         if (size > 2 && distance > threshold) continue
         blendPixel(bitmap, x, y, color, 1)
       } else {
-        // Mirror `stamp` in raster.ts: a 2px round dab is its 2x2 square,
-        // otherwise the circle test rejects every pixel.
+        // A 2px round dab is its full 2x2 square.
         const coverage = size <= 2 ? 1 : Math.max(0, 1 - distance / (threshold + 1e-6))
         if (coverage <= 0) continue
         blendPixel(bitmap, x, y, color, coverage * coverage)

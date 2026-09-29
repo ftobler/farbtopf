@@ -87,6 +87,17 @@ describe('brushes', () => {
     expect(bitmap.get(0, 0).r).toBe(255)
   })
 
+  it('makes the round brush grow with every size step, even ones included', () => {
+    let previous = 0
+    for (let size = 2; size <= 8; size += 1) {
+      const bitmap = new Bitmap(20, 20, WHITE)
+      paintBrushStroke(bitmap, { x: 10, y: 10 }, { x: 10, y: 10 }, { size, color: BLACK, brush: 'round' })
+      const painted = countNonWhite(bitmap)
+      expect(painted, `size ${size}`).toBeGreaterThan(previous)
+      previous = painted
+    }
+  })
+
   it('feathers the edge with the circle blurred brush', () => {
     const bitmap = new Bitmap(40, 40, WHITE)
     paintBrushStroke(bitmap, { x: 20, y: 20 }, { x: 20, y: 20 }, { size: 17, color: BLACK, brush: 'soft' })
