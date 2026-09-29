@@ -158,19 +158,23 @@ export function ellipseSpans(rect: Rect): EllipseSpan[] {
     for (let i = 0; i < height; i += 1) spans.push({ y: y + i, x0: x, x1: x + width - 1 })
     return spans
   }
-  const cx = x + (width - 1) / 2
-  const cy = y + (height - 1) / 2
-  const rx = (width - 1) / 2
-  const ry = (height - 1) / 2
+  // Pixel (px, py) covers the continuous square [px, px+1) × [py, py+1) and is
+  // filled when its centre falls inside the ellipse. Using a continuous centre
+  // keeps the shape symmetric for even and odd sizes alike.
+  const cx = x + width / 2
+  const cy = y + height / 2
+  const rx = width / 2
+  const ry = height / 2
   const spans: EllipseSpan[] = []
   for (let i = 0; i < height; i += 1) {
     const py = y + i
-    const ny = (py - cy) / ry
+    const ny = (py + 0.5 - cy) / ry
     const inside = 1 - ny * ny
     if (inside < 0) continue
     const dx = rx * Math.sqrt(inside)
-    const x0 = Math.max(x, Math.round(cx - dx))
-    const x1 = Math.min(x + width - 1, Math.round(cx + dx))
+    const x0 = Math.max(x, Math.ceil(cx - dx - 0.5))
+    const x1 = Math.min(x + width - 1, Math.floor(cx + dx - 0.5))
+    if (x0 > x1) continue
     spans.push({ y: py, x0, x1 })
   }
   return spans
@@ -183,6 +187,7 @@ export function drawEllipse(
   color: Rgba,
   filled: boolean,
 ): void {
+  const { x, y, width, height } = rect
   const spans = ellipseSpans(rect)
   if (spans.length === 0) return
   const t = Math.max(1, Math.round(size))
@@ -190,21 +195,23 @@ export function drawEllipse(
     for (const span of spans) fillSpan(bitmap, span.y, span.x0, span.x1, color)
     return
   }
-  for (let i = 0; i < spans.length; i += 1) {
-    const span = spans[i]
-    for (let k = 0; k < t; k += 1) {
-      bitmap.set(span.x0 + k, span.y, color)
-      bitmap.set(span.x1 - k, span.y, color)
-    }
-    if (i > 0) {
-      const prev = spans[i - 1]
-      // Bridge steep edges so the outline stays connected on tall ellipses.
-      for (let px = Math.min(prev.x0, span.x0); px <= Math.max(prev.x0, span.x0); px += 1) {
-        bitmap.set(px, span.y, color)
-      }
-      for (let px = Math.min(prev.x1, span.x1); px <= Math.max(prev.x1, span.x1); px += 1) {
-        bitmap.set(px, span.y, color)
-      }
+  // Draw the ring as the filled ellipse minus a version inset by the stroke
+  // width. This follows the curve at every row (including the caps) and, unlike
+  // thickening each row's edges, can never spill outside the dragged box.
+  const innerRect: Rect = {
+    x: x + t,
+    y: y + t,
+    width: width - 2 * t,
+    height: height - 2 * t,
+  }
+  const inner = innerRect.width > 0 && innerRect.height > 0 ? ellipseSpans(innerRect) : []
+  const innerByY = new Map<number, EllipseSpan>()
+  for (const span of inner) innerByY.set(span.y, span)
+  for (const span of spans) {
+    const hole = innerByY.get(span.y)
+    for (let px = span.x0; px <= span.x1; px += 1) {
+      if (hole && px >= hole.x0 && px <= hole.x1) continue
+      bitmap.set(px, span.y, color)
     }
   }
 }

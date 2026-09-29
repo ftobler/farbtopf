@@ -144,7 +144,57 @@ describe('ellipseSpans', () => {
   it('collapses a one-pixel-wide rect to a vertical line', () => {
     expect(ellipseSpans({ x: 2, y: 0, width: 1, height: 4 })).toHaveLength(4)
   })
+
+  it('is horizontally symmetric for even-width rects', () => {
+    const spans = ellipseSpans({ x: 0, y: 0, width: 4, height: 6 })
+    for (const span of spans) {
+      expect(span.x0 + span.x1).toBe(3)
+    }
+  })
 })
+
+describe('drawEllipse even sizes', () => {
+  it('keeps every row of a 2×2 ellipse instead of dropping the left column', () => {
+    const bitmap = new Bitmap(2, 2)
+    drawEllipse(bitmap, { x: 0, y: 0, width: 2, height: 2 }, 1, BLACK, true)
+    expect(countColor(bitmap)).toBe(4)
+  })
+
+  it('draws a 4×4 filled ellipse symmetric about both axes', () => {
+    const bitmap = new Bitmap(4, 4)
+    drawEllipse(bitmap, { x: 0, y: 0, width: 4, height: 4 }, 1, BLACK, true)
+    for (let y = 0; y < 4; y += 1) {
+      for (let x = 0; x < 4; x += 1) {
+        const painted = countPaintedPixel(bitmap, x, y)
+        expect(painted, `mirror x at ${x},${y}`).toBe(countPaintedPixel(bitmap, 3 - x, y))
+        expect(painted, `mirror y at ${x},${y}`).toBe(countPaintedPixel(bitmap, x, 3 - y))
+      }
+    }
+  })
+
+  it('closes the top cap of a circle outline', () => {
+    const bitmap = new Bitmap(7, 7)
+    drawEllipse(bitmap, { x: 0, y: 0, width: 7, height: 7 }, 1, BLACK, false)
+    expect(bitmap.get(2, 0)).toEqual(BLACK)
+    expect(bitmap.get(3, 0)).toEqual(BLACK)
+    expect(bitmap.get(4, 0)).toEqual(BLACK)
+  })
+
+  it('keeps a thick outline inside the dragged box', () => {
+    const bitmap = new Bitmap(12, 12)
+    drawEllipse(bitmap, { x: 3, y: 3, width: 6, height: 6 }, 5, BLACK, false)
+    for (let y = 0; y < 12; y += 1) {
+      for (let x = 0; x < 12; x += 1) {
+        if (x >= 3 && x <= 8 && y >= 3 && y <= 8) continue
+        expect(bitmap.get(x, y)).toEqual(rgba(0, 0, 0, 0))
+      }
+    }
+  })
+})
+
+function countPaintedPixel(bitmap: Bitmap, x: number, y: number): number {
+  return bitmap.get(x, y).r === 0 ? 1 : 0
+}
 
 describe('drawEllipse', () => {
   it('fills the center but not the corners', () => {
