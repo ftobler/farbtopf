@@ -378,7 +378,8 @@ textarea {
   top: calc(100% + 4px);
   min-width: 190px;
   padding: 4px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
