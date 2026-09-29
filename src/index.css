@@ -885,14 +885,14 @@ textarea {
   touch-action: none;
 }
 
-.canvas-resize-handle-nw { left: 0; top: 0; cursor: nwse-resize; }
-.canvas-resize-handle-n { left: 50%; top: 0; cursor: ns-resize; }
-.canvas-resize-handle-ne { left: 100%; top: 0; cursor: nesw-resize; }
-.canvas-resize-handle-e { left: 100%; top: 50%; cursor: ew-resize; }
-.canvas-resize-handle-se { left: 100%; top: 100%; cursor: nwse-resize; }
-.canvas-resize-handle-s { left: 50%; top: 100%; cursor: ns-resize; }
-.canvas-resize-handle-sw { left: 0; top: 100%; cursor: nesw-resize; }
-.canvas-resize-handle-w { left: 0; top: 50%; cursor: ew-resize; }
+.canvas-resize-handle-nw { left: -4px; top: -4px; cursor: nwse-resize; }
+.canvas-resize-handle-n { left: 50%; top: -4px; cursor: ns-resize; }
+.canvas-resize-handle-ne { left: calc(100% + 4px); top: -4px; cursor: nesw-resize; }
+.canvas-resize-handle-e { left: calc(100% + 4px); top: 50%; cursor: ew-resize; }
+.canvas-resize-handle-se { left: calc(100% + 4px); top: calc(100% + 4px); cursor: nwse-resize; }
+.canvas-resize-handle-s { left: 50%; top: calc(100% + 4px); cursor: ns-resize; }
+.canvas-resize-handle-sw { left: -4px; top: calc(100% + 4px); cursor: nesw-resize; }
+.canvas-resize-handle-w { left: -4px; top: 50%; cursor: ew-resize; }
 
 .selection-rotate-line {
   position: absolute;
