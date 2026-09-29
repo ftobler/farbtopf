@@ -81,6 +81,8 @@ function App() {
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
   const [showScaleDialog, setShowScaleDialog] = useState(false)
+  /** Size of the selection the Scale dialog acts on, or null to scale the whole image. */
+  const [scaleSelection, setScaleSelection] = useState<{ width: number; height: number } | null>(null)
   const [showRotateDialog, setShowRotateDialog] = useState(false)
   const [customRotation, setCustomRotation] = useState(0)
   const [lastRotation, setLastRotation] = useState(90)
@@ -269,13 +271,19 @@ function App() {
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
+  const openScaleDialog = useCallback(() => {
+    const selection = canvasRef.current?.getSelection() ?? null
+    setScaleSelection(selection ? { width: selection.width, height: selection.height } : null)
+    setShowScaleDialog(true)
+  }, [])
+
   const handleScaleApply = useCallback(
     (width: number, height: number) => {
-      canvasRef.current?.resize(width, height)
+      canvasRef.current?.scale(width, height)
       setShowScaleDialog(false)
-      notify(`Scaled to ${width} × ${height}`)
+      notify(`Scaled ${scaleSelection ? 'selection' : 'image'} to ${width} × ${height}`)
     },
-    [notify],
+    [notify, scaleSelection],
   )
 
   const handleFlip = useCallback((axis: 'horizontal' | 'vertical') => {
@@ -576,7 +584,7 @@ function App() {
           onShapeKindChange={setShapeKind}
           hasSelection={hasSelection}
           onCrop={handleCrop}
-          onScale={() => setShowScaleDialog(true)}
+          onScale={openScaleDialog}
           onFlip={handleFlip}
           onRotate={handleRotate}
           lastRotation={lastRotation}
@@ -707,8 +715,9 @@ function App() {
       {showScaleDialog ? (
         <ScaleImageDialog
           open={showScaleDialog}
-          initialWidth={canvasSize.width}
-          initialHeight={canvasSize.height}
+          initialWidth={scaleSelection?.width ?? canvasSize.width}
+          initialHeight={scaleSelection?.height ?? canvasSize.height}
+          title={scaleSelection ? 'Scale selection' : 'Scale image'}
           onCancel={() => setShowScaleDialog(false)}
           onApply={handleScaleApply}
         />
@@ -856,7 +865,7 @@ function App() {
               <MenuDivider />
               <MenuItem
                 onClick={() => {
-                  setShowScaleDialog(true)
+                  openScaleDialog()
                   close()
                 }}
               >

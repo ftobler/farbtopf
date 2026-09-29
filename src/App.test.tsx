@@ -108,6 +108,22 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
   })
 
+  it('scales the whole image when nothing is selected', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Scale' }))
+    expect(screen.getByRole('dialog', { name: 'Scale image' })).toBeTruthy()
+  })
+
+  it('scales the selection when there is one', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Scale' }))
+    const dialog = screen.getByRole('dialog', { name: 'Scale selection' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
+    expect(screen.getByText('Scaled selection to 800 × 600')).toBeTruthy()
+  })
+
   it('arranges the image commands in a two by two grid', () => {
     render(<App />)
     const names = ['Crop', 'Rotate', 'Scale', 'Flip']

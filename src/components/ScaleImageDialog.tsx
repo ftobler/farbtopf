@@ -5,6 +5,8 @@ export interface ScaleImageDialogProps {
   open: boolean
   initialWidth: number
   initialHeight: number
+  /** Dialog heading; "Scale selection" when only the selection is scaled. */
+  title?: string
   onCancel: () => void
   onApply: (width: number, height: number) => void
 }
@@ -36,6 +38,7 @@ export function ScaleImageDialog({
   open,
   initialWidth,
   initialHeight,
+  title = 'Scale image',
   onCancel,
   onApply,
 }: ScaleImageDialogProps) {
@@ -116,10 +119,10 @@ export function ScaleImageDialog({
         className="modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Scale image"
+        aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2 className="modal-title">Scale image</h2>
+        <h2 className="modal-title">{title}</h2>
 
         <div className="preset-list" role="group" aria-label="Scale by">
           <button

@@ -330,6 +330,35 @@ describe('PaintCanvas', () => {
     expect(ref.current?.getSelection()).toBeNull()
   })
 
+  it('scales only the selection when there is one', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 3 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 11, clientY: 7 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 11, clientY: 7 })
+    expect(ref.current?.getSelection()).toEqual({ x: 2, y: 3, width: 10, height: 5 })
+    act(() => ref.current?.scale(20, 10))
+    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
+    expect(ref.current?.getSelection()).toEqual({ x: 2, y: 3, width: 20, height: 10 })
+  })
+
+  it('scales the whole image when nothing is selected', () => {
+    const { ref, onSizeChange } = setup('select', 30, 30)
+    act(() => ref.current?.scale(15, 10))
+    expect(ref.current?.getSize()).toEqual({ width: 15, height: 10 })
+    expect(onSizeChange).toHaveBeenLastCalledWith(15, 10)
+  })
+
+  it('undoes a selection scale in one step', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 3 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 11, clientY: 7 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 11, clientY: 7 })
+    act(() => ref.current?.scale(20, 10))
+    act(() => ref.current?.undo())
+    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
   it('drops the selection when the canvas is cleared', () => {
     const { ref } = setup('select', 30, 30)
     act(() => ref.current?.selectAll())

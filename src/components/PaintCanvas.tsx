@@ -71,6 +71,8 @@ export interface PaintCanvasHandle {
    */
   rotate: (degrees: number) => void
   resize: (width: number, height: number) => void
+  /** Scales the selection to `width`×`height` in place, or the whole image when nothing is selected. */
+  scale: (width: number, height: number) => void
   /**
    * Re-sizes the document to `rect` without scaling its pixels. Content is kept
    * at its image position; new area is white and anything outside is cropped.
@@ -1010,6 +1012,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         // Scaling moves every pixel, so the old selection coordinates are stale.
         updateSelection(null)
         applyToLayers((bitmap) => scale(bitmap, width, height))
+      },
+      scale(width, height) {
+        finishPolyline()
+        const rect = currentRect()
+        if (!rect) {
+          this.resize(width, height)
+          return
+        }
+        const floating = ensureFloating(rect)
+        floating.bitmap = scale(floating.source, width, height)
+        renderPreview()
+        updateSelection({ x: floating.x, y: floating.y, width, height }, maskRef.current)
       },
       resizeCanvas(rect) {
         applyCanvasResize(rect)
