@@ -28,6 +28,12 @@ describe('ColorPicker', () => {
     expect(trigger.classList.contains('color-picker-trigger')).toBe(true)
   })
 
+  it('draws the trigger icon at a large size', () => {
+    renderPicker()
+    const icon = screen.getByRole('button', { name: 'Custom colors' }).querySelector('svg')
+    expect(icon?.getAttribute('width')).toBe('26')
+  })
+
   it('opens the color picker dialog from the trigger', () => {
     renderPicker()
     fireEvent.click(screen.getByRole('button', { name: 'Custom colors' }))

@@ -62,7 +62,7 @@ export function ColorPicker(props: ColorPickerProps) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <PaletteIcon size={16} />
+        <PaletteIcon size={26} />
       </button>
 
       {open ? (
