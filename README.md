@@ -67,6 +67,4 @@ src/
 
 ## Deployment
 
-Pushing to `main` builds and publishes the app to GitHub Pages via
-`.github/workflows/deploy.yml`. Enable Pages with the "GitHub Actions" source in the
-repository settings.
+Farbtopf is hosted on GitHub Pages: https://ftobler.github.io/farbtopf/
