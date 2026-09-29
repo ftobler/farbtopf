@@ -20,8 +20,11 @@ import {
   CutIcon,
   EraserIcon,
   FillIcon,
+  FilledShapeIcon,
   FlipIcon,
   MagnifierIcon,
+  OutlineFilledIcon,
+  OutlineShapeIcon,
   PasteIcon,
   PencilIcon,
   PickerIcon,
@@ -56,6 +59,12 @@ const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
   outline: 'Outline',
   filled: 'Filled',
   'outline-filled': 'Outline + fill',
+}
+
+const SHAPE_FILL_ICONS: Record<ShapeFill, ComponentType<IconProps>> = {
+  outline: OutlineShapeIcon,
+  filled: FilledShapeIcon,
+  'outline-filled': OutlineFilledIcon,
 }
 
 export interface RibbonProps {
@@ -143,6 +152,7 @@ export function Ribbon({
   onTextChange,
 }: RibbonProps) {
   const utilityTools = TOOL_GRID.map(toolById)
+  const ShapeFillIcon = SHAPE_FILL_ICONS[shapeFill]
 
   const renderTool = (definition: (typeof TOOLS)[number]) => {
     const Icon = TOOL_ICONS[definition.id]
@@ -512,7 +522,7 @@ export function Ribbon({
               }
             >
               {(close) => (
-                <div className="size-menu">
+                <div className="size-menu" style={{ display: 'flex', flexDirection: 'column' }}>
                   {BRUSH_SIZES.map((size) => (
                     <button
                       key={size}
@@ -525,6 +535,7 @@ export function Ribbon({
                       }}
                     >
                       <span className="size-line" style={{ height: Math.max(1, size) }} />
+                      <span className="size-label">{size} px</span>
                     </button>
                   ))}
                 </div>
@@ -533,7 +544,7 @@ export function Ribbon({
             <Dropdown
               title="Fill"
               ariaLabel="Fill"
-              trigger={<span>{SHAPE_FILL_LABELS[shapeFill]}</span>}
+              trigger={<ShapeFillIcon size={18} />}
             >
               {(close) => (
                 <>

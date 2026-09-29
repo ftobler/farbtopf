@@ -4,6 +4,7 @@ import App from './App'
 import { SHAPES } from './core/shapes'
 import { CUSTOM_COLORS_KEY } from './core/customColors'
 import { ZOOM_LEVELS } from './core/zoom'
+import { BRUSH_SIZES } from './core/tools'
 
 describe('App', () => {
   it('renders the tool palette and status bar', () => {
@@ -455,11 +456,36 @@ describe('App', () => {
     expect(gallery.compareDocumentPosition(stack!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it('renders the size dropdown as a single column with text labels', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    const menu = document.querySelector<HTMLElement>('.size-menu')
+    expect(menu).toBeTruthy()
+    const options = [...menu!.querySelectorAll('.size-option')]
+    expect(options).toHaveLength(BRUSH_SIZES.length)
+    expect(options.map((option) => option.querySelector('.size-label')?.textContent)).toEqual(
+      BRUSH_SIZES.map((size) => `${size} px`),
+    )
+    expect(menu!.style.flexDirection).toBe('column')
+  })
+
   it('changes the shape fill from the fill dropdown', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Fill' }))
+    const trigger = screen.getByRole('button', { name: 'Fill' })
+    expect(trigger.querySelector('svg')).toBeTruthy()
+    fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Filled' }))
-    expect(screen.getByRole('button', { name: 'Fill' }).textContent).toContain('Filled')
+    expect(trigger.querySelector('svg')).toBeTruthy()
+  })
+
+  it('renders an icon on the fill trigger for every fill option', () => {
+    render(<App />)
+    for (const label of ['Filled', 'Outline + fill', 'Outline']) {
+      const trigger = screen.getByRole('button', { name: 'Fill' })
+      fireEvent.click(trigger)
+      fireEvent.click(screen.getByRole('menuitem', { name: label }))
+      expect(screen.getByRole('button', { name: 'Fill' }).querySelector('svg')).toBeTruthy()
+    }
   })
 
   it('selects line, rectangle and ellipse shapes with L, R and O', () => {

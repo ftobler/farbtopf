@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { clampByte, hsvToRgb, parseColor, rgbToHsv, toCss, toHexWithAlpha } from '../core/color'
 import type { Hsv, Rgba } from '../core/color'
-import { PlusIcon, TrashIcon } from './icons'
+import { PaletteIcon, PlusIcon, TrashIcon } from './icons'
 
 export type ColorSlot = 'primary' | 'secondary'
 
@@ -62,7 +62,7 @@ export function ColorPicker(props: ColorPickerProps) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <PlusIcon size={16} />
+        <PaletteIcon size={16} />
       </button>
 
       {open ? (

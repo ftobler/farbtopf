@@ -15,6 +15,8 @@
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
   --checker-a: #ffffff;
   --checker-b: #dfe3e8;
+  --glass-bg: color-mix(in srgb, var(--surface) 20%, transparent);
+  --glass-blur: blur(10px);
 }
 
 [data-theme="dark"] {
@@ -140,6 +142,7 @@ textarea {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex: none;
+  overflow: visible;
 }
 
 .ribbon {
@@ -147,6 +150,7 @@ textarea {
   align-items: stretch;
   flex-wrap: wrap;
   gap: 8px;
+  overflow: visible;
 }
 
 .ribbon-group {
@@ -416,8 +420,9 @@ textarea {
   top: calc(100% + 4px);
   min-width: 190px;
   padding: 4px;
-  background: color-mix(in srgb, var(--surface) 60%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
@@ -516,8 +521,6 @@ textarea {
 }
 
 .size-menu {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: 2px;
   padding: 2px;
 }
@@ -525,13 +528,21 @@ textarea {
 .size-option {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 64px;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
   height: 30px;
+  padding: 0 8px;
   border: none;
   border-radius: 6px;
   background: transparent;
+  color: var(--text);
   cursor: pointer;
+}
+
+.size-label {
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .size-option:hover {

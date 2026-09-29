@@ -94,9 +94,23 @@ export function FillIcon(props: IconProps) {
 export function PickerIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="m2 22 1-1h3l9-9" />
-      <path d="M3 21v-3l9-9" />
-      <path d="m15 6 3.5-3.5a2.12 2.12 0 0 1 3 3L18 9l.5.5a2.12 2.12 0 0 1-3 3L9 6a2.12 2.12 0 0 1 3-3Z" />
+      <path
+        fill="currentColor"
+        stroke="none"
+        d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L4.62 15.2c-.39.39-.61.9-.61 1.41V21h4.39c.51 0 1.02-.2 1.41-.59l7.05-7.05 1.42 1.41 1.41-1.41-1.91-1.93 3.12-3.12c.38-.38.38-1.02 0-1.41l-2.53-2.52c-.2-.2-.45-.29-.71-.29z"
+      />
+    </Svg>
+  )
+}
+
+export function PaletteIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3a9 9 0 0 0 0 18h1.6a1.9 1.9 0 0 0 0-3.8h-1a1.9 1.9 0 0 1 0-3.8h4.3A4.1 4.1 0 0 0 21 9.3C21 5.6 17 3 12 3Z" />
+      <circle cx="7.7" cy="11.2" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.2" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.6" cy="7.2" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="17.6" cy="10.6" r="1.1" fill="currentColor" stroke="none" />
     </Svg>
   )
 }
@@ -162,6 +176,31 @@ export function EllipseIcon(props: IconProps) {
   return (
     <Svg {...props}>
       <ellipse cx="12" cy="12" rx="8" ry="6" />
+    </Svg>
+  )
+}
+
+export function OutlineShapeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+    </Svg>
+  )
+}
+
+export function FilledShapeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+export function OutlineFilledIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <rect x="8.5" y="8.5" width="7" height="7" rx="1.5" fill="currentColor" stroke="none" />
     </Svg>
   )
 }
