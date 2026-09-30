@@ -96,8 +96,18 @@ describe('App', () => {
     expect(select.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
     const freeform = screen.getByRole('menuitem', { name: 'Free-form selection' })
-    expect(freeform.querySelector('svg')).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'Rectangular selection' }).querySelector('svg')).toBeNull()
+    expect(freeform.classList.contains('menu-item-checked')).toBe(true)
+    expect(
+      screen.getByRole('menuitem', { name: 'Rectangular selection' }).classList.contains('menu-item-checked'),
+    ).toBe(false)
+  })
+
+  it('shows an icon next to every selection entry', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    for (const item of screen.getAllByRole('menuitem')) {
+      expect(item.querySelector('svg'), item.textContent ?? '').toBeTruthy()
+    }
   })
 
   it('select all activates the select tool', () => {
@@ -197,6 +207,27 @@ describe('App', () => {
     expect(pixelate.querySelector('.menu-item-icon svg')).toBeTruthy()
     fireEvent.click(pixelate)
     expect(screen.getByRole('button', { name: 'Brush' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('shows an icon next to every brush kind', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    const items = screen.getAllByRole('menuitem')
+    expect(items).toHaveLength(10)
+    for (const item of items) {
+      expect(item.querySelector('.menu-item-icon svg'), item.textContent ?? '').toBeTruthy()
+    }
+  })
+
+  it('shows an icon next to every rotate and flip entry', () => {
+    render(<App />)
+    for (const name of ['Rotate options', 'Flip options']) {
+      fireEvent.click(screen.getByRole('button', { name }))
+      for (const item of screen.getAllByRole('menuitem')) {
+        expect(item.querySelector('.menu-item-icon svg'), item.textContent ?? '').toBeTruthy()
+      }
+      fireEvent.keyDown(document, { key: 'Escape' })
+    }
   })
 
   it('shows the floating text controls only while a text box is open', () => {

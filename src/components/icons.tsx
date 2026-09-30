@@ -272,6 +272,79 @@ export function PixelateIcon(props: IconProps) {
   )
 }
 
+/** The round brush: a crisp filled disc. */
+export function RoundBrushIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="6.5" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+/** The circle-blurred brush: a solid core fading out through soft rings. */
+export function SoftBrushIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="6.5" opacity={0.4} strokeWidth={3} />
+      <circle cx="12" cy="12" r="9.5" opacity={0.18} strokeWidth={2} />
+    </Svg>
+  )
+}
+
+/** The calligraphy pen: a nib with a vent hole. */
+export function CalligraphyIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3 19 10 12 21 5 10z" />
+      <path d="M12 3v7" />
+      <circle cx="12" cy="12.5" r="1.2" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+/** The highlighter pen: an angled marker with a wide chisel tip. */
+export function HighlighterIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14 3.5 20.5 10 13 17.5 6.5 11z" />
+      <path d="M6.5 11 3.5 15.5 8.5 20.5 13 17.5z" />
+      <path d="M10.5 7 17 13.5" />
+    </Svg>
+  )
+}
+
+/** The selective blur: a droplet with a soft inner edge. */
+export function BlurIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3.5c3.5 4.2 6 7.4 6 10.7a6 6 0 0 1-12 0c0-3.3 2.5-6.5 6-10.7z" />
+      <path d="M9.2 14.8a3.2 3.2 0 0 0 3.1 2.7" opacity={0.5} />
+    </Svg>
+  )
+}
+
+/** The smudge brush: colour dragged out into a smear. */
+export function SmudgeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="15" cy="12" r="4.5" fill="currentColor" stroke="none" />
+      <circle cx="11" cy="12" r="4.5" fill="currentColor" stroke="none" opacity={0.45} />
+      <circle cx="7" cy="12" r="4" fill="currentColor" stroke="none" opacity={0.2} />
+    </Svg>
+  )
+}
+
+/** The liquify brush: ripples pushing pixels around. */
+export function LiquifyIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 9c2.7-4 5.3 4 8 0s5.3-4 8 0" />
+      <path d="M4 15c2.7-4 5.3 4 8 0s5.3-4 8 0" opacity={0.55} />
+    </Svg>
+  )
+}
+
 /** Stroke size: three dots growing from small to large. */
 export function SizeIcon({ className, ...props }: IconProps) {
   return (
@@ -578,6 +651,36 @@ export function InvertSelectionIcon(props: IconProps) {
     <Svg {...props}>
       <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
       <rect x="8" y="8" width="8" height="8" rx="0.5" fill="currentColor" fillOpacity={0.35} />
+    </Svg>
+  )
+}
+
+/** Select all: a dashed marquee showing its corner handles. */
+export function SelectAllIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
+      <g fill="currentColor" stroke="none">
+        <rect x="2.1" y="2.1" width="2.6" height="2.6" rx="0.5" />
+        <rect x="19.3" y="2.1" width="2.6" height="2.6" rx="0.5" />
+        <rect x="2.1" y="19.3" width="2.6" height="2.6" rx="0.5" />
+        <rect x="19.3" y="19.3" width="2.6" height="2.6" rx="0.5" />
+      </g>
+    </Svg>
+  )
+}
+
+/** Transparent selection: a marquee filled with a transparency checkerboard. */
+export function TransparentSelectionIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
+      <g fill="currentColor" stroke="none">
+        <rect x="8" y="8" width="4" height="4" opacity={0.55} />
+        <rect x="12" y="12" width="4" height="4" opacity={0.55} />
+        <rect x="12" y="8" width="4" height="4" opacity={0.2} />
+        <rect x="8" y="12" width="4" height="4" opacity={0.2} />
+      </g>
     </Svg>
   )
 }

@@ -12,6 +12,8 @@ import { ShapeGallery } from './ShapeGallery'
 import type { IconProps } from './icons'
 import {
   AirbrushIcon,
+  BlurIcon,
+  CalligraphyIcon,
   SprayCanIcon,
   PixelateIcon,
   BrushIcon,
@@ -22,6 +24,8 @@ import {
   FillIcon,
   FilledShapeIcon,
   FlipIcon,
+  FlipVerticalIcon,
+  InvertSelectionIcon,
   LayersIcon,
   MagnifierIcon,
   OutlineFilledIcon,
@@ -30,13 +34,24 @@ import {
   PencilIcon,
   PickerIcon,
   RectangleIcon,
+  Rotate180Icon,
   RotateIcon,
+  RotateLeftIcon,
+  RotateRightIcon,
+  RoundBrushIcon,
   ScaleIcon,
+  SelectAllIcon,
   SelectIcon,
+  SmudgeIcon,
+  SoftBrushIcon,
   StrokeSizeIcon,
   StrokeSizePreview,
   FreeformSelectIcon,
+  HighlighterIcon,
+  LiquifyIcon,
   TextIcon,
+  TransparentSelectionIcon,
+  TrashIcon,
 } from './icons'
 
 const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
@@ -53,10 +68,18 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
 }
 
 /** Tools group, in reading order: two rows of three. */
-/** Icons for the brushes that have one in the brushes menu. */
-const BRUSH_ICONS: Partial<Record<BrushId, ComponentType<IconProps>>> = {
+/** Icons for every brush in the brushes menu. */
+const BRUSH_ICONS: Record<BrushId, ComponentType<IconProps>> = {
+  round: RoundBrushIcon,
+  soft: SoftBrushIcon,
+  natural: BrushIcon,
+  calligraphy: CalligraphyIcon,
+  highlighter: HighlighterIcon,
   spray: SprayCanIcon,
   pixelate: PixelateIcon,
+  blur: BlurIcon,
+  smudge: SmudgeIcon,
+  liquify: LiquifyIcon,
 }
 
 const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'eraser', 'picker', 'zoom']
@@ -229,6 +252,7 @@ export function Ribbon({
             {(close) => (
               <>
                 <MenuItem
+                  icon={<SelectIcon size={16} />}
                   checked={tool === 'select' && selectionShape === 'rectangle'}
                   onClick={() => {
                     onSelectionShapeChange('rectangle')
@@ -239,6 +263,7 @@ export function Ribbon({
                   Rectangular selection
                 </MenuItem>
                 <MenuItem
+                  icon={<FreeformSelectIcon size={16} />}
                   checked={tool === 'select' && selectionShape === 'freeform'}
                   onClick={() => {
                     onSelectionShapeChange('freeform')
@@ -250,6 +275,7 @@ export function Ribbon({
                 </MenuItem>
                 <MenuDivider />
                 <MenuItem
+                  icon={<SelectAllIcon size={16} />}
                   shortcut="Ctrl+A"
                   onClick={() => {
                     onSelectAll()
@@ -259,6 +285,7 @@ export function Ribbon({
                   Select all
                 </MenuItem>
                 <MenuItem
+                  icon={<InvertSelectionIcon size={16} />}
                   onClick={() => {
                     onInvertSelection()
                     close()
@@ -267,6 +294,7 @@ export function Ribbon({
                   Invert selection
                 </MenuItem>
                 <MenuItem
+                  icon={<TransparentSelectionIcon size={16} />}
                   checked={transparentSelection}
                   onClick={() => {
                     onTransparentSelectionChange(!transparentSelection)
@@ -276,6 +304,7 @@ export function Ribbon({
                   Transparent selection
                 </MenuItem>
                 <MenuItem
+                  icon={<TrashIcon size={16} />}
                   shortcut="Del"
                   disabled={!hasSelection}
                   onClick={() => {
@@ -315,6 +344,7 @@ export function Ribbon({
             {(close) => (
               <>
                 <MenuItem
+                  icon={<RotateRightIcon size={16} />}
                   onClick={() => {
                     onRotate(90)
                     close()
@@ -323,6 +353,7 @@ export function Ribbon({
                   Rotate right 90°
                 </MenuItem>
                 <MenuItem
+                  icon={<RotateLeftIcon size={16} />}
                   onClick={() => {
                     onRotate(270)
                     close()
@@ -331,6 +362,7 @@ export function Ribbon({
                   Rotate left 90°
                 </MenuItem>
                 <MenuItem
+                  icon={<Rotate180Icon size={16} />}
                   onClick={() => {
                     onRotate(180)
                     close()
@@ -339,6 +371,7 @@ export function Ribbon({
                   Rotate 180°
                 </MenuItem>
                 <MenuItem
+                  icon={<RotateIcon size={16} />}
                   onClick={() => {
                     onCustomRotate()
                     close()
@@ -367,6 +400,7 @@ export function Ribbon({
             {(close) => (
               <>
                 <MenuItem
+                  icon={<FlipIcon size={16} />}
                   onClick={() => {
                     onFlip('horizontal')
                     close()
@@ -375,6 +409,7 @@ export function Ribbon({
                   Flip horizontal
                 </MenuItem>
                 <MenuItem
+                  icon={<FlipVerticalIcon size={16} />}
                   onClick={() => {
                     onFlip('vertical')
                     close()
@@ -415,7 +450,7 @@ export function Ribbon({
                   return (
                     <MenuItem
                       key={entry.id}
-                      icon={EntryIcon ? <EntryIcon size={16} /> : undefined}
+                      icon={<EntryIcon size={16} />}
                       checked={tool === 'brush' && brush === entry.id}
                       onClick={() => {
                         onBrushChange(entry.id)
