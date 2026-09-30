@@ -310,6 +310,8 @@ const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', '
 const HANDLE_HIT = 4
 /** Grab radius, in screen pixels, for the curve's endpoints and control handles. */
 const CURVE_DOT_HIT = 8
+/** A curve drag shorter than this many screen pixels counts as a click, not a new curve. */
+const CURVE_CLICK_SLOP = 5
 const DOUBLE_CLICK_MS = 300
 /** How far apart, in screen pixels, the two presses of a double-click may be. */
 const DOUBLE_CLICK_SLOP = 4
@@ -1953,7 +1955,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (curve.pointerId !== event.pointerId) return
         if (curve.phase === 'line') {
           const end = toPoint(event)
-          if (pointsEqual(end, curve.p0)) {
+          if (distance(end, curve.p0) * zoom < CURVE_CLICK_SLOP) {
             cancelCurve()
             return
           }
