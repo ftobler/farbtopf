@@ -209,6 +209,51 @@ export function drawPolyline(
   strokeSegments(bitmap, points, size, color, shape)
 }
 
+function cubicBezierAt(t: number, control: readonly [Point, Point, Point, Point]): Point {
+  const [p0, c1, c2, p3] = control
+  const u = 1 - t
+  const a = u * u * u
+  const b = 3 * u * u * t
+  const c = 3 * u * t * t
+  const d = t * t * t
+  return {
+    x: a * p0.x + b * c1.x + c * c2.x + d * p3.x,
+    y: a * p0.y + b * c1.y + c * c2.y + d * p3.y,
+  }
+}
+
+/** Total length of the control polygon p0→c1→c2→p3. */
+function controlLength(control: readonly [Point, Point, Point, Point]): number {
+  let total = 0
+  for (let i = 0; i < control.length - 1; i += 1) {
+    total += Math.hypot(control[i + 1].x - control[i].x, control[i + 1].y - control[i].y)
+  }
+  return total
+}
+
+/**
+ * Flattens a cubic bezier into `steps + 1` points sampled from t = 0 to t = 1 inclusive.
+ * Without an explicit step count one is derived from the control-polygon length, clamped
+ * to 8..256 so short curves stay cheap and long ones stay smooth.
+ */
+export function bezierPoints(control: readonly [Point, Point, Point, Point], steps?: number): Point[] {
+  const defaultSteps = Math.min(256, Math.max(8, Math.round(controlLength(control))))
+  const count = Math.max(1, Math.floor(steps ?? defaultSteps))
+  const points: Point[] = []
+  for (let i = 0; i <= count; i += 1) points.push(cubicBezierAt(i / count, control))
+  return points
+}
+
+/** Strokes the cubic bezier through the four control points with round caps and joins. */
+export function drawBezier(
+  bitmap: Bitmap,
+  control: readonly [Point, Point, Point, Point],
+  width: number,
+  color: Rgba,
+): void {
+  drawPolyline(bitmap, bezierPoints(control), width, color, 'round')
+}
+
 function fillSpan(bitmap: Bitmap, y: number, x0: number, x1: number, color: Rgba, thickness = 1): void {
   const left = Math.min(x0, x1)
   const right = Math.max(x0, x1)

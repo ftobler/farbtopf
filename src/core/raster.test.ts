@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { Bitmap } from './bitmap'
 import { BLACK, WHITE, rgba } from './color'
+import type { Point } from './geometry'
 import {
+  bezierPoints,
   blit,
   crop,
+  drawBezier,
   drawEllipse,
   drawLine,
   drawPolyline,
@@ -156,6 +159,97 @@ describe('drawPolyline', () => {
     )
     expect(bitmap.get(2, 0)).toEqual(BLACK)
     expect(bitmap.get(2, 2)).toEqual(BLACK)
+  })
+})
+
+describe('bezierPoints', () => {
+  const control: [Point, Point, Point, Point] = [
+    { x: 0, y: 0 },
+    { x: 10, y: 20 },
+    { x: 30, y: 20 },
+    { x: 40, y: 0 },
+  ]
+
+  it('includes the exact endpoints', () => {
+    const points = bezierPoints(control)
+    expect(points[0]).toEqual(control[0])
+    expect(points[points.length - 1]).toEqual(control[3])
+  })
+
+  it('samples t monotonically along a horizontal curve', () => {
+    const flat: [Point, Point, Point, Point] = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+      { x: 30, y: 0 },
+    ]
+    const points = bezierPoints(flat, 12)
+    for (let i = 1; i < points.length; i += 1) {
+      expect(points[i].x).toBeGreaterThan(points[i - 1].x)
+    }
+  })
+
+  it('keeps collinear control points collinear', () => {
+    const line: [Point, Point, Point, Point] = [
+      { x: 0, y: 0 },
+      { x: 5, y: 5 },
+      { x: 10, y: 10 },
+      { x: 15, y: 15 },
+    ]
+    for (const p of bezierPoints(line, 8)) expect(p.x).toBeCloseTo(p.y)
+  })
+
+  it('uses more steps for longer curves', () => {
+    const short: [Point, Point, Point, Point] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ]
+    const long: [Point, Point, Point, Point] = [
+      { x: 0, y: 0 },
+      { x: 50, y: 40 },
+      { x: 100, y: -40 },
+      { x: 150, y: 0 },
+    ]
+    expect(bezierPoints(long).length).toBeGreaterThan(bezierPoints(short).length)
+  })
+})
+
+describe('drawBezier', () => {
+  const control: [Point, Point, Point, Point] = [
+    { x: 5, y: 5 },
+    { x: 30, y: 5 },
+    { x: 5, y: 35 },
+    { x: 35, y: 35 },
+  ]
+
+  it('paints on the curve', () => {
+    const bitmap = new Bitmap(40, 40)
+    drawBezier(bitmap, control, 1, BLACK)
+    expect(bitmap.get(18, 20)).toEqual(BLACK)
+  })
+
+  it('leaves a far-off pixel empty', () => {
+    const bitmap = new Bitmap(40, 40)
+    drawBezier(bitmap, control, 1, BLACK)
+    expect(bitmap.get(5, 35).a).toBe(0)
+  })
+
+  it('bending a control point leaves the straight-line midpoint empty', () => {
+    const straight: [Point, Point, Point, Point] = [
+      { x: 5, y: 5 },
+      { x: 15, y: 15 },
+      { x: 25, y: 25 },
+      { x: 35, y: 35 },
+    ]
+    const straightBitmap = new Bitmap(40, 40)
+    drawBezier(straightBitmap, straight, 1, BLACK)
+    expect(straightBitmap.get(20, 20)).toEqual(BLACK)
+
+    const bentBitmap = new Bitmap(40, 40)
+    drawBezier(bentBitmap, control, 1, BLACK)
+    expect(bentBitmap.get(20, 20).a).toBe(0)
   })
 })
 

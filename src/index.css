@@ -1076,6 +1076,32 @@ textarea {
   stroke-dasharray: 4 3;
 }
 
+.curve-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.curve-overlay .curve-guide {
+  stroke: color-mix(in srgb, var(--accent) 70%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.curve-overlay .curve-endpoint {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+
+.curve-overlay .curve-handle {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
 @keyframes selection-ants {
   to {
     border-color: rgba(255, 255, 255, 0.85);
@@ -1216,6 +1242,21 @@ textarea {
 
 .text-toolbar .text-size-input {
   height: 30px;
+}
+
+.curve-toolbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  z-index: 30;
 }
 
 .color-palette {

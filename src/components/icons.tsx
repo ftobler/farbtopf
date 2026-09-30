@@ -477,6 +477,14 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
+export function CrossIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
+    </Svg>
+  )
+}
+
 export function FreeformSelectIcon(props: IconProps) {
   return (
     <Svg {...props}>

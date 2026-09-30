@@ -653,7 +653,7 @@ describe('PaintCanvas', () => {
     })
   })
 
-  describe('freehand and polyline shapes', () => {
+  describe('freeform shape (click to place)', () => {
     const black = [0, 0, 0, 255]
     const white = [255, 255, 255, 255]
 
@@ -689,43 +689,19 @@ describe('PaintCanvas', () => {
       up(canvas, 1, 12, 2)
     }
 
-    it('draws a freeform shape through every dragged point as one undo step', () => {
+    it('adds freeform vertices on click and finishes with Enter as one undo step', () => {
       const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       vi.mocked(renderShape).mockClear()
-      down(canvas, 1, 2, 2)
-      move(canvas, 1, 12, 2)
-      move(canvas, 1, 12, 12)
-      up(canvas, 1, 12, 12)
-      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
-        'freeform',
-        [{ x: 2, y: 2 }, { x: 12, y: 2 }, { x: 12, y: 12 }],
-      ])
-      expect(pixel(7, 2)).toEqual(black)
-      expect(pixel(12, 7)).toEqual(black)
-      expect(pixel(7, 7)).toEqual(black)
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-      act(() => ref.current?.undo())
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
-      expect(pixel(7, 2)).toEqual(white)
-    })
-
-    it('leaves no history for a freeform click without a drag', () => {
-      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
-      onHistoryChange.mockClear()
-      click(canvas, 1, 5, 5)
-      expect(onHistoryChange).not.toHaveBeenCalled()
-    })
-
-    it('adds polyline vertices on click and finishes with Enter as one undo step', () => {
-      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
-      const pixel = spyPixels(canvas, 20)
-      onHistoryChange.mockClear()
       dragFirstSegment(canvas)
       click(canvas, 2, 12, 12)
       expect(onHistoryChange).not.toHaveBeenCalled()
       fireEvent.keyDown(window, { key: 'Enter' })
+      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
+        'freeform',
+        [{ x: 2, y: 2 }, { x: 12, y: 2 }, { x: 12, y: 12 }],
+      ])
       expect(pixel(7, 2)).toEqual(black)
       expect(pixel(12, 7)).toEqual(black)
       expect(pixel(7, 7)).toEqual(white)
@@ -737,8 +713,8 @@ describe('PaintCanvas', () => {
       expect(pixel(12, 7)).toEqual(white)
     })
 
-    it('finishes a polyline on double-click', () => {
-      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('finishes a freeform shape on double-click', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragFirstSegment(canvas)
@@ -751,8 +727,8 @@ describe('PaintCanvas', () => {
       expect(onHistoryChange).toHaveBeenCalledTimes(1)
     })
 
-    it('finishes a polyline on Escape, keeping what was drawn', () => {
-      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('finishes a freeform shape on Escape, keeping what was drawn', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragFirstSegment(canvas)
@@ -762,7 +738,7 @@ describe('PaintCanvas', () => {
     })
 
     it('previews the next segment while hovering but leaves it out when finished', () => {
-      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       dragFirstSegment(canvas)
       move(canvas, 1, 12, 12, 0)
@@ -773,7 +749,7 @@ describe('PaintCanvas', () => {
     })
 
     it('ignores Enter typed into another text field', () => {
-      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       onHistoryChange.mockClear()
       dragFirstSegment(canvas)
       const input = document.createElement('textarea')
@@ -783,8 +759,8 @@ describe('PaintCanvas', () => {
       input.remove()
     })
 
-    it('commits an unfinished polyline when the tool changes', () => {
-      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('commits an unfinished freeform shape when the tool changes', () => {
+      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragFirstSegment(canvas)
@@ -796,8 +772,8 @@ describe('PaintCanvas', () => {
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     })
 
-    it('commits an unfinished polyline with its own kind when the shape kind changes', () => {
-      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('commits an unfinished freeform shape with its own kind when the shape kind changes', () => {
+      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragFirstSegment(canvas)
@@ -808,8 +784,8 @@ describe('PaintCanvas', () => {
       expect(onHistoryChange).toHaveBeenCalledTimes(1)
     })
 
-    it('commits an unfinished polyline before undoing', () => {
-      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('commits an unfinished freeform shape before undoing', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       dragFirstSegment(canvas)
       act(() => ref.current?.undo())
@@ -819,11 +795,128 @@ describe('PaintCanvas', () => {
       expect(pixel(7, 2)).toEqual(black)
     })
 
-    it('drops a polyline that never got a second vertex', () => {
-      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('drops a freeform shape that never got a second vertex', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       onHistoryChange.mockClear()
       click(canvas, 1, 5, 5)
       fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('curve shape (drag then bend)', () => {
+    const black = [0, 0, 0, 255]
+    const white = [255, 255, 255, 255]
+
+    function spyPixels(canvas: HTMLCanvasElement, width: number) {
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      return (x: number, y: number) => {
+        const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+        return Array.from(image.data.slice((y * width + x) * 4, (y * width + x) * 4 + 4))
+      }
+    }
+
+    function down(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId, clientX: x, clientY: y })
+    }
+
+    function move(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number, buttons = 1) {
+      fireEvent.pointerMove(canvas, { buttons, pointerId, clientX: x, clientY: y })
+    }
+
+    function up(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      fireEvent.pointerUp(canvas, { button: 0, pointerId, clientX: x, clientY: y })
+    }
+
+    function click(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      down(canvas, pointerId, x, y)
+      up(canvas, pointerId, x, y)
+    }
+
+    function dragLine(canvas: HTMLCanvasElement) {
+      down(canvas, 1, 2, 2)
+      move(canvas, 1, 12, 2)
+      up(canvas, 1, 12, 2)
+    }
+
+    it('commits a dragged curve on Enter as one undo step and undo removes it', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 2)).toEqual(black)
+      act(() => ref.current?.undo())
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+      expect(pixel(7, 2)).toEqual(white)
+    })
+
+    it('commits a curve from the tick button', () => {
+      const { canvas, container, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      fireEvent.click(within(container).getByLabelText('Finish curve'))
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 2)).toEqual(black)
+    })
+
+    it('cancels a curve from the cross button without history and restores the pixel', () => {
+      const { canvas, container, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      expect(pixel(7, 2)).toEqual(black)
+      fireEvent.click(within(container).getByLabelText('Cancel curve'))
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      expect(pixel(7, 2)).toEqual(white)
+    })
+
+    it('cancels a pending curve on Escape without history', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      expect(pixel(7, 2)).toEqual(white)
+    })
+
+    it('bends the curve by dragging its c1 handle', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      dragLine(canvas)
+      // c1 starts a third along the straight chord from (2,2) to (12,2).
+      down(canvas, 2, 5, 2)
+      move(canvas, 2, 5, 12)
+      up(canvas, 2, 5, 12)
+      expect(pixel(7, 2)).toEqual(white)
+      expect(pixel(7, 6)).toEqual(black)
+      onHistoryChange.mockClear()
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 6)).toEqual(black)
+      act(() => ref.current?.undo())
+      expect(pixel(7, 6)).toEqual(white)
+    })
+
+    it('cancels a pending curve when the tool changes without recording history', () => {
+      const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      setProps({ tool: 'brush' })
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      expect(pixel(7, 2)).toEqual(white)
+    })
+
+    it('records no history for a click without a drag', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      onHistoryChange.mockClear()
+      click(canvas, 1, 5, 5)
       expect(onHistoryChange).not.toHaveBeenCalled()
     })
   })

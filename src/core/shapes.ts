@@ -2,7 +2,7 @@ import type { Bitmap } from './bitmap'
 import type { Rgba } from './color'
 import type { Point, Rect } from './geometry'
 import { normalizeRect } from './geometry'
-import { drawEllipse, drawLine, drawPolyline, drawRect, fillPolygon } from './raster'
+import { bezierPoints, drawBezier, drawEllipse, drawLine, drawPolyline, drawRect, fillPolygon } from './raster'
 
 export type ShapeKind =
   | 'line'
@@ -31,25 +31,25 @@ export type ShapeKind =
  * How a shape is drawn with the pointer:
  * - 'drag': press, drag a bounding box, release.
  * - 'polyline': click to add vertices; double-click or Enter finishes (open path).
- * - 'freehand': press and drag a free outline; releasing closes it.
+ * - 'curve': click four control points for a cubic bezier (open path).
  */
-export type ShapeInteraction = 'drag' | 'polyline' | 'freehand'
+export type ShapeInteraction = 'drag' | 'polyline' | 'curve'
 
 export interface ShapeDef {
   id: ShapeKind
   label: string
   interaction: ShapeInteraction
-  /** Open paths (line, polyline) have no interior to fill. */
+  /** Open paths (line, polyline, freeform) have no interior to fill. */
   closed: boolean
 }
 
 export const SHAPES: readonly ShapeDef[] = [
   { id: 'line', label: 'Line', interaction: 'drag', closed: false },
-  { id: 'polyline', label: 'Polyline', interaction: 'polyline', closed: false },
+  { id: 'polyline', label: 'Polyline', interaction: 'curve', closed: false },
   { id: 'ellipse', label: 'Ellipse', interaction: 'drag', closed: true },
   { id: 'rectangle', label: 'Rectangle', interaction: 'drag', closed: true },
   { id: 'rounded-rectangle', label: 'Rounded rectangle', interaction: 'drag', closed: true },
-  { id: 'freeform', label: 'Freeform shape', interaction: 'freehand', closed: true },
+  { id: 'freeform', label: 'Freeform shape', interaction: 'polyline', closed: false },
   { id: 'triangle', label: 'Triangle', interaction: 'drag', closed: true },
   { id: 'right-triangle', label: 'Right triangle', interaction: 'drag', closed: true },
   { id: 'diamond', label: 'Diamond', interaction: 'drag', closed: true },
@@ -301,8 +301,31 @@ function strokeClosed(bitmap: Bitmap, points: readonly Point[], style: ShapeStyl
 }
 
 /**
+ * The four cubic bezier control points for a 'polyline' shape, tolerating short
+ * input: fewer than two points has no curve, two gives the straight chord, and
+ * three treats the middle point as a quadratic control converted to cubic.
+ */
+function bezierControl(points: readonly Point[]): [Point, Point, Point, Point] | null {
+  if (points.length < 2) return null
+  const p0 = points[0]
+  const p3 = points[points.length - 1]
+  if (points.length === 2) return [p0, p0, p3, p3]
+  if (points.length === 3) {
+    const c = points[1]
+    return [
+      p0,
+      { x: p0.x + (2 / 3) * (c.x - p0.x), y: p0.y + (2 / 3) * (c.y - p0.y) },
+      { x: p3.x + (2 / 3) * (c.x - p3.x), y: p3.y + (2 / 3) * (c.y - p3.y) },
+      p3,
+    ]
+  }
+  return [points[0], points[1], points[2], points[3]]
+}
+
+/**
  * Draws a shape onto `bitmap`. For 'drag' shapes `points` is [start, end] of the
- * dragged box; for 'polyline' and 'freehand' shapes it is the list of vertices.
+ * dragged box; for 'freeform' it is the list of vertices of an open path; for
+ * 'polyline' it is the four cubic bezier control points [p0, c1, c2, p3].
  */
 export function renderShape(bitmap: Bitmap, kind: ShapeKind, points: readonly Point[], style: ShapeStyle): void {
   if (points.length === 0) return
@@ -312,13 +335,14 @@ export function renderShape(bitmap: Bitmap, kind: ShapeKind, points: readonly Po
     if (style.stroke) drawLine(bitmap, start, end, style.width, style.stroke, 'round')
     return
   }
-  if (kind === 'polyline') {
+  if (kind === 'freeform') {
     if (style.stroke) drawPolyline(bitmap, [...points], style.width, style.stroke, 'round')
     return
   }
-  if (kind === 'freeform') {
-    if (style.fill) fillPolygon(bitmap, points.map((p) => ({ x: p.x + 0.5, y: p.y + 0.5 })), style.fill)
-    strokeClosed(bitmap, points, style)
+  if (kind === 'polyline') {
+    if (!style.stroke) return
+    const control = bezierControl(points)
+    if (control) drawBezier(bitmap, control, style.width, style.stroke)
     return
   }
   const rect = normalizeRect(start, end)
@@ -339,18 +363,6 @@ export function renderShape(bitmap: Bitmap, kind: ShapeKind, points: readonly Po
   if (style.stroke) strokeClosed(bitmap, polygon(outline), style)
 }
 
-const FREEFORM_ICON: readonly Point[] = [
-  { x: 0.15, y: 0.3 },
-  { x: 0.45, y: 0.05 },
-  { x: 0.7, y: 0.25 },
-  { x: 0.95, y: 0.15 },
-  { x: 0.85, y: 0.6 },
-  { x: 1, y: 0.9 },
-  { x: 0.5, y: 0.95 },
-  { x: 0.3, y: 0.7 },
-  { x: 0, y: 0.8 },
-]
-
 const POLYLINE_ICON: readonly Point[] = [
   { x: 0, y: 1 },
   { x: 0.3, y: 0.2 },
@@ -358,6 +370,16 @@ const POLYLINE_ICON: readonly Point[] = [
   { x: 0.8, y: 0 },
   { x: 1, y: 0.55 },
 ]
+
+/** Cubic control points for a smooth S-curve, sampled into polyline icon points. */
+const CURVE_CONTROL: readonly [Point, Point, Point, Point] = [
+  { x: 0, y: 1 },
+  { x: 0, y: 0 },
+  { x: 1, y: 1 },
+  { x: 1, y: 0 },
+]
+
+const CURVE_ICON: readonly Point[] = bezierPoints(CURVE_CONTROL, 16)
 
 function formatNumber(n: number): string {
   return String(Math.round(n * 100) / 100)
@@ -374,7 +396,7 @@ export function shapeIconPath(kind: ShapeKind, size = 24): string {
   const box: Rect = { x: m, y: m, width: size - 2 * m, height: size - 2 * m }
   const map = boxTransform(box)
   if (kind === 'line') return pathData([map(0, 1), map(1, 0)], false)
-  if (kind === 'polyline') return pathData(POLYLINE_ICON.map((p) => map(p.x, p.y)), false)
-  if (kind === 'freeform') return pathData(FREEFORM_ICON.map((p) => map(p.x, p.y)), true)
+  if (kind === 'polyline') return pathData(CURVE_ICON.map((p) => map(p.x, p.y)), false)
+  if (kind === 'freeform') return pathData(POLYLINE_ICON.map((p) => map(p.x, p.y)), false)
   return pathData(shapePolygon(kind, box), true)
 }

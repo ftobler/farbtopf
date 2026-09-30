@@ -67,6 +67,7 @@ import { bitmapFromDataUrl } from '../render/image'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
+import { CheckIcon, CrossIcon } from './icons'
 
 export interface PaintCanvasHandle {
   newDocument: (width: number, height: number) => void
@@ -214,6 +215,35 @@ interface PolylineState {
   lastDown: { time: number; point: Point }
 }
 
+/**
+ * A cubic bezier being placed and bent. A drag sets the straight chord p0→p3 and
+ * its two control handles at the thirds; dragging a handle then bends the curve.
+ * The document stays untouched until the curve is committed.
+ */
+interface CurveState {
+  kind: ShapeKind
+  slot: 'primary' | 'secondary'
+  base: Bitmap
+  p0: Point
+  p3: Point
+  c1: Point
+  c2: Point
+  phase: 'line' | 'bend'
+  /** The pointer that started the line or is dragging a handle, if any. */
+  pointerId: number | null
+  /** The control handle being dragged in the bend phase. */
+  active: 'c1' | 'c2' | null
+}
+
+/** The part of a pending curve the overlay and dialog redraw from. */
+interface CurveMirror {
+  phase: 'line' | 'bend'
+  p0: Point
+  p3: Point
+  c1: Point
+  c2: Point
+}
+
 interface TextEditorState {
   x: number
   y: number
@@ -282,6 +312,10 @@ const HANDLE_HIT = 4
 const DOUBLE_CLICK_MS = 300
 /** How far apart, in screen pixels, the two presses of a double-click may be. */
 const DOUBLE_CLICK_SLOP = 4
+/** The curve's floating tick/cross dialog. */
+const CURVE_TOOLBAR_WIDTH = 72
+const CURVE_TOOLBAR_HEIGHT = 40
+const CURVE_TOOLBAR_GAP = 10
 
 const MIN_TEXT_SIZE = 24
 const DEFAULT_TEXT_WIDTH = 200
@@ -293,9 +327,9 @@ const TEXT_TOOLBAR_GAP = 8
 /** Roughly the height of the font menu; used to decide if it fits below. */
 const TEXT_MENU_HEIGHT = 240
 
-/** The points handed to `renderShape`: the dragged box, or the whole freehand trail. */
+/** The points handed to `renderShape` for a dragged shape: the start and current end. */
 function shapePoints(stroke: StrokeState, end: Point): Point[] {
-  return shapeById(stroke.kind).interaction === 'freehand' ? stroke.points : [stroke.start, end]
+  return [stroke.start, end]
 }
 
 /** The pixels a freehand segment of `width` can touch, with room for every brush's reach. */
@@ -594,9 +628,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const canvasResizeRef = useRef<CanvasResizeDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
   const polylineRef = useRef<PolylineState | null>(null)
+  const curveRef = useRef<CurveState | null>(null)
   // The handle is built before the pointer helpers it needs, so it calls through this.
   const clickOutsideRef = useRef<(clientX: number, clientY: number) => void>(() => {})
   const [polylineActive, setPolylineActive] = useState(false)
+  const [curve, setCurve] = useState<CurveMirror | null>(null)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [editor, setEditor] = useState<TextEditorState | null>(null)
   const [selection, setSelection] = useState<Rect | null>(null)
@@ -923,13 +959,63 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const before = strength < 1 ? target.clone() : null
       drawShape(target, kind, points, {
         width: strokeWidthFor('shape', brushSize),
-        stroke: shapeFill === 'filled' ? null : color,
+        // Open paths have no interior, so they are always stroked however the fill is set.
+        stroke: shapeById(kind).closed && shapeFill === 'filled' ? null : color,
         fill: shapeFill === 'filled' ? color : shapeFill === 'outline-filled' ? fillColor : null,
       })
       if (before) blendToward(target, before, target, strength)
     },
     [brushSize, colorFor, primary, secondary, shapeFill, strength],
   )
+
+  const cancelCurveRef = useRef<() => void>(() => {})
+
+  /** Draws the pending curve onto a copy of the base; the live bitmap is left untouched. */
+  const previewCurve = useCallback(() => {
+    const curve = curveRef.current
+    if (!curve) return
+    const preview = curve.base.clone()
+    renderShape(preview, curve.kind, [curve.p0, curve.c1, curve.c2, curve.p3], curve.slot)
+    paint(preview)
+    setCurve({ phase: curve.phase, p0: curve.p0, p3: curve.p3, c1: curve.c1, c2: curve.c2 })
+  }, [paint, renderShape])
+
+  /** Draws the bent curve onto the active layer as one undo step. */
+  const commitCurve = useCallback(() => {
+    const curve = curveRef.current
+    if (!curve) return
+    curveRef.current = null
+    setCurve(null)
+    if (pointsEqual(curve.p0, curve.p3)) {
+      bitmapRef.current = curve.base
+      paint(curve.base)
+      return
+    }
+    recordHistory(curve.base)
+    const final = curve.base.clone()
+    renderShape(final, curve.kind, [curve.p0, curve.c1, curve.c2, curve.p3], curve.slot)
+    bitmapRef.current = final
+    paint(final)
+    syncHistory()
+  }, [paint, recordHistory, renderShape, syncHistory])
+
+  /** Drops the pending curve, restoring the untouched base and recording no history. */
+  const cancelCurve = useCallback(() => {
+    const curve = curveRef.current
+    if (!curve) return
+    curveRef.current = null
+    setCurve(null)
+    bitmapRef.current = curve.base
+    paint(curve.base)
+  }, [paint])
+
+  const commitCurveRef = useRef(commitCurve)
+  useEffect(() => {
+    commitCurveRef.current = commitCurve
+  }, [commitCurve])
+  useEffect(() => {
+    cancelCurveRef.current = cancelCurve
+  }, [cancelCurve])
 
   const previewPolyline = useCallback(() => {
     const polyline = polylineRef.current
@@ -942,6 +1028,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
   const finishPolyline = useCallback(() => {
+    // A pending curve is dropped whenever a polyline is settled, so any edit action
+    // that flushes one also clears the other.
+    cancelCurveRef.current()
     const polyline = polylineRef.current
     if (!polyline) return
     polylineRef.current = null
@@ -965,6 +1054,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   useEffect(() => {
     finishPolylineRef.current()
+    cancelCurveRef.current()
   }, [tool, shapeKind])
 
   useEffect(() => {
@@ -981,10 +1071,31 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [polylineActive])
 
+  useEffect(() => {
+    if (!curve) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== 'Escape') return
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return
+      event.preventDefault()
+      if (event.key === 'Escape') {
+        // Escape cancels the curve and must not reach the app's select-tool shortcut.
+        event.stopImmediatePropagation()
+        cancelCurveRef.current()
+      } else {
+        commitCurveRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [curve])
+
   const resetDocument = useCallback(
     (bitmap: Bitmap) => {
       polylineRef.current = null
       setPolylineActive(false)
+      curveRef.current = null
+      setCurve(null)
       historyRef.current = new History<DocSnapshot>(HISTORY_LIMIT)
       editorRef.current = null
       floatingRef.current = null
@@ -1557,6 +1668,38 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         previewPolyline()
         return
       }
+      if (isShapeTool(tool) && shapeById(shapeKind).interaction === 'curve') {
+        const curve = curveRef.current
+        if (curve) {
+          // A pending curve is only retargeted by grabbing one of its handles.
+          const tolerance = HANDLE_HIT / zoom
+          const active: 'c1' | 'c2' | null =
+            curve.phase === 'bend' && distance(point, curve.c1) <= tolerance
+              ? 'c1'
+              : curve.phase === 'bend' && distance(point, curve.c2) <= tolerance
+                ? 'c2'
+                : null
+          if (active) {
+            curve.pointerId = event.pointerId
+            curve.active = active
+          }
+          return
+        }
+        curveRef.current = {
+          kind: shapeKind,
+          slot,
+          base: doc().clone(),
+          p0: point,
+          p3: point,
+          c1: point,
+          c2: point,
+          phase: 'line',
+          pointerId: event.pointerId,
+          active: null,
+        }
+        setCurve({ phase: 'line', p0: point, p3: point, c1: point, c2: point })
+        return
+      }
       const base = doc().clone()
       const stroke: StrokeState = {
         pointerId: event.pointerId,
@@ -1687,6 +1830,25 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         previewPolyline()
         return
       }
+      const curve = curveRef.current
+      if (curve) {
+        if (curve.pointerId === null || curve.pointerId !== event.pointerId) return
+        if (curve.phase === 'line') {
+          curve.p3 = point
+          const thirdX = (point.x - curve.p0.x) / 3
+          const thirdY = (point.y - curve.p0.y) / 3
+          curve.c1 = { x: curve.p0.x + thirdX, y: curve.p0.y + thirdY }
+          curve.c2 = { x: curve.p0.x + 2 * thirdX, y: curve.p0.y + 2 * thirdY }
+        } else if (curve.active === 'c1') {
+          curve.c1 = point
+        } else if (curve.active === 'c2') {
+          curve.c2 = point
+        } else {
+          return
+        }
+        previewCurve()
+        return
+      }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       if (isShapeTool(stroke.tool)) {
@@ -1722,7 +1884,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewPolyline, primary, random, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toEdgePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewCurve, previewPolyline, primary, random, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toEdgePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -1764,6 +1926,27 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         previewPolyline()
         return
       }
+      const curve = curveRef.current
+      if (curve) {
+        if (curve.pointerId !== event.pointerId) return
+        if (curve.phase === 'line') {
+          const end = toPoint(event)
+          if (pointsEqual(end, curve.p0)) {
+            cancelCurve()
+            return
+          }
+          curve.p3 = end
+          const thirdX = (end.x - curve.p0.x) / 3
+          const thirdY = (end.y - curve.p0.y) / 3
+          curve.c1 = { x: curve.p0.x + thirdX, y: curve.p0.y + thirdY }
+          curve.c2 = { x: curve.p0.x + 2 * thirdX, y: curve.p0.y + 2 * thirdY }
+          curve.phase = 'bend'
+        }
+        curve.active = null
+        curve.pointerId = null
+        previewCurve()
+        return
+      }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       stopSpraying()
@@ -1781,7 +1964,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       strokeRef.current = null
     },
-    [paint, previewPolyline, publishLayers, renderShape, size.height, size.width, stopSpraying, syncHistory, text.fontSize, toPoint, updateSelection, zoom],
+    [cancelCurve, paint, previewCurve, previewPolyline, publishLayers, renderShape, size.height, size.width, stopSpraying, syncHistory, text.fontSize, toPoint, updateSelection, zoom],
   )
 
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
@@ -2040,6 +2223,25 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         })()
       : 'down'
 
+  // The curve's tick/cross dialog floats above the midpoint of the bezier.
+  const curveToolbarPosition = curve && curve.phase === 'bend'
+    ? (() => {
+        const mid = {
+          x: (curve.p0.x + 3 * curve.c1.x + 3 * curve.c2.x + curve.p3.x) / 8,
+          y: (curve.p0.y + 3 * curve.c1.y + 3 * curve.c2.y + curve.p3.y) / 8,
+        }
+        const frameWidth = size.width * zoom
+        const frameHeight = size.height * zoom
+        const left = clamp(mid.x * zoom - CURVE_TOOLBAR_WIDTH / 2, 0, Math.max(0, frameWidth - CURVE_TOOLBAR_WIDTH))
+        const above = mid.y * zoom - CURVE_TOOLBAR_HEIGHT - CURVE_TOOLBAR_GAP
+        const top =
+          above >= 0
+            ? above
+            : Math.min(Math.max(0, frameHeight - CURVE_TOOLBAR_HEIGHT), mid.y * zoom + CURVE_TOOLBAR_GAP)
+        return { left, top }
+      })()
+    : null
+
   const cursor =
     tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
 
@@ -2126,6 +2328,48 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             points={lasso.map((point) => `${(point.x + 0.5) * zoom},${(point.y + 0.5) * zoom}`).join(' ')}
           />
         </svg>
+      ) : null}
+      {curve && curve.phase === 'bend' ? (
+        <svg
+          className="curve-overlay"
+          aria-hidden="true"
+          width={size.width * zoom}
+          height={size.height * zoom}
+        >
+          <line
+            className="curve-guide"
+            x1={(curve.p0.x + 0.5) * zoom}
+            y1={(curve.p0.y + 0.5) * zoom}
+            x2={(curve.c1.x + 0.5) * zoom}
+            y2={(curve.c1.y + 0.5) * zoom}
+          />
+          <line
+            className="curve-guide"
+            x1={(curve.p3.x + 0.5) * zoom}
+            y1={(curve.p3.y + 0.5) * zoom}
+            x2={(curve.c2.x + 0.5) * zoom}
+            y2={(curve.c2.y + 0.5) * zoom}
+          />
+          <circle className="curve-endpoint" cx={(curve.p0.x + 0.5) * zoom} cy={(curve.p0.y + 0.5) * zoom} r={3} />
+          <circle className="curve-endpoint" cx={(curve.p3.x + 0.5) * zoom} cy={(curve.p3.y + 0.5) * zoom} r={3} />
+          <circle className="curve-handle" cx={(curve.c1.x + 0.5) * zoom} cy={(curve.c1.y + 0.5) * zoom} r={4.5} />
+          <circle className="curve-handle" cx={(curve.c2.x + 0.5) * zoom} cy={(curve.c2.y + 0.5) * zoom} r={4.5} />
+        </svg>
+      ) : null}
+      {curve && curve.phase === 'bend' && curveToolbarPosition ? (
+        <div
+          className="curve-toolbar"
+          role="toolbar"
+          aria-label="Curve options"
+          style={{ left: curveToolbarPosition.left, top: curveToolbarPosition.top }}
+        >
+          <button type="button" className="icon-button" aria-label="Finish curve" onClick={commitCurve}>
+            <CheckIcon size={16} />
+          </button>
+          <button type="button" className="icon-button" aria-label="Cancel curve" onClick={cancelCurve}>
+            <CrossIcon size={16} />
+          </button>
+        </div>
       ) : null}
       {editor && textToolbarPosition ? (
         <div

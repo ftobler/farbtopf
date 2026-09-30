@@ -71,7 +71,7 @@ describe('SHAPES', () => {
     expect(SHAPES).toHaveLength(21)
     expect(new Set(SHAPES.map((shape) => shape.id)).size).toBe(21)
     for (const shape of SHAPES) {
-      expect(['drag', 'polyline', 'freehand']).toContain(shape.interaction)
+      expect(['drag', 'polyline', 'curve']).toContain(shape.interaction)
       expect(shapeById(shape.id)).toBe(shape)
     }
   })
@@ -224,6 +224,7 @@ describe('renderShape closed drag shapes', () => {
 
 describe('renderShape line, polyline and freeform', () => {
   const path: Point[] = [{ x: 5, y: 5 }, { x: 30, y: 5 }, { x: 30, y: 30 }]
+  const curve: Point[] = [{ x: 5, y: 5 }, { x: 30, y: 5 }, { x: 5, y: 35 }, { x: 35, y: 35 }]
 
   it('draws a line between start and end', () => {
     const bitmap = draw('line', BOTH, [{ x: 5, y: 5 }, { x: 30, y: 30 }])
@@ -231,30 +232,34 @@ describe('renderShape line, polyline and freeform', () => {
     expect(painted(bitmap, 25, 10)).toBe(false)
   })
 
-  it('polyline draws an open path and never fills', () => {
-    const bitmap = draw('polyline', BOTH, path)
+  it('freeform draws an open click path and never fills', () => {
+    const bitmap = draw('freeform', BOTH, path)
     expect(is(bitmap, 17, 5, BLACK)).toBe(true)
     expect(is(bitmap, 30, 17, BLACK)).toBe(true)
     expect(painted(bitmap, 17, 17)).toBe(false)
     expect(painted(bitmap, 25, 10)).toBe(false)
   })
 
-  it('freeform closes the path and fills the interior', () => {
-    const bitmap = draw('freeform', BOTH, path)
-    expect(is(bitmap, 17, 17, BLACK)).toBe(true)
-    expect(is(bitmap, 25, 10, RED)).toBe(true)
-    expect(painted(bitmap, 10, 25)).toBe(false)
+  it('polyline strokes a cubic bezier through its four control points', () => {
+    const bitmap = draw('polyline', BOTH, curve)
+    expect(painted(bitmap, 18, 20)).toBe(true)
+    expect(painted(bitmap, 5, 35)).toBe(false)
   })
 
-  it('freeform outline only leaves the interior empty', () => {
-    const bitmap = draw('freeform', OUTLINE_ONLY, path)
-    expect(is(bitmap, 17, 17, BLACK)).toBe(true)
-    expect(painted(bitmap, 25, 10)).toBe(false)
+  it('bending a polyline control point changes the curve', () => {
+    const straight = draw('polyline', BOTH, [
+      { x: 5, y: 5 },
+      { x: 15, y: 15 },
+      { x: 25, y: 25 },
+      { x: 35, y: 35 },
+    ])
+    const bent = draw('polyline', BOTH, curve)
+    expect(bent.data).not.toEqual(straight.data)
   })
 
   it('handles empty and single point input', () => {
     const bitmap = new Bitmap(40, 40)
-    for (const kind of ['line', 'polyline', 'freeform'] as ShapeKind[]) {
+    for (const kind of ['line', 'freeform', 'polyline'] as ShapeKind[]) {
       expect(() => renderShape(bitmap, kind, [], BOTH)).not.toThrow()
       expect(() => renderShape(bitmap, kind, [START], BOTH)).not.toThrow()
     }
@@ -295,7 +300,7 @@ describe('shapePolygon', () => {
     }
   })
 
-  it('returns no polygon for open and freehand shapes', () => {
+  it('returns no polygon for open shapes', () => {
     for (const kind of ['line', 'polyline', 'freeform'] as ShapeKind[]) {
       expect(shapePolygon(kind, { x: 0, y: 0, width: 10, height: 10 })).toEqual([])
     }
