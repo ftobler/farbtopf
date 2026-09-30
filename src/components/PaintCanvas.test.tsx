@@ -903,6 +903,27 @@ describe('PaintCanvas', () => {
       expect(pixel(7, 6)).toEqual(white)
     })
 
+    it('grabs a control handle from beyond the selection handle tolerance', () => {
+      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      dragLine(canvas)
+      // c1 starts at (2 + (12 - 2) / 3, 2) = (5.333, 2); press 6px below it, past
+      // the old 4px tolerance but inside the curve's wider 8px grab radius. The
+      // pointer coordinate lands on the pixel grid, so c1's x floors to 5.
+      down(canvas, 2, 5.333, 8)
+      move(canvas, 2, 5.333, 12)
+      up(canvas, 2, 5.333, 12)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
+        'polyline',
+        [
+          { x: 2, y: 2 },
+          { x: 5, y: 12 },
+          { x: 2 + 2 * ((12 - 2) / 3), y: 2 },
+          { x: 12, y: 2 },
+        ],
+      ])
+    })
+
     it('floats the curve dialog above the bounding box, centered over it', () => {
       const { canvas, container } = setup('shape', 200, 200, false, 'rectangle', 'polyline')
       down(canvas, 1, 60, 100)

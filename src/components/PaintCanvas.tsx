@@ -310,6 +310,8 @@ const HISTORY_LIMIT = 80
 
 const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const HANDLE_HIT = 4
+/** Grab radius, in screen pixels, for the curve's endpoints and control handles. */
+const CURVE_DOT_HIT = 8
 const DOUBLE_CLICK_MS = 300
 /** How far apart, in screen pixels, the two presses of a double-click may be. */
 const DOUBLE_CLICK_SLOP = 4
@@ -1674,7 +1676,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (curve) {
           // A pending curve is only retargeted by grabbing one of its four dots.
           if (curve.phase !== 'bend') return
-          const tolerance = HANDLE_HIT / zoom
+          const tolerance = CURVE_DOT_HIT / zoom
           const candidates: { handle: 'p0' | 'p3' | 'c1' | 'c2'; dot: Point }[] = [
             { handle: 'p0', dot: curve.p0 },
             { handle: 'p3', dot: curve.p3 },
