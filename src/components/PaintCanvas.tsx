@@ -41,6 +41,7 @@ import {
   stamp,
 } from '../core/raster'
 import { MAX_CANVAS } from '../core/palette'
+import { eraserPreviewRect } from '../core/cursorPreview'
 import type { BrushShape } from '../core/raster'
 import {
   applyMask,
@@ -56,6 +57,7 @@ import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { backingScale } from '../core/zoom'
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { bitmapFromDataUrl } from '../render/image'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
@@ -403,6 +405,20 @@ function pointerAngle(center: Point, point: Point): number {
   return Math.atan2(point.y - center.y, point.x - center.x)
 }
 
+/**
+ * The eraser's footprint in the colour it erases to, like MS Paint's eraser cursor.
+ * It is only an overlay: nothing here touches the image or the history.
+ */
+function EraserPreview({ rect, color }: { rect: Rect; color: Rgba }) {
+  return (
+    <div
+      className="eraser-preview"
+      aria-hidden="true"
+      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height, backgroundColor: toCss(color) }}
+    />
+  )
+}
+
 function MaskOutline({ mask }: { mask: SelectionMask }) {
   const outlineRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -496,6 +512,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const [mask, setMask] = useState<SelectionMask | null>(null)
   const [lasso, setLasso] = useState<Point[] | null>(null)
   const [hoverCursor, setHoverCursor] = useState<string | null>(null)
+  /** The image pixel under the pointer while the eraser is active, for its footprint preview. */
+  const [eraserHover, setEraserHover] = useState<Point | null>(null)
+  const pixelRatio = useDevicePixelRatio()
   const [viewport, setViewport] = useState<Rect | null>(null)
 
   const doc = useCallback((): Bitmap => {
@@ -1275,6 +1294,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       // it: no secondary-colour paint, no zoom-out, no colour pick. The canvas
       // `onContextMenu` swallows the native menu.
       if (event.button === 2) return
+      if (tool === 'eraser') setEraserHover(toPoint(event))
       if (editorRef.current) {
         commitText()
         return
@@ -1412,6 +1432,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       const point = toPoint(event)
       onCursorMove(point)
+      if (tool === 'eraser') setEraserHover((last) => (last && pointsEqual(last, point) ? last : point))
       if (tool === 'select' && !selectRef.current) {
         const rect = currentRect()
         const handle = rect ? hitHandle(rect, point, HANDLE_HIT / zoom) : null
@@ -1684,6 +1705,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const handlePointerLeave = useCallback(() => {
     onCursorMove(null)
+    setEraserHover(null)
     const polyline = polylineRef.current
     if (polyline && polyline.pointerId === null) {
       polyline.pending = null
@@ -1815,6 +1837,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           className="grid-overlay"
           aria-hidden="true"
           style={{ backgroundSize: `${zoom}px ${zoom}px` }}
+        />
+      ) : null}
+      {tool === 'eraser' && eraserHover ? (
+        <EraserPreview
+          rect={eraserPreviewRect(eraserHover, strokeWidthFor('eraser', brushSize), zoom, pixelRatio, size.width, size.height)}
+          color={secondary}
         />
       ) : null}
       {selection ? (

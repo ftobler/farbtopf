@@ -896,6 +896,13 @@ textarea {
     linear-gradient(to bottom, rgba(128, 128, 128, 0.35) 1px, transparent 1px);
 }
 
+.eraser-preview {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px solid #000;
+}
+
 .selection-overlay {
   position: absolute;
   pointer-events: none;
