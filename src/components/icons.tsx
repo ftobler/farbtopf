@@ -24,62 +24,6 @@ function Svg({ size = 20, children, ...rest }: IconProps) {
   )
 }
 
-export function LogoIcon({ size = 22, ...rest }: IconProps) {
-  const curls = [
-    'M17 30c-6-4-3-12 3-10 5 2 2 8-1 6',
-    'M26 27c-4-7 2-13 7-9 4 3-1 8-3 5',
-    'M36 27c-1-8 7-11 10-6 2 4-3 6-4 3',
-    'M46 30c3-6 10-4 9 1-1 4-5 3-5 0',
-  ]
-  return (
-    <svg width={size} height={size} viewBox="0 8 64 64" aria-hidden="true" {...rest}>
-      <defs>
-        <linearGradient id="logo-paint" gradientUnits="userSpaceOnUse" x1="12" y1="14" x2="56" y2="34">
-          <stop offset="0" stopColor="#ff4fa3" />
-          <stop offset="0.5" stopColor="#a66cff" />
-          <stop offset="1" stopColor="#2f8cff" />
-        </linearGradient>
-        <linearGradient id="logo-paint-dark" gradientUnits="userSpaceOnUse" x1="12" y1="14" x2="56" y2="34">
-          <stop offset="0" stopColor="#c2237a" />
-          <stop offset="0.5" stopColor="#7040d0" />
-          <stop offset="1" stopColor="#1560c8" />
-        </linearGradient>
-      </defs>
-      <g fill="url(#logo-paint)">
-        <circle cx="19" cy="25" r="6" />
-        <circle cx="29" cy="21" r="7" />
-        <circle cx="40" cy="21" r="7" />
-        <circle cx="50" cy="27" r="5.5" />
-        <rect x="14" y="22" width="40" height="8" />
-      </g>
-      <g strokeLinecap="round" strokeLinejoin="round" fill="none">
-        {curls.map((d) => (
-          <g key={d}>
-            <path d={d} stroke="url(#logo-paint-dark)" strokeWidth={6.5} />
-            <path d={d} stroke="url(#logo-paint)" strokeWidth={5} />
-          </g>
-        ))}
-      </g>
-      <path
-        d="M13 30h38l-4 26a5 5 0 0 1-5 4H22a5 5 0 0 1-5-4z"
-        fill="#d3dbe3"
-        stroke="#5b6773"
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 28h40a2 2 0 0 1 0 5H47c-2 0-2 2-2 4s-3 2-3 0v-2c0-1-1-2-2-2H26c-1 0-2 1-2 2v5c0 2-3 2-3 0v-5c0-1-1-2-2-2h-7a2 2 0 0 1 0-5z"
-        fill="url(#logo-paint)"
-      />
-      <circle cx="26" cy="43" r="2.4" fill="#26303a" />
-      <circle cx="38" cy="43" r="2.4" fill="#26303a" />
-      <circle cx="21.5" cy="48" r="2" fill="#ff8fc3" opacity={0.7} />
-      <circle cx="42.5" cy="48" r="2" fill="#ff8fc3" opacity={0.7} />
-      <path d="M26 48c2.5 4 9.5 4 12 0" stroke="#26303a" strokeWidth={2.4} fill="none" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 export function PencilIcon(props: IconProps) {
   return (
     <Svg {...props}>
