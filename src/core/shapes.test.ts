@@ -129,9 +129,25 @@ describe('renderShape closed drag shapes', () => {
 
   it('is independent of the drag direction', () => {
     for (const kind of Object.keys(CLOSED_DRAG) as ShapeKind[]) {
+      if (kind === 'right-triangle') continue
       const a = draw(kind, BOTH)
       const b = draw(kind, BOTH, [END, START])
       expect(b.data).toEqual(a.data)
+    }
+  })
+
+  it('orients the right triangle so the right angle follows the drag', () => {
+    const cases: { from: Point; to: Point; inside: Point; outside: Point }[] = [
+      { from: TL, to: BR, inside: { x: 10, y: 30 }, outside: { x: 30, y: 10 } },
+      { from: TR, to: BL, inside: { x: 30, y: 30 }, outside: { x: 10, y: 10 } },
+      { from: BL, to: TR, inside: { x: 10, y: 10 }, outside: { x: 30, y: 30 } },
+      { from: BR, to: TL, inside: { x: 30, y: 10 }, outside: { x: 10, y: 30 } },
+    ]
+    for (const { from, to, inside, outside } of cases) {
+      const label = `${from.x},${from.y}->${to.x},${to.y}`
+      const bitmap = draw('right-triangle', FILL_ONLY, [from, to])
+      expect(is(bitmap, inside.x, inside.y, RED), label).toBe(true)
+      expect(painted(bitmap, outside.x, outside.y), label).toBe(false)
     }
   })
 

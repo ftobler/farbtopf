@@ -285,6 +285,16 @@ function fillBox(outline: Rect, grow: number): Rect {
   }
 }
 
+/** Directed right triangle: `start` is a hypotenuse end, the right angle sits at (start.x, end.y). */
+function rightTrianglePolygon(box: Rect, start: Point): Point[] {
+  const map = boxTransform(box)
+  const atRight = start.x > box.x + box.width / 2
+  const atBottom = start.y > box.y + box.height / 2
+  const sx = atRight ? 1 : 0
+  const sy = atBottom ? 1 : 0
+  return [map(sx, sy), map(sx, atBottom ? 0 : 1), map(atRight ? 0 : 1, atBottom ? 0 : 1)]
+}
+
 function strokeClosed(bitmap: Bitmap, points: readonly Point[], style: ShapeStyle): void {
   if (!style.stroke || points.length === 0) return
   drawPolyline(bitmap, [...points, points[0]], style.width, style.stroke, 'round')
@@ -323,8 +333,10 @@ export function renderShape(bitmap: Bitmap, kind: ShapeKind, points: readonly Po
     return
   }
   const outline = outlineBox(rect, style.stroke ? style.width : 1)
-  if (style.fill) fillPolygon(bitmap, shapePolygon(kind, fillBox(outline, style.stroke ? 0 : 0.25)), style.fill)
-  if (style.stroke) strokeClosed(bitmap, shapePolygon(kind, outline), style)
+  const polygon = (box: Rect) =>
+    kind === 'right-triangle' ? rightTrianglePolygon(box, start) : shapePolygon(kind, box)
+  if (style.fill) fillPolygon(bitmap, polygon(fillBox(outline, style.stroke ? 0 : 0.25)), style.fill)
+  if (style.stroke) strokeClosed(bitmap, polygon(outline), style)
 }
 
 const FREEFORM_ICON: readonly Point[] = [
