@@ -492,3 +492,59 @@ export function RotateIcon(props: IconProps) {
     </Svg>
   )
 }
+
+export function RotateLeftIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 9.5A8 8 0 1 1 5.5 17" />
+      <path d="M3.5 4.5v5h5" />
+    </Svg>
+  )
+}
+
+export function RotateRightIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M20 9.5A8 8 0 1 0 18.5 17" />
+      <path d="M20.5 4.5v5h-5" />
+    </Svg>
+  )
+}
+
+export function Rotate180Icon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 11a7 7 0 0 1 14 0v4" />
+      <path d="m15.5 12 3.5 3.5 3.5-3.5" />
+      <path d="M5 11v8" />
+    </Svg>
+  )
+}
+
+export function FlipVerticalIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 12h18" strokeDasharray="2 2" />
+      <path d="M5 9l7-6 7 6z" />
+      <path d="M5 15l7 6 7-6z" />
+    </Svg>
+  )
+}
+
+export function InvertSelectionIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
+      <rect x="8" y="8" width="8" height="8" rx="0.5" fill="currentColor" fillOpacity={0.35} />
+    </Svg>
+  )
+}
+
+export function InvertColorsIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" />
+    </Svg>
+  )
+}

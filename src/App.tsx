@@ -3,6 +3,23 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent }
 import { ContextMenu } from './components/ContextMenu'
 import { MenuBar } from './components/MenuBar'
 import { MenuDivider, MenuItem, MenuSubmenu } from './components/Dropdown'
+import {
+  CopyIcon,
+  CropIcon,
+  CutIcon,
+  FlipIcon,
+  FlipVerticalIcon,
+  InvertColorsIcon,
+  InvertSelectionIcon,
+  PasteIcon,
+  Rotate180Icon,
+  RotateIcon,
+  RotateLeftIcon,
+  RotateRightIcon,
+  ScaleIcon,
+  SelectIcon,
+  TrashIcon,
+} from './components/icons'
 import { LayersPanel } from './components/LayersPanel'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
@@ -741,6 +758,7 @@ function App() {
           {(close) => (
             <>
               <MenuItem
+                icon={<CutIcon size={16} />}
                 shortcut="Ctrl+X"
                 onClick={() => {
                   void handleCutFromCanvas()
@@ -750,6 +768,7 @@ function App() {
                 Cut
               </MenuItem>
               <MenuItem
+                icon={<CopyIcon size={16} />}
                 shortcut="Ctrl+C"
                 onClick={() => {
                   void handleCopyFromCanvas()
@@ -759,6 +778,7 @@ function App() {
                 Copy
               </MenuItem>
               <MenuItem
+                icon={<PasteIcon size={16} />}
                 shortcut="Ctrl+V"
                 onClick={() => {
                   void handlePasteFromClipboard()
@@ -769,6 +789,7 @@ function App() {
               </MenuItem>
               <MenuDivider />
               <MenuItem
+                icon={<CropIcon size={16} />}
                 disabled={!hasSelection}
                 onClick={() => {
                   handleCrop()
@@ -778,6 +799,7 @@ function App() {
                 Crop
               </MenuItem>
               <MenuItem
+                icon={<SelectIcon size={16} />}
                 shortcut="Ctrl+A"
                 onClick={() => {
                   handleSelectAll()
@@ -787,6 +809,7 @@ function App() {
                 Select all
               </MenuItem>
               <MenuItem
+                icon={<InvertSelectionIcon size={16} />}
                 onClick={() => {
                   handleInvertSelection()
                   close()
@@ -795,6 +818,7 @@ function App() {
                 Invert selection
               </MenuItem>
               <MenuItem
+                icon={<TrashIcon size={16} />}
                 shortcut="Del"
                 disabled={!hasSelection}
                 onClick={() => {
@@ -805,10 +829,11 @@ function App() {
                 Delete
               </MenuItem>
               <MenuDivider />
-              <MenuSubmenu label="Rotate">
+              <MenuSubmenu label="Rotate" icon={<RotateIcon size={16} />}>
                 {(closeSub) => (
                   <>
                     <MenuItem
+                      icon={<RotateLeftIcon size={16} />}
                       onClick={() => {
                         handleRotate(270)
                         closeSub()
@@ -818,6 +843,7 @@ function App() {
                       Rotate left 90°
                     </MenuItem>
                     <MenuItem
+                      icon={<RotateRightIcon size={16} />}
                       onClick={() => {
                         handleRotate(90)
                         closeSub()
@@ -827,6 +853,7 @@ function App() {
                       Rotate right 90°
                     </MenuItem>
                     <MenuItem
+                      icon={<Rotate180Icon size={16} />}
                       onClick={() => {
                         handleRotate(180)
                         closeSub()
@@ -838,10 +865,11 @@ function App() {
                   </>
                 )}
               </MenuSubmenu>
-              <MenuSubmenu label="Flip">
+              <MenuSubmenu label="Flip" icon={<FlipIcon size={16} />}>
                 {(closeSub) => (
                   <>
                     <MenuItem
+                      icon={<FlipIcon size={16} />}
                       onClick={() => {
                         handleFlip('horizontal')
                         closeSub()
@@ -851,6 +879,7 @@ function App() {
                       Flip horizontal
                     </MenuItem>
                     <MenuItem
+                      icon={<FlipVerticalIcon size={16} />}
                       onClick={() => {
                         handleFlip('vertical')
                         closeSub()
@@ -864,6 +893,7 @@ function App() {
               </MenuSubmenu>
               <MenuDivider />
               <MenuItem
+                icon={<ScaleIcon size={16} />}
                 onClick={() => {
                   openScaleDialog()
                   close()
@@ -872,6 +902,7 @@ function App() {
                 Resize
               </MenuItem>
               <MenuItem
+                icon={<InvertColorsIcon size={16} />}
                 onClick={() => {
                   handleInvertColors()
                   close()

@@ -604,6 +604,20 @@ describe('App', () => {
     ])
   })
 
+  it('shows an icon next to every canvas context menu entry', () => {
+    const { container } = render(<App />)
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 40, clientY: 40 })
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Rotate' }))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Flip' }))
+    const items = screen.getAllByRole('menuitem')
+    expect(items.length).toBeGreaterThan(11)
+    for (const item of items) {
+      const slot = item.querySelector('.menu-item-icon')
+      expect(slot, item.textContent ?? '').not.toBeNull()
+      expect(slot?.querySelector('svg'), item.textContent ?? '').not.toBeNull()
+    }
+  })
+
   it('opens the rotate submenu from the context menu', () => {
     const { container } = render(<App />)
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 40, clientY: 40 })
