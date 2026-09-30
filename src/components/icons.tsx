@@ -293,6 +293,27 @@ export function StrokeSizePreview({ size }: { size: number }) {
   )
 }
 
+/** Stroke size: three dots growing from small to large. */
+export function SizeIcon({ className, ...props }: IconProps) {
+  return (
+    <Svg className={['size-icon', className].filter(Boolean).join(' ')} {...props} stroke="none" fill="currentColor">
+      <circle cx="4.5" cy="15" r="1.5" />
+      <circle cx="10" cy="14" r="2.5" />
+      <circle cx="17.5" cy="12.5" r="4" />
+    </Svg>
+  )
+}
+
+/** Opacity: a drop, half solid and half hollow. */
+export function OpacityIcon({ className, ...props }: IconProps) {
+  return (
+    <Svg className={['opacity-icon', className].filter(Boolean).join(' ')} {...props}>
+      <path d="M12 3.5c3 3.6 6 7 6 10.5a6 6 0 0 1-12 0c0-3.5 3-6.9 6-10.5z" />
+      <path d="M12 3.5c-3 3.6-6 7-6 10.5a6 6 0 0 0 6 6z" fill="currentColor" />
+    </Svg>
+  )
+}
+
 export function UndoIcon(props: IconProps) {
   return (
     <Svg {...props}>

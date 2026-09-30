@@ -37,6 +37,28 @@ describe('ToolSliders', () => {
     expect(opacitySlider.getAttribute('aria-orientation')).toBe('vertical')
   })
 
+  it('stacks the size slider above the opacity slider, each with an icon', () => {
+    const { container, sizeSlider, opacitySlider } = setup()
+    expect(sizeSlider.compareDocumentPosition(opacitySlider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const rows = [...container.querySelectorAll('.tool-slider')]
+    expect(rows).toHaveLength(2)
+    expect(rows[0].querySelector('svg.tool-slider-icon.size-icon')).toBeTruthy()
+    expect(rows[1].querySelector('svg.tool-slider-icon.opacity-icon')).toBeTruthy()
+    for (const icon of container.querySelectorAll('svg.tool-slider-icon')) {
+      expect(icon.getAttribute('aria-hidden')).toBe('true')
+    }
+  })
+
+  it('hints what each slider does and its value on hover', () => {
+    const { container, sizeSlider, opacitySlider } = setup(12, 80)
+    const rows = [...container.querySelectorAll<HTMLElement>('.tool-slider')]
+    expect(rows[0].title).toBe('Size: 12 px')
+    expect(rows[1].title).toBe('Opacity: 80%')
+    // The accessible names stay plain.
+    expect(sizeSlider.getAttribute('aria-label')).toBe('Size')
+    expect(opacitySlider.getAttribute('aria-label')).toBe('Opacity')
+  })
+
   it('shows the current values', () => {
     const { sizeSlider, opacitySlider } = setup(12, 80)
     expect(sizeSlider.getAttribute('aria-valuenow')).toBe('12')

@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { ReactNode, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import {
   MAX_OPACITY,
   MAX_SIZE,
@@ -13,9 +13,11 @@ import {
   sliderToSize,
   stepSize,
 } from '../core/toolSettings'
+import { OpacityIcon, SizeIcon } from './icons'
 
 interface VerticalSliderProps {
   label: string
+  icon: ReactNode
   value: number
   min: number
   max: number
@@ -36,6 +38,7 @@ interface VerticalSliderProps {
  */
 function VerticalSlider({
   label,
+  icon,
   value,
   min,
   max,
@@ -64,10 +67,13 @@ function VerticalSlider({
   const percent = Math.min(1, Math.max(0, position)) * 100
 
   return (
-    <div className="tool-slider">
-      <span className="tool-slider-value" aria-hidden="true">
-        {valueText}
-      </span>
+    <div className="tool-slider" title={`${label}: ${valueText}`}>
+      <div className="tool-slider-header">
+        {icon}
+        <span className="tool-slider-value" aria-hidden="true">
+          {valueText}
+        </span>
+      </div>
       <div
         className="tool-slider-track"
         role="slider"
@@ -78,7 +84,6 @@ function VerticalSlider({
         aria-valuemax={max}
         aria-valuenow={value}
         aria-valuetext={valueText}
-        title={label}
         onPointerDown={(event) => {
           if (event.button !== 0) return
           event.preventDefault()
@@ -106,9 +111,6 @@ function VerticalSlider({
         <span className="tool-slider-fill" style={{ height: `${percent}%` }} />
         <span className="tool-slider-thumb" style={{ bottom: `${percent}%` }} />
       </div>
-      <span className="tool-slider-label" aria-hidden="true">
-        {label}
-      </span>
     </div>
   )
 }
@@ -167,7 +169,7 @@ export interface ToolSlidersProps {
 }
 
 /**
- * Floating size and opacity sliders for the sized tools, on the left of the workspace.
+ * Floating size and opacity sliders for the sized tools, stacked on the left of the workspace.
  * The size slider is logarithmic so 1-10 px are as easy to pick as the big sizes.
  */
 export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSlidingChange }: ToolSlidersProps) {
@@ -184,6 +186,7 @@ export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSl
     >
       <VerticalSlider
         label="Size"
+        icon={<SizeIcon size={16} className="tool-slider-icon" />}
         value={size}
         min={MIN_SIZE}
         max={MAX_SIZE}
@@ -196,6 +199,7 @@ export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSl
       />
       <VerticalSlider
         label="Opacity"
+        icon={<OpacityIcon size={16} className="tool-slider-icon" />}
         value={opacity}
         min={MIN_OPACITY}
         max={MAX_OPACITY}

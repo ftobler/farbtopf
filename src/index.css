@@ -743,8 +743,10 @@ textarea {
   left: 16px;
   transform: translateY(-50%);
   display: flex;
-  gap: 2px;
-  padding: 8px 4px;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100% - 24px);
+  padding: 8px 6px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -760,7 +762,20 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: 48px;
+  width: 52px;
+}
+
+.tool-slider + .tool-slider {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-slider-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-muted);
 }
 
 .tool-slider-value {
@@ -771,15 +786,10 @@ textarea {
   white-space: nowrap;
 }
 
-.tool-slider-label {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 .tool-slider-track {
   position: relative;
   width: 28px;
-  height: min(180px, 40vh);
+  height: min(130px, 18vh);
   border-radius: 6px;
   cursor: pointer;
   touch-action: none;
