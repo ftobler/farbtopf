@@ -1415,4 +1415,112 @@ describe('PaintCanvas', () => {
       expect(pixel(2, 2)).toEqual([0, 0, 0, 255])
     })
   })
+
+  describe('live shape handles', () => {
+    const black = [0, 0, 0, 255]
+    const white = [255, 255, 255, 255]
+
+    function spyPixels(canvas: HTMLCanvasElement, width: number) {
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      return (x: number, y: number) => {
+        const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+        return Array.from(image.data.slice((y * width + x) * 4, (y * width + x) * 4 + 4))
+      }
+    }
+
+    function down(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId, clientX: x, clientY: y })
+    }
+
+    function move(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number, buttons = 1) {
+      fireEvent.pointerMove(canvas, { buttons, pointerId, clientX: x, clientY: y })
+    }
+
+    function up(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      fireEvent.pointerUp(canvas, { button: 0, pointerId, clientX: x, clientY: y })
+    }
+
+    function click(canvas: HTMLCanvasElement, pointerId: number, x: number, y: number) {
+      down(canvas, pointerId, x, y)
+      up(canvas, pointerId, x, y)
+    }
+
+    function dragRect(canvas: HTMLCanvasElement) {
+      down(canvas, 1, 2, 2)
+      move(canvas, 1, 12, 12)
+      up(canvas, 1, 12, 12)
+    }
+
+    it('keeps a dragged rectangle live with eight handles and no history', () => {
+      const { canvas, container, onHistoryChange } = setup('shape', 30, 30)
+      onHistoryChange.mockClear()
+      dragRect(canvas)
+      expect(container.querySelectorAll('.shape-handle')).toHaveLength(8)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+
+    it('keeps a dragged ellipse live with four handles and no history', () => {
+      const { canvas, container, onHistoryChange } = setup('shape', 30, 30, false, 'rectangle', 'ellipse')
+      onHistoryChange.mockClear()
+      dragRect(canvas)
+      expect(container.querySelectorAll('.shape-handle')).toHaveLength(4)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+
+    it('places the live shape as one history entry when clicking outside its handles', () => {
+      const { canvas, container, onHistoryChange } = setup('shape', 30, 30)
+      const pixel = spyPixels(canvas, 30)
+      onHistoryChange.mockClear()
+      dragRect(canvas)
+      click(canvas, 2, 2, 25)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 2)).toEqual(black)
+      expect(pixel(7, 7)).toEqual(white)
+      expect(container.querySelectorAll('.shape-handle')).toHaveLength(0)
+      click(canvas, 3, 2, 25)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+    })
+
+    it('tweaks the live shape by dragging a handle and commits once on Enter', () => {
+      const { canvas, onHistoryChange } = setup('shape', 30, 30)
+      const pixel = spyPixels(canvas, 30)
+      onHistoryChange.mockClear()
+      dragRect(canvas)
+      down(canvas, 2, 12, 12)
+      move(canvas, 2, 17, 17)
+      up(canvas, 2, 17, 17)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 2)).toEqual(black)
+      expect(pixel(17, 10)).toEqual(black)
+    })
+
+    it('treats a sub-5px drag outside the handles as a click without a new shape', () => {
+      const { canvas, container, onHistoryChange } = setup('shape', 30, 30)
+      onHistoryChange.mockClear()
+      dragRect(canvas)
+      down(canvas, 2, 2, 25)
+      move(canvas, 2, 2, 28)
+      up(canvas, 2, 2, 28)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(container.querySelectorAll('.shape-handle')).toHaveLength(0)
+    })
+
+    it('cancels the live shape on Escape without history and restores the pixels', () => {
+      const { canvas, onHistoryChange } = setup('shape', 30, 30)
+      const pixel = spyPixels(canvas, 30)
+      onHistoryChange.mockClear()
+      dragRect(canvas)
+      expect(pixel(7, 2)).toEqual(black)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      expect(pixel(7, 2)).toEqual(white)
+    })
+  })
 })

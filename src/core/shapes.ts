@@ -166,11 +166,11 @@ const TAIL_START = 0.42
 const TAIL_END = 0.25
 const TAIL_TIP = 0.15
 
-function callout(kind: ShapeKind, box: Rect): Point[] {
+export function callout(kind: ShapeKind, box: Rect, tipOverride?: Point): Point[] {
   const { x, y, width: w, height: h } = box
   const body: Rect = { x, y, width: w, height: h * CALLOUT_BODY }
   const bodyBottom = y + body.height
-  const tip = { x: x + w * TAIL_TIP, y: y + h }
+  const tip = tipOverride ?? { x: x + w * TAIL_TIP, y: y + h }
   if (kind === 'callout-oval') {
     const cx = x + w / 2
     const cy = y + body.height / 2
