@@ -43,6 +43,7 @@ import {
 } from '../core/raster'
 import { MAX_CANVAS } from '../core/palette'
 import { eraserPreviewRect } from '../core/cursorPreview'
+import { blendToward } from '../core/opacity'
 import type { BrushShape } from '../core/raster'
 import {
   applyMask,
@@ -117,6 +118,11 @@ export interface PaintCanvasProps {
   primary: Rgba
   secondary: Rgba
   brushSize: number
+  /**
+   * Stroke opacity (strength) of the current tool in percent, 1..100. A stroke is
+   * painted at full strength and blended once, so it never builds up over itself.
+   */
+  opacity?: number
   shapeFill: ShapeFill
   shapeKind?: ShapeKind
   zoom: number
@@ -169,6 +175,10 @@ interface StrokeState {
   points: Point[]
   /** Stroke-scoped coverage for the highlighter so overlaps stay one flat alpha. */
   highlighter?: CoverageMask
+  /** Below 1, the stroke is painted at full strength into `work` and blended onto `base` at this strength. */
+  strength: number
+  /** The full-strength stroke over `base`, when painting at less than 100 % opacity. */
+  work?: Bitmap
 }
 
 /**
@@ -269,6 +279,19 @@ const TEXT_MENU_HEIGHT = 240
 /** The points handed to `renderShape`: the dragged box, or the whole freehand trail. */
 function shapePoints(stroke: StrokeState, end: Point): Point[] {
   return shapeById(stroke.kind).interaction === 'freehand' ? stroke.points : [stroke.start, end]
+}
+
+/** The pixels a freehand segment of `width` can touch, with room for every brush's reach. */
+function segmentBounds(from: Point, to: Point, width: number): Rect {
+  const pad = Math.ceil(width) + 2
+  const x = Math.floor(Math.min(from.x, to.x)) - pad
+  const y = Math.floor(Math.min(from.y, to.y)) - pad
+  return {
+    x,
+    y,
+    width: Math.ceil(Math.max(from.x, to.x)) + pad + 1 - x,
+    height: Math.ceil(Math.max(from.y, to.y)) + pad + 1 - y,
+  }
 }
 
 function strokeShape(tool: ToolId): BrushShape {
@@ -498,6 +521,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     primary,
     secondary,
     brushSize,
+    opacity = 100,
     shapeFill,
     shapeKind = 'rectangle',
     zoom,
@@ -557,6 +581,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** The image pixel under the pointer while the eraser is active, for its footprint preview. */
   const [eraserHover, setEraserHover] = useState<Point | null>(null)
   const pixelRatio = useDevicePixelRatio()
+  /** The current tool's opacity as a 0.01..1 blend factor. */
+  const strength = Math.min(100, Math.max(1, Number.isFinite(opacity) ? opacity : 100)) / 100
   const [viewport, setViewport] = useState<Rect | null>(null)
 
   const doc = useCallback((): Bitmap => {
@@ -865,13 +891,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (target: Bitmap, kind: ShapeKind, points: readonly Point[], slot: 'primary' | 'secondary') => {
       const color = colorFor(slot)
       const fillColor = slot === 'secondary' ? primary : secondary
+      // Below 100 %, outline and fill are drawn at full strength and faded in together,
+      // so where they overlap the shape is not any more opaque.
+      const before = strength < 1 ? target.clone() : null
       drawShape(target, kind, points, {
-        width: brushSize,
+        width: strokeWidthFor('shape', brushSize),
         stroke: shapeFill === 'filled' ? null : color,
         fill: shapeFill === 'filled' ? color : shapeFill === 'outline-filled' ? fillColor : null,
       })
+      if (before) blendToward(target, before, target, strength)
     },
-    [brushSize, colorFor, primary, secondary, shapeFill],
+    [brushSize, colorFor, primary, secondary, shapeFill, strength],
   )
 
   const previewPolyline = useCallback(() => {
@@ -1444,6 +1474,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         base,
         recorded: false,
         points: [point],
+        strength,
       }
       strokeRef.current = stroke
 
@@ -1452,25 +1483,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       } else {
         recordHistory(base)
         stroke.recorded = true
+        if (strength < 1) stroke.work = base.clone()
+        const target = stroke.work ?? doc()
         const color = tool === 'eraser' ? eraseColor() : strokeColorFor(tool, slot, primary, secondary)
         const width = strokeWidthFor(tool, brushSize)
         if (tool === 'airbrush') {
-          sprayDab(doc(), point, width, color)
+          sprayDab(target, point, width, color)
         } else if (tool === 'brush' && brush === 'highlighter') {
           const mask = createCoverageMask(base.width, base.height)
           stampHighlighter(mask, point, point, width)
           stroke.highlighter = mask
-          bitmapRef.current = compositeHighlighter(base, mask, color, HIGHLIGHTER_ALPHA)
+          const result = compositeHighlighter(base, mask, color, HIGHLIGHTER_ALPHA)
+          if (stroke.work) stroke.work = result
+          else bitmapRef.current = result
         } else if (tool === 'brush') {
-          paintBrushStroke(doc(), point, point, { size: width, color, brush })
+          paintBrushStroke(target, point, point, { size: width, color, brush })
         } else {
-          stamp(doc(), point.x, point.y, width, color, strokeShape(tool))
+          stamp(target, point.x, point.y, width, color, strokeShape(tool))
         }
+        if (stroke.work) blendToward(doc(), base, stroke.work, strength, segmentBounds(point, point, width))
         paint(doc())
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, strength, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -1556,15 +1592,21 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       } else {
         const color = stroke.tool === 'eraser' ? eraseColor() : strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         const width = strokeWidthFor(stroke.tool, brushSize)
+        const target = stroke.work ?? doc()
         if (stroke.tool === 'airbrush') {
-          sprayDab(doc(), point, width, color)
+          sprayDab(target, point, width, color)
         } else if (stroke.tool === 'brush' && brush === 'highlighter' && stroke.highlighter) {
           stampHighlighter(stroke.highlighter, stroke.last, point, width)
-          bitmapRef.current = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)
+          const result = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)
+          if (stroke.work) stroke.work = result
+          else bitmapRef.current = result
         } else if (stroke.tool === 'brush') {
-          paintBrushStroke(doc(), stroke.last, point, { size: width, color, brush })
+          paintBrushStroke(target, stroke.last, point, { size: width, color, brush })
         } else {
-          drawLine(doc(), stroke.last, point, width, color, strokeShape(stroke.tool))
+          drawLine(target, stroke.last, point, width, color, strokeShape(stroke.tool))
+        }
+        if (stroke.work) {
+          blendToward(doc(), stroke.base, stroke.work, stroke.strength, segmentBounds(stroke.last, point, width))
         }
         paint(doc())
       }

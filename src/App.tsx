@@ -89,6 +89,7 @@ function App() {
   if (isSizedTool(tool) && tool !== lastSizedTool) setLastSizedTool(tool)
   const sizedTool: SizedTool = isSizedTool(tool) ? tool : lastSizedTool
   const brushSize = toolSettings[sizedTool].size
+  const opacity = toolSettings[sizedTool].opacity
   const setBrushSize = useCallback(
     (size: number) =>
       setToolSettings((current) => ({ ...current, [sizedTool]: { ...current[sizedTool], size: clampSize(size) } })),
@@ -666,6 +667,7 @@ function App() {
           primary={primary}
           secondary={secondary}
           brushSize={brushSize}
+          opacity={opacity}
           shapeFill={shapeFill}
           shapeKind={shapeKind}
           zoom={shownZoom}
