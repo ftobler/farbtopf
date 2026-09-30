@@ -12,6 +12,7 @@ import { ShapeGallery } from './ShapeGallery'
 import type { IconProps } from './icons'
 import {
   AirbrushIcon,
+  SprayCanIcon,
   BrushIcon,
   CopyIcon,
   CropIcon,
@@ -51,6 +52,11 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
 }
 
 /** Tools group, in reading order: two rows of three. */
+/** Icons for the brushes that have one in the brushes menu. */
+const BRUSH_ICONS: Partial<Record<BrushId, ComponentType<IconProps>>> = {
+  spray: SprayCanIcon,
+}
+
 const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'eraser', 'picker', 'zoom']
 
 const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
@@ -402,19 +408,23 @@ export function Ribbon({
           >
             {(close) => (
               <>
-                {BRUSHES.map((entry) => (
-                  <MenuItem
-                    key={entry.id}
-                    checked={tool === 'brush' && brush === entry.id}
-                    onClick={() => {
-                      onBrushChange(entry.id)
-                      onToolChange('brush')
-                      close()
-                    }}
-                  >
-                    {entry.label}
-                  </MenuItem>
-                ))}
+                {BRUSHES.map((entry) => {
+                  const EntryIcon = BRUSH_ICONS[entry.id]
+                  return (
+                    <MenuItem
+                      key={entry.id}
+                      icon={EntryIcon ? <EntryIcon size={16} /> : undefined}
+                      checked={tool === 'brush' && brush === entry.id}
+                      onClick={() => {
+                        onBrushChange(entry.id)
+                        onToolChange('brush')
+                        close()
+                      }}
+                    >
+                      {entry.label}
+                    </MenuItem>
+                  )
+                })}
               </>
             )}
           </Dropdown>

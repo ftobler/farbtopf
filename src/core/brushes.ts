@@ -1,6 +1,7 @@
 import type { Bitmap } from './bitmap'
 import type { Rgba } from './color'
 import type { Point } from './geometry'
+import type { Random } from './random'
 
 export type BrushId =
   | 'round'
@@ -8,6 +9,7 @@ export type BrushId =
   | 'natural'
   | 'calligraphy'
   | 'highlighter'
+  | 'spray'
   | 'blur'
   | 'smudge'
   | 'liquify'
@@ -23,6 +25,7 @@ export const BRUSHES: readonly BrushDef[] = [
   { id: 'natural', label: 'Natural brush' },
   { id: 'calligraphy', label: 'Calligraphy pen' },
   { id: 'highlighter', label: 'Highlighter pen' },
+  { id: 'spray', label: 'Spray can' },
   { id: 'blur', label: 'Selective blurring' },
   { id: 'smudge', label: 'Smudge' },
   { id: 'liquify', label: 'Liquify' },
@@ -43,24 +46,46 @@ export interface StrokeOptions {
   size: number
   color: Rgba
   brush: BrushId
+  /** Random source for the random brushes; Math.random by default. */
+  random?: Random
 }
 
 /**
  * One puff of the airbrush: random opaque dots inside a circle `size` pixels across.
- * The number of dots grows with the area, so the density looks the same at any size.
+ * By default the number of dots grows with the area, so the density looks the same at
+ * any size; `dots` overrides it (the spray can sprays fewer per tick).
  */
-export function sprayDab(bitmap: Bitmap, center: Point, size: number, color: Rgba): void {
+export function sprayDab(
+  bitmap: Bitmap,
+  center: Point,
+  size: number,
+  color: Rgba,
+  random: Random = Math.random,
+  dots?: number,
+): void {
   const r = Math.max(1, size / 2)
-  const attempts = Math.max(8, Math.round(r * r * 0.6))
+  const attempts = dots ?? Math.max(8, Math.round(r * r * 0.6))
   for (let i = 0; i < attempts; i += 1) {
-    const angle = Math.random() * Math.PI * 2
-    const distance = Math.sqrt(Math.random()) * r
+    const angle = random() * Math.PI * 2
+    const distance = Math.sqrt(random()) * r
     bitmap.set(
       Math.round(center.x + Math.cos(angle) * distance),
       Math.round(center.y + Math.sin(angle) * distance),
       color,
     )
   }
+}
+
+/** How often the spray can sprays while the pointer is held down, moving or not. */
+export const SPRAY_TICK_MS = 30
+
+/**
+ * Dots the spray can sprays per tick: about 5 % of its circle, so like classic Paint the
+ * paint builds up the longer it is held over one spot (≈ fully covered after a second).
+ */
+export function sprayCanDots(size: number): number {
+  const r = Math.max(0.5, size / 2)
+  return Math.max(1, Math.round(Math.PI * r * r * 0.05))
 }
 
 /** Alpha-composites `color` over the pixel at (`x`,`y`) with the given coverage. */
@@ -423,6 +448,10 @@ export function paintBrushStroke(bitmap: Bitmap, from: Point, to: Point, options
       for (const point of segmentPoints(from, to, Math.max(1, radius / 3))) {
         paintCalligraphyDab(bitmap, point, radius, color)
       }
+      return
+    case 'spray':
+      // Classic spray can: dots only where the pointer is; the timer keeps adding more.
+      sprayDab(bitmap, to, options.size, color, options.random ?? Math.random, sprayCanDots(options.size))
       return
     case 'highlighter': {
       const mask = createCoverageMask(bitmap.width, bitmap.height)

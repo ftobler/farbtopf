@@ -162,6 +162,7 @@ describe('App', () => {
       'Natural brush',
       'Calligraphy pen',
       'Highlighter pen',
+      'Spray can',
       'Selective blurring',
       'Smudge',
       'Liquify',
@@ -175,6 +176,17 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Brush' }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
     expect(screen.getByRole('menuitem', { name: 'Smudge' }).querySelector('svg')).toBeTruthy()
+  })
+
+  it('offers the spray can with its icon in the brushes menu', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    const spray = screen.getByRole('menuitem', { name: 'Spray can' })
+    expect(spray.querySelector('.menu-item-icon svg')).toBeTruthy()
+    fireEvent.click(spray)
+    expect(screen.getByRole('button', { name: 'Brush' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    expect(screen.getByRole('menuitem', { name: 'Spray can' }).classList.contains('menu-item-checked')).toBe(true)
   })
 
   it('shows the floating text controls only while a text box is open', () => {

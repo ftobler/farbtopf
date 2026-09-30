@@ -293,6 +293,24 @@ export function StrokeSizePreview({ size }: { size: number }) {
   )
 }
 
+/** The spray can brush: a can with a nozzle and a puff of dots. */
+export function SprayCanIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="10" width="8" height="11" rx="1.5" />
+      <path d="M7 10V7.5h4V10M8.5 7.5V5.5h2" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="15" cy="5" r="0.9" />
+        <circle cx="18" cy="3.5" r="0.9" />
+        <circle cx="18.5" cy="7" r="0.9" />
+        <circle cx="21" cy="5" r="0.9" />
+        <circle cx="21" cy="9" r="0.9" />
+        <circle cx="16" cy="8.5" r="0.9" />
+      </g>
+    </Svg>
+  )
+}
+
 /** Stroke size: three dots growing from small to large. */
 export function SizeIcon({ className, ...props }: IconProps) {
   return (

@@ -15,7 +15,9 @@ import {
   HIGHLIGHTER_ALPHA,
   compositeHighlighter,
   createCoverageMask,
+  SPRAY_TICK_MS,
   paintBrushStroke,
+  sprayCanDots,
   sprayDab,
   stampHighlighter,
 } from '../core/brushes'
@@ -44,6 +46,7 @@ import {
 import { MAX_CANVAS } from '../core/palette'
 import { eraserPreviewRect } from '../core/cursorPreview'
 import { blendToward } from '../core/opacity'
+import type { Random } from '../core/random'
 import type { BrushShape } from '../core/raster'
 import {
   applyMask,
@@ -144,6 +147,8 @@ export interface PaintCanvasProps {
   selectionShape?: SelectionShape
   /** Freehand brush style used by the brush tool. */
   brush?: BrushId
+  /** Random source for the airbrush and spray can; Math.random by default (seeded in tests). */
+  random?: Random
   /** Font, size and style used by the text tool. */
   text?: TextOptions
   /** Called by the floating text toolbar when a text option changes. */
@@ -537,6 +542,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     transparentSelection,
     selectionShape = 'rectangle',
     brush = 'round',
+    random = Math.random,
     text = DEFAULT_TEXT_OPTIONS,
     onTextChange = () => {},
     showMiniature = false,
@@ -557,6 +563,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** The layers below and above the active one, pre-flattened so painting only blends three bitmaps. */
   const stackRef = useRef<{ below: Bitmap | null; above: Bitmap | null }>({ below: null, above: null })
   const strokeRef = useRef<StrokeState | null>(null)
+  /** Keeps the spray can spraying while the pointer is held down, even without moving. */
+  const sprayTimerRef = useRef<number | null>(null)
+  const stopSpraying = useCallback(() => {
+    if (sprayTimerRef.current !== null) window.clearInterval(sprayTimerRef.current)
+    sprayTimerRef.current = null
+  }, [])
+  useEffect(() => stopSpraying, [stopSpraying])
   const editorRef = useRef<TextEditorState | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const textToolbarRef = useRef<HTMLDivElement | null>(null)
@@ -1488,7 +1501,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const color = tool === 'eraser' ? eraseColor() : strokeColorFor(tool, slot, primary, secondary)
         const width = strokeWidthFor(tool, brushSize)
         if (tool === 'airbrush') {
-          sprayDab(target, point, width, color)
+          sprayDab(target, point, width, color, random)
         } else if (tool === 'brush' && brush === 'highlighter') {
           const mask = createCoverageMask(base.width, base.height)
           stampHighlighter(mask, point, point, width)
@@ -1497,7 +1510,23 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (stroke.work) stroke.work = result
           else bitmapRef.current = result
         } else if (tool === 'brush') {
-          paintBrushStroke(target, point, point, { size: width, color, brush })
+          paintBrushStroke(target, point, point, { size: width, color, brush, random })
+          if (brush === 'spray') {
+            stopSpraying()
+            sprayTimerRef.current = window.setInterval(() => {
+              const current = strokeRef.current
+              if (current !== stroke) {
+                stopSpraying()
+                return
+              }
+              const surface = stroke.work ?? doc()
+              sprayDab(surface, stroke.last, width, color, random, sprayCanDots(width))
+              if (stroke.work) {
+                blendToward(doc(), stroke.base, stroke.work, stroke.strength, segmentBounds(stroke.last, stroke.last, width))
+              }
+              paint(doc())
+            }, SPRAY_TICK_MS)
+          }
         } else {
           stamp(target, point.x, point.y, width, color, strokeShape(tool))
         }
@@ -1506,7 +1535,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, strength, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -1594,14 +1623,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const width = strokeWidthFor(stroke.tool, brushSize)
         const target = stroke.work ?? doc()
         if (stroke.tool === 'airbrush') {
-          sprayDab(target, point, width, color)
+          sprayDab(target, point, width, color, random)
         } else if (stroke.tool === 'brush' && brush === 'highlighter' && stroke.highlighter) {
           stampHighlighter(stroke.highlighter, stroke.last, point, width)
           const result = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)
           if (stroke.work) stroke.work = result
           else bitmapRef.current = result
         } else if (stroke.tool === 'brush') {
-          paintBrushStroke(target, stroke.last, point, { size: width, color, brush })
+          paintBrushStroke(target, stroke.last, point, { size: width, color, brush, random })
         } else {
           drawLine(target, stroke.last, point, width, color, strokeShape(stroke.tool))
         }
@@ -1612,7 +1641,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewPolyline, primary, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toEdgePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewPolyline, primary, random, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toEdgePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -1656,6 +1685,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
+      stopSpraying()
       if (isShapeTool(stroke.tool) && stroke.recorded) {
         const end = toPoint(event)
         if (!pointsEqual(end, stroke.points[stroke.points.length - 1])) stroke.points.push(end)
@@ -1670,7 +1700,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       strokeRef.current = null
     },
-    [paint, previewPolyline, publishLayers, renderShape, size.height, size.width, syncHistory, text.fontSize, toPoint, updateSelection, zoom],
+    [paint, previewPolyline, publishLayers, renderShape, size.height, size.width, stopSpraying, syncHistory, text.fontSize, toPoint, updateSelection, zoom],
   )
 
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {

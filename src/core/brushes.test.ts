@@ -8,9 +8,12 @@ import {
   createCoverageMask,
   isColorBrush,
   paintBrushStroke,
+  SPRAY_TICK_MS,
+  sprayCanDots,
   sprayDab,
   stampHighlighter,
 } from './brushes'
+import { seededRandom } from './random'
 import type { BrushId } from './brushes'
 import { BLACK, WHITE } from './color'
 
@@ -45,13 +48,14 @@ function countNonWhite(bitmap: Bitmap): number {
 }
 
 describe('brushes', () => {
-  it('lists the eight brushes in order', () => {
+  it('lists the brushes in order', () => {
     expect(BRUSHES.map((brush) => brush.id)).toEqual([
       'round',
       'soft',
       'natural',
       'calligraphy',
       'highlighter',
+      'spray',
       'blur',
       'smudge',
       'liquify',
@@ -62,6 +66,7 @@ describe('brushes', () => {
       'Natural brush',
       'Calligraphy pen',
       'Highlighter pen',
+      'Spray can',
       'Selective blurring',
       'Smudge',
       'Liquify',
@@ -289,5 +294,59 @@ describe('large brush sizes', () => {
     expect(bitmap.get(350, 350 - 248)).toEqual(BLACK)
     expect(bitmap.get(350, 350 + 248)).toEqual(BLACK)
     expect(bitmap.get(350, 350 - 255)).toEqual(WHITE)
+  })
+})
+
+describe('spray can', () => {
+  const painted = (bitmap: Bitmap) => countNonWhite(bitmap)
+
+  it('lays down colour', () => {
+    expect(isColorBrush('spray')).toBe(true)
+  })
+
+  it('is repeatable with a seeded random source', () => {
+    const a = new Bitmap(40, 40, WHITE)
+    const b = new Bitmap(40, 40, WHITE)
+    sprayDab(a, { x: 20, y: 20 }, 16, BLACK, seededRandom(7), sprayCanDots(16))
+    sprayDab(b, { x: 20, y: 20 }, 16, BLACK, seededRandom(7), sprayCanDots(16))
+    expect(pixelData(a)).toEqual(pixelData(b))
+    const c = new Bitmap(40, 40, WHITE)
+    sprayDab(c, { x: 20, y: 20 }, 16, BLACK, seededRandom(8), sprayCanDots(16))
+    expect(pixelData(c)).not.toEqual(pixelData(a))
+  })
+
+  it('sprays a few dots per tick, growing with the area', () => {
+    expect(sprayCanDots(1)).toBeGreaterThanOrEqual(1)
+    expect(sprayCanDots(40)).toBeGreaterThan(sprayCanDots(10))
+    // Sparser than one airbrush puff, so holding still builds up gradually.
+    expect(sprayCanDots(20)).toBeLessThan(Math.round(10 * 10 * 0.6))
+    expect(SPRAY_TICK_MS).toBeGreaterThan(0)
+  })
+
+  it('builds up density with each tick on the same spot, inside the circle', () => {
+    const bitmap = new Bitmap(60, 60, WHITE)
+    const random = seededRandom(3)
+    const counts: number[] = []
+    for (let tick = 0; tick < 12; tick += 1) {
+      sprayDab(bitmap, { x: 30, y: 30 }, 30, BLACK, random, sprayCanDots(30))
+      counts.push(painted(bitmap))
+    }
+    expect(counts[11]).toBeGreaterThan(counts[0] * 3)
+    for (let y = 0; y < 60; y += 1) {
+      for (let x = 0; x < 60; x += 1) {
+        if (bitmap.get(x, y).r < 255) expect(Math.hypot(x - 30, y - 30)).toBeLessThanOrEqual(15.75)
+      }
+    }
+  })
+
+  it('paints one puff per segment end with paintBrushStroke', () => {
+    const a = new Bitmap(40, 40, WHITE)
+    paintBrushStroke(a, { x: 10, y: 20 }, { x: 30, y: 20 }, { size: 10, color: BLACK, brush: 'spray', random: seededRandom(5) })
+    expect(painted(a)).toBeGreaterThan(0)
+    for (let y = 0; y < 40; y += 1) {
+      for (let x = 0; x < 40; x += 1) {
+        if (a.get(x, y).r < 255) expect(Math.hypot(x - 30, y - 20)).toBeLessThanOrEqual(5.75)
+      }
+    }
   })
 })
