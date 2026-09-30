@@ -30,7 +30,6 @@ import { History } from '../core/history'
 import { compositeLayers, drawOver, moveItem, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
-  bezierPoints,
   blit,
   blitAlpha,
   crop,
@@ -68,7 +67,6 @@ import { bitmapFromDataUrl } from '../render/image'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
-import { CheckIcon, CrossIcon } from './icons'
 
 export interface PaintCanvasHandle {
   newDocument: (width: number, height: number) => void
@@ -315,10 +313,6 @@ const CURVE_DOT_HIT = 8
 const DOUBLE_CLICK_MS = 300
 /** How far apart, in screen pixels, the two presses of a double-click may be. */
 const DOUBLE_CLICK_SLOP = 4
-/** The curve's floating tick/cross dialog. */
-const CURVE_TOOLBAR_WIDTH = 72
-const CURVE_TOOLBAR_HEIGHT = 40
-const CURVE_TOOLBAR_GAP = 10
 
 const MIN_TEXT_SIZE = 24
 const DEFAULT_TEXT_WIDTH = 200
@@ -1697,8 +1691,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (active) {
             curve.pointerId = event.pointerId
             curve.active = active
+            return
           }
-          return
+          // A press outside the dots places the pending curve, then starts the next.
+          commitCurve()
         }
         curveRef.current = {
           kind: shapeKind,
@@ -1774,7 +1770,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitCurve, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -2010,11 +2006,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (selectRef.current) return
       const rect = currentRect()
       if (rect && hitHandle(rect, clientToCanvas(clientX, clientY), HANDLE_HIT / zoom)) return
+      commitCurve()
       commitText()
       commitFloating()
       updateSelection(null)
     },
-    [clientToCanvas, commitFloating, commitText, currentRect, updateSelection, zoom],
+    [clientToCanvas, commitCurve, commitFloating, commitText, currentRect, updateSelection, zoom],
   )
   useEffect(() => {
     clickOutsideRef.current = handleClickOutside
@@ -2249,37 +2246,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         })()
       : 'down'
 
-  // The curve's tick/cross dialog floats just north of the bezier's bounding box,
-  // horizontally centered over it, so a bulging curve never crosses the dialog.
-  const curveToolbarPosition = curve && curve.phase === 'bend'
-    ? (() => {
-        const points = bezierPoints([curve.p0, curve.c1, curve.c2, curve.p3])
-        let minX = Infinity
-        let maxX = -Infinity
-        let minY = Infinity
-        let maxY = -Infinity
-        for (const point of points) {
-          if (point.x < minX) minX = point.x
-          if (point.x > maxX) maxX = point.x
-          if (point.y < minY) minY = point.y
-          if (point.y > maxY) maxY = point.y
-        }
-        const frameWidth = size.width * zoom
-        const frameHeight = size.height * zoom
-        const left = clamp(
-          ((minX + maxX) / 2) * zoom - CURVE_TOOLBAR_WIDTH / 2,
-          0,
-          Math.max(0, frameWidth - CURVE_TOOLBAR_WIDTH),
-        )
-        const above = minY * zoom - CURVE_TOOLBAR_HEIGHT - CURVE_TOOLBAR_GAP
-        const top =
-          above >= 0
-            ? above
-            : Math.min(Math.max(0, frameHeight - CURVE_TOOLBAR_HEIGHT), maxY * zoom + CURVE_TOOLBAR_GAP)
-        return { left, top }
-      })()
-    : null
-
   const cursor =
     tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
 
@@ -2393,21 +2359,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           <circle className="curve-handle" cx={(curve.c1.x + 0.5) * zoom} cy={(curve.c1.y + 0.5) * zoom} r={4.5} />
           <circle className="curve-handle" cx={(curve.c2.x + 0.5) * zoom} cy={(curve.c2.y + 0.5) * zoom} r={4.5} />
         </svg>
-      ) : null}
-      {curve && curve.phase === 'bend' && curveToolbarPosition ? (
-        <div
-          className="curve-toolbar"
-          role="toolbar"
-          aria-label="Curve options"
-          style={{ left: curveToolbarPosition.left, top: curveToolbarPosition.top }}
-        >
-          <button type="button" className="icon-button" aria-label="Finish curve" onClick={commitCurve}>
-            <CheckIcon size={16} />
-          </button>
-          <button type="button" className="icon-button" aria-label="Cancel curve" onClick={cancelCurve}>
-            <CrossIcon size={16} />
-          </button>
-        </div>
       ) : null}
       {editor && textToolbarPosition ? (
         <div

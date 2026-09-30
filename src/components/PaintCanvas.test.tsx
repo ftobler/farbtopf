@@ -854,25 +854,55 @@ describe('PaintCanvas', () => {
       expect(pixel(7, 2)).toEqual(white)
     })
 
-    it('commits a curve from the tick button', () => {
+    it('places the curve when clicking outside its control points', () => {
       const { canvas, container, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragLine(canvas)
-      fireEvent.click(within(container).getByLabelText('Finish curve'))
+      // (15, 15) is far from the chord at y = 2 and from all four dots.
+      click(canvas, 2, 15, 15)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 2)).toEqual(black)
+      expect(within(container).queryByLabelText('Finish curve')).toBeNull()
+      expect(within(container).queryByLabelText('Cancel curve')).toBeNull()
+      expect(within(container).queryByRole('toolbar', { name: 'Curve options' })).toBeNull()
+    })
+
+    it('keeps editing when clicking a control point', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      // c1 starts a third along the chord at (5.333, 2); a click on it only grabs it.
+      down(canvas, 2, 5, 2)
+      up(canvas, 2, 5, 2)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+    })
+
+    it('places the curve when clicking the workspace background', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      const pixel = spyPixels(canvas, 20)
+      onHistoryChange.mockClear()
+      dragLine(canvas)
+      act(() => ref.current?.clickOutside(18, 18))
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
       expect(pixel(7, 2)).toEqual(black)
     })
 
-    it('cancels a curve from the cross button without history and restores the pixel', () => {
-      const { canvas, container, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
-      const pixel = spyPixels(canvas, 20)
+    it('places the current curve and starts a new one on the next drag', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
       onHistoryChange.mockClear()
       dragLine(canvas)
-      expect(pixel(7, 2)).toEqual(black)
-      fireEvent.click(within(container).getByLabelText('Cancel curve'))
-      expect(onHistoryChange).not.toHaveBeenCalled()
-      expect(pixel(7, 2)).toEqual(white)
+      // Press outside the four dots and drag out a second chord.
+      down(canvas, 2, 15, 15)
+      move(canvas, 2, 15, 17)
+      up(canvas, 2, 15, 17)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(onHistoryChange).toHaveBeenCalledTimes(2)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     })
 
     it('cancels a pending curve on Escape without history', () => {
@@ -922,18 +952,6 @@ describe('PaintCanvas', () => {
           { x: 12, y: 2 },
         ],
       ])
-    })
-
-    it('floats the curve dialog above the bounding box, centered over it', () => {
-      const { canvas, container } = setup('shape', 200, 200, false, 'rectangle', 'polyline')
-      down(canvas, 1, 60, 100)
-      move(canvas, 1, 140, 100)
-      up(canvas, 1, 140, 100)
-      const toolbar = within(container).getByRole('toolbar', { name: 'Curve options' })
-      // The dialog must sit entirely above the curve's topmost point (y = 100).
-      expect(parseFloat(toolbar.style.top) + 40).toBeLessThanOrEqual(100)
-      // ...and be horizontally centered over the bounding box (midpoint 100).
-      expect(parseFloat(toolbar.style.left) + 36).toBeCloseTo(100, 5)
     })
 
     it('keeps bending after the start endpoint has been dragged', () => {

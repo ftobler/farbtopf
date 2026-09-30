@@ -1244,21 +1244,6 @@ textarea {
   height: 30px;
 }
 
-.curve-toolbar {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  z-index: 30;
-}
-
 .color-palette {
   display: flex;
   align-items: center;
