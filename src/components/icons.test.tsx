@@ -1,6 +1,8 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { StrokeSizeIcon } from './icons'
+import { BRUSH_SIZES } from '../core/tools'
+import { strokePreviewWidth } from '../core/strokeWave'
+import { StrokeSizeIcon, StrokeSizePreview } from './icons'
 
 describe('StrokeSizeIcon', () => {
   it('draws exactly one sine wavelength: a crest then a trough across the icon', () => {
@@ -27,5 +29,29 @@ describe('StrokeSizeIcon', () => {
     expect(trough[1]).toBeGreaterThan(12)
     expect(trough[2]).toBe(21)
     expect(trough[3]).toBe(12)
+  })
+})
+
+describe('StrokeSizePreview', () => {
+  it('keeps every wave, including its round caps, inside the preview box', () => {
+    for (const size of BRUSH_SIZES) {
+      const { container, unmount } = render(<StrokeSizePreview size={size} />)
+      const svg = container.querySelector('svg.size-wave')!
+      const [, , w, h] = svg.getAttribute('viewBox')!.split(' ').map(Number)
+      const path = svg.querySelector('path')!
+      const stroke = Number(path.getAttribute('stroke-width'))
+      expect(stroke).toBe(strokePreviewWidth(size))
+      const nums = path.getAttribute('d')!.match(/-?[\d.]+/g)!.map(Number)
+      const xs = nums.filter((_, i) => i % 2 === 0)
+      const ys = nums.filter((_, i) => i % 2 === 1)
+      // Bezier peaks reach 3/4 of the way to the control points.
+      const cy = h / 2
+      const reach = (Math.max(...ys) - cy) * 0.75
+      expect(cy - reach - stroke / 2).toBeGreaterThanOrEqual(0)
+      expect(cy + reach + stroke / 2).toBeLessThanOrEqual(h)
+      expect(Math.min(...xs) - stroke / 2).toBeGreaterThanOrEqual(0)
+      expect(Math.max(...xs) + stroke / 2).toBeLessThanOrEqual(w)
+      unmount()
+    }
   })
 })

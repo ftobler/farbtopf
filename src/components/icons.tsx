@@ -1,4 +1,5 @@
 import type { SVGProps } from 'react'
+import { sineWavePath, strokePreviewWidth } from '../core/strokeWave'
 
 export interface IconProps extends SVGProps<SVGSVGElement> {
   size?: number
@@ -246,8 +247,34 @@ export function OutlineFilledIcon(props: IconProps) {
 export function StrokeSizeIcon(props: IconProps) {
   return (
     <Svg className="stroke-size-icon" {...props}>
-      <path d="M3 12C6 5.5 9 5.5 12 12S18 18.5 21 12" />
+      <path d={sineWavePath(3, 21, 12, 4.875)} />
     </Svg>
+  )
+}
+
+const PREVIEW_W = 48
+const PREVIEW_H = 24
+
+/** A stroke size menu entry's preview: the stroke size wave drawn at that size's thickness. */
+export function StrokeSizePreview({ size }: { size: number }) {
+  const width = strokePreviewWidth(size)
+  const cy = PREVIEW_H / 2
+  const amp = Math.min(5, Math.max(1.5, cy - width / 2 - 1))
+  const pad = width / 2 + 1
+  return (
+    <svg
+      className="size-wave"
+      width={PREVIEW_W}
+      height={PREVIEW_H}
+      viewBox={`0 0 ${PREVIEW_W} ${PREVIEW_H}`}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={sineWavePath(pad, PREVIEW_W - pad, cy, amp)} strokeWidth={width} />
+    </svg>
   )
 }
 

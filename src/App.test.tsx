@@ -5,6 +5,7 @@ import { SHAPES } from './core/shapes'
 import { CUSTOM_COLORS_KEY } from './core/customColors'
 import { ZOOM_LEVELS } from './core/zoom'
 import { BRUSH_SIZES } from './core/tools'
+import { strokePreviewWidth } from './core/strokeWave'
 
 describe('App', () => {
   it('renders the tool palette and status bar', () => {
@@ -514,6 +515,26 @@ describe('App', () => {
       BRUSH_SIZES.map((size) => `${size} px`),
     )
     expect(menu!.style.flexDirection).toBe('column')
+  })
+
+  it('previews every size in the sine wave dropdown as a wave drawn at that thickness', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    const options = [...document.querySelectorAll<HTMLElement>('.size-menu .size-option')]
+    expect(options).toHaveLength(BRUSH_SIZES.length)
+    const widths = options.map((option, i) => {
+      expect(option.querySelector('.size-line')).toBeNull()
+      const wave = option.querySelector('svg.size-wave')
+      expect(wave).toBeTruthy()
+      expect(wave!.getAttribute('stroke')).toBe('currentColor')
+      expect(wave!.getAttribute('stroke-linecap')).toBe('round')
+      const path = wave!.querySelector('path')!
+      expect(path.getAttribute('d')).toMatch(/C.*S/)
+      const width = Number(path.getAttribute('stroke-width'))
+      expect(width).toBe(strokePreviewWidth(BRUSH_SIZES[i]))
+      return width
+    })
+    for (let i = 1; i < widths.length; i++) expect(widths[i]).toBeGreaterThan(widths[i - 1])
   })
 
   it('starts on a size the dropdown can show and steps it with [ and ]', () => {

@@ -571,12 +571,9 @@ textarea {
   background: var(--accent-soft);
 }
 
-.size-line {
+.size-wave {
   display: block;
-  width: 44px;
-  max-height: 20px;
-  border-radius: 2px;
-  background: var(--text);
+  flex: none;
 }
 
 .statusbar .zoom-control {

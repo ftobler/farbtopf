@@ -32,6 +32,7 @@ import {
   ScaleIcon,
   SelectIcon,
   StrokeSizeIcon,
+  StrokeSizePreview,
   FreeformSelectIcon,
   TextIcon,
 } from './icons'
@@ -433,6 +434,7 @@ export function Ribbon({
             }}
           />
           <div className="shape-options">
+            {/* The "sine wave button": stroke size dropdown, its icon and every option drawn as a sine wave. */}
             <Dropdown
               title="Stroke size"
               ariaLabel="Size"
@@ -451,7 +453,7 @@ export function Ribbon({
                         close()
                       }}
                     >
-                      <span className="size-line" style={{ height: Math.max(1, size) }} />
+                      <StrokeSizePreview size={size} />
                       <span className="size-label">{size} px</span>
                     </button>
                   ))}
