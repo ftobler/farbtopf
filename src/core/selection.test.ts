@@ -4,6 +4,7 @@ import { BLACK, WHITE } from './color'
 import {
   applyMask,
   fillSelection,
+  invertSelectedColors,
   invertSelection,
   isSelected,
   polygonSelection,
@@ -135,5 +136,22 @@ describe('fillSelection', () => {
     expect(bitmap.get(0, 0)).toEqual(BLACK)
     expect(bitmap.get(1, 0)).toEqual(BLACK)
     expect(bitmap.get(2, 0)).toEqual(WHITE)
+  })
+})
+
+describe('invertSelectedColors', () => {
+  it('inverts only the selected pixels, keeping alpha', () => {
+    const bitmap = new Bitmap(3, 1, { r: 10, g: 20, b: 30, a: 40 })
+    invertSelectedColors(bitmap, { x: 1, y: 0, width: 2, height: 1 }, maskFrom(['.#']))
+    expect(bitmap.get(0, 0)).toEqual({ r: 10, g: 20, b: 30, a: 40 })
+    expect(bitmap.get(1, 0)).toEqual({ r: 10, g: 20, b: 30, a: 40 })
+    expect(bitmap.get(2, 0)).toEqual({ r: 245, g: 235, b: 225, a: 40 })
+  })
+
+  it('ignores the part of the selection outside the bitmap', () => {
+    const bitmap = new Bitmap(2, 2, BLACK)
+    invertSelectedColors(bitmap, { x: -1, y: -1, width: 2, height: 2 }, null)
+    expect(bitmap.get(0, 0)).toEqual(WHITE)
+    expect(bitmap.get(1, 1)).toEqual(BLACK)
   })
 })

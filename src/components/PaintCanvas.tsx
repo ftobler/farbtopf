@@ -42,7 +42,14 @@ import {
 } from '../core/raster'
 import { MAX_CANVAS } from '../core/palette'
 import type { BrushShape } from '../core/raster'
-import { applyMask, fillSelection, invertSelection, isSelected, polygonSelection } from '../core/selection'
+import {
+  applyMask,
+  fillSelection,
+  invertSelectedColors,
+  invertSelection,
+  isSelected,
+  polygonSelection,
+} from '../core/selection'
 import type { SelectionMask, SelectionShape } from '../core/selection'
 import { renderShape as drawShape, shapeById } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
@@ -78,7 +85,7 @@ export interface PaintCanvasHandle {
    * at its image position; new area is white and anything outside is cropped.
    */
   resizeCanvas: (rect: Rect) => void
-  /** Inverts the colours of the whole document. */
+  /** Inverts the colours of the selection, or of the whole document without one. */
   invertColors: () => void
   cropToSelection: () => void
   getSelection: () => Rect | null
@@ -1035,7 +1042,21 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       invertColors() {
         finishPolyline()
-        commitFloating()
+        const floating = floatingRef.current
+        if (floating) {
+          floating.bitmap = invertBitmap(floating.bitmap)
+          floating.source = invertBitmap(floating.source)
+          renderPreview()
+          return
+        }
+        const rect = selectionRef.current
+        if (rect) {
+          recordHistory(doc().clone())
+          invertSelectedColors(doc(), rect, maskRef.current)
+          paint(doc())
+          syncHistory()
+          return
+        }
         applyToLayers((bitmap) => invertBitmap(bitmap))
       },
       cropToSelection() {

@@ -120,3 +120,14 @@ export function fillSelection(bitmap: Bitmap, rect: Rect, mask: SelectionMask | 
     }
   }
 }
+
+/** Inverts the red, green and blue channels of every selected pixel of `bitmap`, keeping alpha. */
+export function invertSelectedColors(bitmap: Bitmap, rect: Rect, mask: SelectionMask | null): void {
+  for (let y = rect.y; y < rect.y + rect.height; y += 1) {
+    for (let x = rect.x; x < rect.x + rect.width; x += 1) {
+      if (!bitmap.contains(x, y) || !isSelected(rect, mask, x, y)) continue
+      const pixel = bitmap.get(x, y)
+      bitmap.set(x, y, { r: 255 - pixel.r, g: 255 - pixel.g, b: 255 - pixel.b, a: pixel.a })
+    }
+  }
+}
