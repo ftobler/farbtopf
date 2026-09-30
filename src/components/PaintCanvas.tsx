@@ -30,6 +30,7 @@ import { History } from '../core/history'
 import { compositeLayers, drawOver, moveItem, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
+  bezierPoints,
   blit,
   blitAlpha,
   crop,
@@ -2246,21 +2247,33 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         })()
       : 'down'
 
-  // The curve's tick/cross dialog floats above the midpoint of the bezier.
+  // The curve's tick/cross dialog floats just north of the bezier's bounding box,
+  // horizontally centered over it, so a bulging curve never crosses the dialog.
   const curveToolbarPosition = curve && curve.phase === 'bend'
     ? (() => {
-        const mid = {
-          x: (curve.p0.x + 3 * curve.c1.x + 3 * curve.c2.x + curve.p3.x) / 8,
-          y: (curve.p0.y + 3 * curve.c1.y + 3 * curve.c2.y + curve.p3.y) / 8,
+        const points = bezierPoints([curve.p0, curve.c1, curve.c2, curve.p3])
+        let minX = Infinity
+        let maxX = -Infinity
+        let minY = Infinity
+        let maxY = -Infinity
+        for (const point of points) {
+          if (point.x < minX) minX = point.x
+          if (point.x > maxX) maxX = point.x
+          if (point.y < minY) minY = point.y
+          if (point.y > maxY) maxY = point.y
         }
         const frameWidth = size.width * zoom
         const frameHeight = size.height * zoom
-        const left = clamp(mid.x * zoom - CURVE_TOOLBAR_WIDTH / 2, 0, Math.max(0, frameWidth - CURVE_TOOLBAR_WIDTH))
-        const above = mid.y * zoom - CURVE_TOOLBAR_HEIGHT - CURVE_TOOLBAR_GAP
+        const left = clamp(
+          ((minX + maxX) / 2) * zoom - CURVE_TOOLBAR_WIDTH / 2,
+          0,
+          Math.max(0, frameWidth - CURVE_TOOLBAR_WIDTH),
+        )
+        const above = minY * zoom - CURVE_TOOLBAR_HEIGHT - CURVE_TOOLBAR_GAP
         const top =
           above >= 0
             ? above
-            : Math.min(Math.max(0, frameHeight - CURVE_TOOLBAR_HEIGHT), mid.y * zoom + CURVE_TOOLBAR_GAP)
+            : Math.min(Math.max(0, frameHeight - CURVE_TOOLBAR_HEIGHT), maxY * zoom + CURVE_TOOLBAR_GAP)
         return { left, top }
       })()
     : null

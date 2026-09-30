@@ -903,6 +903,18 @@ describe('PaintCanvas', () => {
       expect(pixel(7, 6)).toEqual(white)
     })
 
+    it('floats the curve dialog above the bounding box, centered over it', () => {
+      const { canvas, container } = setup('shape', 200, 200, false, 'rectangle', 'polyline')
+      down(canvas, 1, 60, 100)
+      move(canvas, 1, 140, 100)
+      up(canvas, 1, 140, 100)
+      const toolbar = within(container).getByRole('toolbar', { name: 'Curve options' })
+      // The dialog must sit entirely above the curve's topmost point (y = 100).
+      expect(parseFloat(toolbar.style.top) + 40).toBeLessThanOrEqual(100)
+      // ...and be horizontally centered over the bounding box (midpoint 100).
+      expect(parseFloat(toolbar.style.left) + 36).toBeCloseTo(100, 5)
+    })
+
     it('keeps bending after the start endpoint has been dragged', () => {
       const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
       dragLine(canvas)
