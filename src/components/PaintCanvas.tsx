@@ -231,8 +231,8 @@ interface CurveState {
   phase: 'line' | 'bend'
   /** The pointer that started the line or is dragging a handle, if any. */
   pointerId: number | null
-  /** The control handle being dragged in the bend phase. */
-  active: 'c1' | 'c2' | null
+  /** The endpoint dot or control handle being dragged in the bend phase. */
+  active: 'p0' | 'p3' | 'c1' | 'c2' | null
 }
 
 /** The part of a pending curve the overlay and dialog redraw from. */
@@ -1671,14 +1671,26 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (isShapeTool(tool) && shapeById(shapeKind).interaction === 'curve') {
         const curve = curveRef.current
         if (curve) {
-          // A pending curve is only retargeted by grabbing one of its handles.
+          // A pending curve is only retargeted by grabbing one of its four dots.
+          if (curve.phase !== 'bend') return
           const tolerance = HANDLE_HIT / zoom
-          const active: 'c1' | 'c2' | null =
-            curve.phase === 'bend' && distance(point, curve.c1) <= tolerance
-              ? 'c1'
-              : curve.phase === 'bend' && distance(point, curve.c2) <= tolerance
-                ? 'c2'
-                : null
+          const candidates: { handle: 'p0' | 'p3' | 'c1' | 'c2'; dot: Point }[] = [
+            { handle: 'p0', dot: curve.p0 },
+            { handle: 'p3', dot: curve.p3 },
+            { handle: 'c1', dot: curve.c1 },
+            { handle: 'c2', dot: curve.c2 },
+          ]
+          // The nearest dot wins, so a press exactly on an endpoint never grabs the
+          // adjacent control handle that overlaps it.
+          let active: 'p0' | 'p3' | 'c1' | 'c2' | null = null
+          let best = Infinity
+          for (const candidate of candidates) {
+            const reach = distance(point, candidate.dot)
+            if (reach <= tolerance && reach < best) {
+              best = reach
+              active = candidate.handle
+            }
+          }
           if (active) {
             curve.pointerId = event.pointerId
             curve.active = active
@@ -1843,6 +1855,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           curve.c1 = point
         } else if (curve.active === 'c2') {
           curve.c2 = point
+        } else if (curve.active === 'p0') {
+          // Moving an endpoint carries its adjacent handle along, preserving the tangent.
+          const dx = point.x - curve.p0.x
+          const dy = point.y - curve.p0.y
+          curve.p0 = point
+          curve.c1 = { x: curve.c1.x + dx, y: curve.c1.y + dy }
+        } else if (curve.active === 'p3') {
+          const dx = point.x - curve.p3.x
+          const dy = point.y - curve.p3.y
+          curve.p3 = point
+          curve.c2 = { x: curve.c2.x + dx, y: curve.c2.y + dy }
         } else {
           return
         }
@@ -2350,8 +2373,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             x2={(curve.c2.x + 0.5) * zoom}
             y2={(curve.c2.y + 0.5) * zoom}
           />
-          <circle className="curve-endpoint" cx={(curve.p0.x + 0.5) * zoom} cy={(curve.p0.y + 0.5) * zoom} r={3} />
-          <circle className="curve-endpoint" cx={(curve.p3.x + 0.5) * zoom} cy={(curve.p3.y + 0.5) * zoom} r={3} />
+          <circle className="curve-endpoint" cx={(curve.p0.x + 0.5) * zoom} cy={(curve.p0.y + 0.5) * zoom} r={4.5} />
+          <circle className="curve-endpoint" cx={(curve.p3.x + 0.5) * zoom} cy={(curve.p3.y + 0.5) * zoom} r={4.5} />
           <circle className="curve-handle" cx={(curve.c1.x + 0.5) * zoom} cy={(curve.c1.y + 0.5) * zoom} r={4.5} />
           <circle className="curve-handle" cx={(curve.c2.x + 0.5) * zoom} cy={(curve.c2.y + 0.5) * zoom} r={4.5} />
         </svg>

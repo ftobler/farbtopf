@@ -903,6 +903,66 @@ describe('PaintCanvas', () => {
       expect(pixel(7, 6)).toEqual(white)
     })
 
+    it('keeps bending after the start endpoint has been dragged', () => {
+      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      dragLine(canvas)
+      // Press exactly on the start endpoint; it, not the nearby c1, must be grabbed.
+      down(canvas, 2, 2, 2)
+      move(canvas, 2, 2, 8)
+      up(canvas, 2, 2, 8)
+      // c1 travelled with p0; grabbing it must still bend the curve.
+      down(canvas, 3, 5, 8)
+      move(canvas, 3, 5, 12)
+      up(canvas, 3, 5, 12)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
+        'polyline',
+        [
+          { x: 2, y: 8 },
+          { x: 5, y: 12 },
+          { x: 2 + 2 * ((12 - 2) / 3), y: 2 },
+          { x: 12, y: 2 },
+        ],
+      ])
+    })
+
+    it('moves the end endpoint and its handle together', () => {
+      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      dragLine(canvas)
+      down(canvas, 2, 12, 2)
+      move(canvas, 2, 12, 8)
+      up(canvas, 2, 12, 8)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
+        'polyline',
+        [
+          { x: 2, y: 2 },
+          { x: 2 + (12 - 2) / 3, y: 2 },
+          { x: 2 + 2 * ((12 - 2) / 3), y: 8 },
+          { x: 12, y: 8 },
+        ],
+      ])
+    })
+
+    it('grabs the endpoint over the overlapping control handle', () => {
+      const { canvas } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+      dragLine(canvas)
+      // c1 sits ~3px from p0, inside the hit tolerance, but the nearest dot wins.
+      down(canvas, 2, 2, 2)
+      move(canvas, 2, 2, 6)
+      up(canvas, 2, 2, 6)
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(vi.mocked(renderShape).mock.lastCall?.slice(1, 3)).toEqual([
+        'polyline',
+        [
+          { x: 2, y: 6 },
+          { x: 2 + (12 - 2) / 3, y: 6 },
+          { x: 2 + 2 * ((12 - 2) / 3), y: 2 },
+          { x: 12, y: 2 },
+        ],
+      ])
+    })
+
     it('cancels a pending curve when the tool changes without recording history', () => {
       const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
       const pixel = spyPixels(canvas, 20)
