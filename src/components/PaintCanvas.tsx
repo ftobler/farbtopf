@@ -195,6 +195,12 @@ interface TextResizeState {
   handle: SelectionHandle
 }
 
+/** A text box being dragged out on the canvas, before the editor opens. */
+interface TextPlaceState {
+  pointerId: number
+  start: Point
+}
+
 type SelectionHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
 interface FloatingSelection {
@@ -246,6 +252,8 @@ const DOUBLE_CLICK_SLOP = 4
 
 const MIN_TEXT_SIZE = 24
 const DEFAULT_TEXT_WIDTH = 200
+/** How far, in screen pixels, the pointer may wander before a text click becomes a drag. */
+const TEXT_DRAG_SLOP = 4
 const TEXT_TOOLBAR_WIDTH = 300
 const TEXT_TOOLBAR_HEIGHT = 40
 const TEXT_TOOLBAR_GAP = 8
@@ -364,6 +372,38 @@ function resizeTextBox(
   if (handle.includes('n')) top = clamp(Math.round(point.y), 0, bottom - MIN_TEXT_SIZE)
   if (handle.includes('s')) bottom = clamp(Math.round(point.y), top + MIN_TEXT_SIZE, height)
   return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+/** Grows `rect` to the minimum text box size and slides it back inside the canvas. */
+function fitTextBox(rect: Rect, width: number, height: number): Rect {
+  const w = Math.max(MIN_TEXT_SIZE, rect.width)
+  const h = Math.max(MIN_TEXT_SIZE, rect.height)
+  return {
+    x: clamp(rect.x, 0, Math.max(0, width - w)),
+    y: clamp(rect.y, 0, Math.max(0, height - h)),
+    width: w,
+    height: h,
+  }
+}
+
+/**
+ * The text box placed by a press at `start` and release at `end`. A drag spans the
+ * dragged rectangle, like a marquee selection; a plain click (within `slop` canvas
+ * pixels) opens a default-sized, one-line box at `start`.
+ */
+function placeTextBox(
+  start: Point,
+  end: Point,
+  slop: number,
+  lineHeight: number,
+  width: number,
+  height: number,
+): Rect {
+  if (Math.abs(end.x - start.x) <= slop && Math.abs(end.y - start.y) <= slop) {
+    const defaultWidth = Math.min(DEFAULT_TEXT_WIDTH, width - start.x)
+    return fitTextBox({ x: start.x, y: start.y, width: defaultWidth, height: lineHeight }, width, height)
+  }
+  return fitTextBox(clampRect(normalizeRect(start, end), width, height), width, height)
 }
 
 /** An opaque bitmap of the selected pixels, used to rotate a selection's shape. */
@@ -499,6 +539,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const textToolbarRef = useRef<HTMLDivElement | null>(null)
   const textOverlayRef = useRef<HTMLDivElement | null>(null)
   const textResizeRef = useRef<TextResizeState | null>(null)
+  const textPlaceRef = useRef<TextPlaceState | null>(null)
   const selectionRef = useRef<Rect | null>(null)
   const maskRef = useRef<SelectionMask | null>(null)
   const selectRef = useRef<SelectDrag | null>(null)
@@ -511,6 +552,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const [selection, setSelection] = useState<Rect | null>(null)
   const [mask, setMask] = useState<SelectionMask | null>(null)
   const [lasso, setLasso] = useState<Point[] | null>(null)
+  /** The dashed outline of a text box being dragged out. */
+  const [textDraft, setTextDraft] = useState<Rect | null>(null)
   const [hoverCursor, setHoverCursor] = useState<string | null>(null)
   /** The image pixel under the pointer while the eraser is active, for its footprint preview. */
   const [eraserHover, setEraserHover] = useState<Point | null>(null)
@@ -1346,16 +1389,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return
       }
       if (tool === 'text') {
-        const next = {
-          x: point.x,
-          y: point.y,
-          width: Math.max(MIN_TEXT_SIZE, Math.min(DEFAULT_TEXT_WIDTH, size.width - point.x)),
-          height: Math.max(MIN_TEXT_SIZE, Math.round(text.fontSize * TEXT_LINE_HEIGHT) + 4),
-          value: '',
-          slot,
-        }
-        editorRef.current = next
-        setEditor(next)
+        // The box opens on release, sized by the drag (or at the default size for a click).
+        event.currentTarget.setPointerCapture?.(event.pointerId)
+        textPlaceRef.current = { pointerId: event.pointerId, start: point }
         return
       }
 
@@ -1425,7 +1461,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, text.fontSize, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -1439,6 +1475,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         setHoverCursor(
           handle ? handleCursor(handle) : rect && pointInRect(point, rect) ? 'move' : null,
         )
+      }
+      const place = textPlaceRef.current
+      if (place && place.pointerId === event.pointerId) {
+        setTextDraft(clampRect(normalizeRect(place.start, point), size.width, size.height))
+        return
       }
       const drag = selectRef.current
       if (drag && drag.pointerId === event.pointerId) {
@@ -1525,6 +1566,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const handlePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      const place = textPlaceRef.current
+      if (place && place.pointerId === event.pointerId) {
+        textPlaceRef.current = null
+        setTextDraft(null)
+        if (event.type === 'pointercancel') return
+        const lineHeight = Math.round(text.fontSize * TEXT_LINE_HEIGHT) + 4
+        const rect = placeTextBox(place.start, toPoint(event), TEXT_DRAG_SLOP / zoom, lineHeight, size.width, size.height)
+        const next: TextEditorState = { ...rect, value: '', slot: 'primary' }
+        editorRef.current = next
+        setEditor(next)
+        return
+      }
       const drag = selectRef.current
       if (drag && drag.pointerId === event.pointerId) {
         if (drag.mode === 'marquee') {
@@ -1566,7 +1619,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       strokeRef.current = null
     },
-    [paint, previewPolyline, publishLayers, renderShape, size.height, size.width, syncHistory, toPoint, updateSelection],
+    [paint, previewPolyline, publishLayers, renderShape, size.height, size.width, syncHistory, text.fontSize, toPoint, updateSelection, zoom],
   )
 
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
@@ -1870,6 +1923,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             onPointerCancel={handleRotateUp}
           />
         </div>
+      ) : null}
+      {textDraft ? (
+        <div
+          className="selection-overlay text-draft"
+          aria-hidden="true"
+          style={{
+            left: textDraft.x * zoom,
+            top: textDraft.y * zoom,
+            width: textDraft.width * zoom,
+            height: textDraft.height * zoom,
+          }}
+        />
       ) : null}
       {lasso ? (
         <svg

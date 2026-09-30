@@ -876,6 +876,19 @@ describe('PaintCanvas', () => {
   describe('text tool', () => {
     function openEditor(canvas: HTMLCanvasElement, x = 10, y = 10) {
       fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
+    }
+
+    function dragBox(canvas: HTMLCanvasElement, from: [number, number], to: [number, number]) {
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: from[0], clientY: from[1] })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: to[0], clientY: to[1] })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: to[0], clientY: to[1] })
+    }
+
+    function box(container: HTMLElement) {
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      const { left, top, width, height } = textarea.style
+      return { left, top, width, height }
     }
 
     function fullGesture(element: Element) {
@@ -897,6 +910,67 @@ describe('PaintCanvas', () => {
       expect(container.querySelectorAll('.text-handle')).toHaveLength(8)
       expect(within(container).getByLabelText('Text size')).toBeTruthy()
       expect(within(container).getByRole('button', { name: 'Bold' })).toBeTruthy()
+    })
+
+    it('draws a dashed outline while dragging and opens the box only on release', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 20, clientY: 30 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 120, clientY: 90 })
+      expect(container.querySelector('.text-editor')).toBeNull()
+      const draft = container.querySelector('.text-draft') as HTMLElement
+      expect(draft).not.toBeNull()
+      expect(draft.classList.contains('selection-overlay')).toBe(true)
+      expect(draft.style.left).toBe('20px')
+      expect(draft.style.top).toBe('30px')
+      expect(draft.style.width).toBe('101px')
+      expect(draft.style.height).toBe('61px')
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 120, clientY: 90 })
+      expect(container.querySelector('.text-draft')).toBeNull()
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      expect(textarea).not.toBeNull()
+      expect(document.activeElement).toBe(textarea)
+    })
+
+    it('sizes the text box to the dragged rectangle', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      dragBox(canvas, [20, 30], [120, 90])
+      expect(box(container)).toEqual({ left: '20px', top: '30px', width: '101px', height: '61px' })
+    })
+
+    it('normalizes a drag made up and to the left', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      dragBox(canvas, [120, 90], [20, 30])
+      expect(box(container)).toEqual({ left: '20px', top: '30px', width: '101px', height: '61px' })
+    })
+
+    it('falls back to the default size for a plain click', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      openEditor(canvas, 10, 10)
+      const { left, top, width, height } = box(container)
+      expect({ left, top, width }).toEqual({ left: '10px', top: '10px', width: '190px' })
+      expect(parseInt(height)).toBeGreaterThanOrEqual(24)
+    })
+
+    it('enforces a minimum size for a tiny drag and keeps it on the canvas', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      dragBox(canvas, [50, 50], [55, 53])
+      expect(box(container)).toEqual({ left: '50px', top: '50px', width: '24px', height: '24px' })
+    })
+
+    it('shifts a minimum-size box back inside the canvas edge', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      dragBox(canvas, [190, 190], [199, 199])
+      expect(box(container)).toEqual({ left: '176px', top: '176px', width: '24px', height: '24px' })
+    })
+
+    it('commits on a canvas click without opening a new box on release', () => {
+      const { canvas, container } = setup('text', 200, 200)
+      dragBox(canvas, [20, 30], [120, 90])
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 150, clientY: 150 })
+      fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 180, clientY: 180 })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 2, clientX: 180, clientY: 180 })
+      expect(container.querySelector('.text-editor')).toBeNull()
+      expect(container.querySelector('.text-draft')).toBeNull()
     })
 
     it('resizes the text box from a handle without stamping it', () => {

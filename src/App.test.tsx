@@ -186,6 +186,7 @@ describe('App', () => {
 
     const canvas = document.querySelector('.paint-canvas') as HTMLCanvasElement
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
     expect(screen.getByLabelText('Text size')).toBeTruthy()
 
     const undo = screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement
