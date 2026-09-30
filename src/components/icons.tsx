@@ -243,12 +243,27 @@ export function OutlineFilledIcon(props: IconProps) {
   )
 }
 
-/** A smooth wavy pen stroke (one full sine wavelength), used for the stroke size control. */
-export function StrokeSizeIcon(props: IconProps) {
+/**
+ * The "sine wave button" icon for the stroke size control: a wide (2:1) icon with a thin
+ * wave above a thicker one, each one full sine wavelength, hinting at a choice of sizes.
+ */
+export function StrokeSizeIcon({ size = 20, ...rest }: IconProps) {
   return (
-    <Svg className="stroke-size-icon" {...props}>
-      <path d={sineWavePath(3, 21, 12, 4.875)} />
-    </Svg>
+    <svg
+      className="stroke-size-icon"
+      width={size * 2}
+      height={size}
+      viewBox="0 0 48 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...rest}
+    >
+      <path d={sineWavePath(4, 44, 6.5, 2.5)} strokeWidth={1.5} />
+      <path d={sineWavePath(4, 44, 16.5, 2.5)} strokeWidth={4} />
+    </svg>
   )
 }
 
