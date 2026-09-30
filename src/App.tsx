@@ -412,6 +412,12 @@ function App() {
 
   const handlePanDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
+      // A plain click on the gray background itself (not the canvas, a handle,
+      // scrollbar or floating panel) settles the selection and deselects.
+      if (event.button === 0 && event.target === event.currentTarget) {
+        canvasRef.current?.clickOutside(event.clientX, event.clientY)
+        return
+      }
       if (event.button !== 1) return
       const workspace = workspaceRef.current
       if (!workspace) return

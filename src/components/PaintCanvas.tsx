@@ -97,6 +97,12 @@ export interface PaintCanvasHandle {
   cropToSelection: () => void
   getSelection: () => Rect | null
   clearSelection: () => void
+  /**
+   * A primary press on the workspace outside the image, at client coordinates:
+   * commits an open text box and a floating selection, then deselects. Presses
+   * on a selection handle that reaches past the image edge are ignored.
+   */
+  clickOutside: (clientX: number, clientY: number) => void
   selectAll: () => void
   invertSelection: () => void
   deleteSelection: () => void
@@ -582,6 +588,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const canvasResizeRef = useRef<CanvasResizeDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
   const polylineRef = useRef<PolylineState | null>(null)
+  // The handle is built before the pointer helpers it needs, so it calls through this.
+  const clickOutsideRef = useRef<(clientX: number, clientY: number) => void>(() => {})
   const [polylineActive, setPolylineActive] = useState(false)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [editor, setEditor] = useState<TextEditorState | null>(null)
@@ -1199,6 +1207,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         updateSelection(null)
       },
+      clickOutside(clientX, clientY) {
+        clickOutsideRef.current(clientX, clientY)
+      },
       selectAll() {
         finishPolyline()
         commitFloating()
@@ -1712,6 +1723,23 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       y: rect.height === 0 ? 0 : ((clientY - rect.top) * size.height) / rect.height,
     }
   }, [size.width, size.height])
+
+  // Clicking the workspace background settles pending edits and deselects, but
+  // never while a canvas drag is running or on a handle poking past the image.
+  const handleClickOutside = useCallback(
+    (clientX: number, clientY: number) => {
+      if (selectRef.current) return
+      const rect = currentRect()
+      if (rect && hitHandle(rect, clientToCanvas(clientX, clientY), HANDLE_HIT / zoom)) return
+      commitText()
+      commitFloating()
+      updateSelection(null)
+    },
+    [clientToCanvas, commitFloating, commitText, currentRect, updateSelection, zoom],
+  )
+  useEffect(() => {
+    clickOutsideRef.current = handleClickOutside
+  }, [handleClickOutside])
 
   const handleRotateDown = useCallback(
     (event: ReactPointerEvent<HTMLSpanElement>) => {
