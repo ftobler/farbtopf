@@ -6,7 +6,6 @@ import {
   FullscreenIcon,
   GitHubIcon,
   GridIcon,
-  LogoIcon,
   MagnifierIcon,
   MiniatureIcon,
   MoonIcon,
@@ -77,7 +76,7 @@ export function MenuBar({
   return (
     <header className="menubar">
       <span className="menubar-logo">
-        <LogoIcon size={22} />
+        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={20} height={20} draggable={false} />
       </span>
 
       <div className="menubar-menus">
