@@ -76,7 +76,7 @@ export function MenuBar({
   return (
     <header className="menubar">
       <span className="menubar-logo">
-        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={20} height={20} draggable={false} />
+        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={28} height={28} draggable={false} />
       </span>
 
       <div className="menubar-menus">

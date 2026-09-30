@@ -90,6 +90,7 @@ textarea {
   display: block;
   object-fit: contain;
   user-select: none;
+  transform: translateY(-2px);
 }
 
 .menubar-menus {
