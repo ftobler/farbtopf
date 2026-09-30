@@ -799,6 +799,65 @@ describe('App', () => {
   })
 })
 
+describe('tool size and opacity sliders', () => {
+  const panel = () => screen.queryByRole('group', { name: 'Tool size and opacity' })
+  const sizeSlider = () => screen.getByRole('slider', { name: 'Size' })
+  const opacitySlider = () => screen.getByRole('slider', { name: 'Opacity' })
+
+  it('floats on the left of the workspace for the sized tools only', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    expect(panel()).toBeTruthy()
+    expect(workspace.contains(panel())).toBe(true)
+    // Tool shortcuts: pencil, airbrush, eraser, shape, brush are sized...
+    for (const key of ['p', 'a', 'e', 'u', 'b']) {
+      fireEvent.keyDown(window, { key })
+      expect(panel(), key).toBeTruthy()
+    }
+    // ...fill, picker, text, zoom and select are not.
+    for (const key of ['f', 'k', 't', 'z', 's']) {
+      fireEvent.keyDown(window, { key })
+      expect(panel(), key).toBeNull()
+    }
+  })
+
+  it('shows the size and opacity of the current tool', () => {
+    render(<App />)
+    expect(sizeSlider().getAttribute('aria-valuetext')).toBe('4 px')
+    expect(opacitySlider().getAttribute('aria-valuetext')).toBe('100%')
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    expect(sizeSlider().getAttribute('aria-valuetext')).toBe('1 px')
+  })
+
+  it('changes the size from the slider, also to sizes that are not presets', () => {
+    render(<App />)
+    fireEvent.keyDown(sizeSlider(), { key: 'ArrowUp' })
+    fireEvent.keyDown(sizeSlider(), { key: 'ArrowUp' })
+    expect(sizeSlider().getAttribute('aria-valuenow')).toBe('6')
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    expect(document.querySelector('.size-option[aria-pressed="true"]')).toBeNull()
+    expect(document.querySelector('.size-current')?.textContent).toBe('6 px')
+  })
+
+  it('moves the slider when a preset is picked from the dropdown', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    fireEvent.click(screen.getByRole('button', { name: /^20 px/ }))
+    expect(sizeSlider().getAttribute('aria-valuenow')).toBe('20')
+    expect(sizeSlider().getAttribute('aria-valuetext')).toBe('20 px')
+  })
+
+  it('changes the opacity of the current tool only', () => {
+    render(<App />)
+    fireEvent.keyDown(opacitySlider(), { key: 'PageDown' })
+    expect(opacitySlider().getAttribute('aria-valuetext')).toBe('90%')
+    fireEvent.click(screen.getByRole('button', { name: 'Eraser' }))
+    expect(opacitySlider().getAttribute('aria-valuetext')).toBe('100%')
+    fireEvent.click(screen.getByRole('button', { name: 'Brush' }))
+    expect(opacitySlider().getAttribute('aria-valuetext')).toBe('90%')
+  })
+})
+
 describe('custom color picker', () => {
   const primary = () => screen.getByLabelText('Primary color') as HTMLInputElement
   const secondary = () => screen.getByLabelText('Secondary color') as HTMLInputElement

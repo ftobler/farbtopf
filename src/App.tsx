@@ -29,6 +29,7 @@ import { RotateDialog } from './components/RotateDialog'
 import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { Scrollbars } from './components/Scrollbars'
 import { StatusBar } from './components/StatusBar'
+import { ToolSliders } from './components/ToolSliders'
 import type { BrushId } from './core/brushes'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
@@ -38,7 +39,7 @@ import type { ShapeKind } from './core/shapes'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
 import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
 import { TOOLS, toolById } from './core/tools'
-import { DEFAULT_TOOL_SETTINGS, clampSize, isSizedTool, stepSize } from './core/toolSettings'
+import { DEFAULT_TOOL_SETTINGS, clampOpacity, clampSize, isSizedTool, stepSize } from './core/toolSettings'
 import type { SizedTool, ToolSettingsMap } from './core/toolSettings'
 import type { ShapeFill, ToolId } from './core/tools'
 import { ZOOM_LEVELS, displayZoom, nextZoom } from './core/zoom'
@@ -93,6 +94,14 @@ function App() {
   const setBrushSize = useCallback(
     (size: number) =>
       setToolSettings((current) => ({ ...current, [sizedTool]: { ...current[sizedTool], size: clampSize(size) } })),
+    [sizedTool],
+  )
+  const setOpacity = useCallback(
+    (value: number) =>
+      setToolSettings((current) => ({
+        ...current,
+        [sizedTool]: { ...current[sizedTool], opacity: clampOpacity(value) },
+      })),
     [sizedTool],
   )
   const [brush, setBrush] = useState<BrushId>('round')
@@ -699,6 +708,14 @@ function App() {
           canvasSize={canvasSize}
           onPanChange={setPan}
         />
+        {isSizedTool(tool) ? (
+          <ToolSliders
+            size={brushSize}
+            opacity={opacity}
+            onSizeChange={setBrushSize}
+            onOpacityChange={setOpacity}
+          />
+        ) : null}
         {showLayers ? (
           <LayersPanel
             layers={layers.list}

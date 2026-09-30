@@ -736,6 +736,98 @@ textarea {
   z-index: 6;
 }
 
+/* Size and opacity sliders for the sized tools: the layers panel's floating glass, on the left. */
+.tool-sliders {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 8px 4px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  z-index: 6;
+  user-select: none;
+}
+
+.tool-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 48px;
+}
+
+.tool-slider-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool-slider-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tool-slider-track {
+  position: relative;
+  width: 28px;
+  height: min(180px, 40vh);
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.tool-slider-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tool-slider-rail,
+.tool-slider-fill {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 4px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+.tool-slider-rail {
+  top: 0;
+  background: var(--border-strong);
+}
+
+.tool-slider-fill {
+  background: var(--accent);
+}
+
+.tool-slider-thumb {
+  position: absolute;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, 50%);
+  box-sizing: border-box;
+}
+
+.tool-slider-track:hover .tool-slider-thumb,
+.tool-slider-track:active .tool-slider-thumb {
+  width: 16px;
+  height: 16px;
+}
+
 .layers-list {
   display: flex;
   flex-direction: column;
