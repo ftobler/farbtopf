@@ -1090,6 +1090,12 @@ textarea {
   stroke-width: 1;
 }
 
+.shape-overlay .shape-rotate-handle {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
 @keyframes selection-ants {
   to {
     border-color: rgba(255, 255, 255, 0.85);

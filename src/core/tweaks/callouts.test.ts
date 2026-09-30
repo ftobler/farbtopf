@@ -4,31 +4,35 @@ import { BLACK, rgba } from '../color'
 import { normalizeRect } from '../geometry'
 import type { Point } from '../geometry'
 import type { ShapeKind, ShapeStyle } from '../shapes'
-import { renderShape } from '../shapes'
 import { calloutFamily } from './callouts'
 
 const RED = rgba(255, 0, 0)
 const KINDS: ShapeKind[] = ['callout-rectangle', 'callout-rounded-rectangle', 'callout-oval']
 const BOTH: ShapeStyle = { width: 2, stroke: BLACK, fill: RED }
 const FILL_ONLY: ShapeStyle = { width: 1, stroke: null, fill: RED }
-const OUTLINE_ONLY: ShapeStyle = { width: 1, stroke: BLACK, fill: null }
 
 const SQUARE: [Point, Point] = [
   { x: 5, y: 5 },
   { x: 34, y: 34 },
 ]
-const WIDE: [Point, Point] = [
-  { x: 5, y: 5 },
-  { x: 44, y: 24 },
-]
-const TALL: [Point, Point] = [
-  { x: 5, y: 5 },
-  { x: 24, y: 44 },
-]
-const BOXES: [Point, Point][] = [SQUARE, WIDE, TALL]
 
 function painted(bitmap: Bitmap, x: number, y: number): boolean {
   return bitmap.get(x, y).a !== 0
+}
+
+function renderWithTip(kind: ShapeKind, tip: Point, style: ShapeStyle = BOTH): Bitmap {
+  const points = calloutFamily.insert(kind, SQUARE[0], SQUARE[1])
+  const moved = calloutFamily.move(kind, points, 'tail', tip)
+  const bitmap = new Bitmap(60, 60)
+  calloutFamily.render(bitmap, kind, moved ?? points, style)
+  return bitmap
+}
+
+function renderDefault(kind: ShapeKind, style: ShapeStyle = BOTH): Bitmap {
+  const points = calloutFamily.insert(kind, SQUARE[0], SQUARE[1])
+  const bitmap = new Bitmap(60, 60)
+  calloutFamily.render(bitmap, kind, points, style)
+  return bitmap
 }
 
 describe('calloutFamily insert', () => {
@@ -68,6 +72,40 @@ describe('calloutFamily handles', () => {
   })
 })
 
+describe('calloutFamily dynamic tail origin', () => {
+  it('a tip north of the body attaches to the top edge and paints above it', () => {
+    for (const kind of KINDS) {
+      const bitmap = renderWithTip(kind, { x: 20, y: -4 })
+      expect(painted(bitmap, 20, 3), `${kind} above body`).toBe(true)
+      expect(painted(bitmap, 20, 40), `${kind} no tail below`).toBe(false)
+    }
+  })
+
+  it('a tip south of the body attaches to the bottom edge and paints below it', () => {
+    for (const kind of KINDS) {
+      const bitmap = renderWithTip(kind, { x: 20, y: 44 })
+      expect(painted(bitmap, 19, 35), `${kind} below body`).toBe(true)
+      expect(painted(bitmap, 20, 3), `${kind} no tail above`).toBe(false)
+    }
+  })
+
+  it('a tip east of the body attaches to the right edge and paints beyond it', () => {
+    for (const kind of KINDS) {
+      const bitmap = renderWithTip(kind, { x: 46, y: 20 })
+      expect(painted(bitmap, 40, 19), `${kind} right of body`).toBe(true)
+      expect(painted(bitmap, 2, 19), `${kind} no tail left`).toBe(false)
+    }
+  })
+
+  it('a tip west of the body attaches to the left edge and paints beyond it', () => {
+    for (const kind of KINDS) {
+      const bitmap = renderWithTip(kind, { x: -6, y: 20 })
+      expect(painted(bitmap, 2, 19), `${kind} left of body`).toBe(true)
+      expect(painted(bitmap, 40, 19), `${kind} no tail right`).toBe(false)
+    }
+  })
+})
+
 describe('calloutFamily tail', () => {
   it('moving the tail replaces the tip anchor', () => {
     const points = calloutFamily.insert('callout-rectangle', SQUARE[0], SQUARE[1])
@@ -79,44 +117,18 @@ describe('calloutFamily tail', () => {
   })
 
   it('moving the tail changes the drawn tail pixels', () => {
-    const points = calloutFamily.insert('callout-rectangle', SQUARE[0], SQUARE[1])
-    const moved = calloutFamily.move('callout-rectangle', points, 'tail', { x: 33, y: 39 })!
-    const before = new Bitmap(50, 50)
-    calloutFamily.render(before, 'callout-rectangle', points, FILL_ONLY)
-    const after = new Bitmap(50, 50)
-    calloutFamily.render(after, 'callout-rectangle', moved, FILL_ONLY)
+    const before = renderDefault('callout-rectangle', FILL_ONLY)
+    const after = renderWithTip('callout-rectangle', { x: 30, y: 42 }, FILL_ONLY)
     expect(after.data).not.toEqual(before.data)
-    expect(painted(after, 21, 32)).toBe(true)
-    expect(painted(before, 21, 32)).toBe(false)
+    expect(painted(after, 29, 35)).toBe(true)
+    expect(painted(before, 29, 35)).toBe(false)
   })
 
-  it('keeps the tail at the same relative position when the box resizes', () => {
+  it('keeps the tip at the same relative position when the box resizes', () => {
     const points = calloutFamily.insert('callout-rectangle', SQUARE[0], SQUARE[1])
     const resized = calloutFamily.move('callout-rectangle', points, 'se', { x: 44, y: 44 })!
     const box = normalizeRect(resized[0], resized[1])
     expect(resized[2].x).toBeCloseTo(box.x + 0.15 * box.width)
     expect(resized[2].y).toBeCloseTo(box.y + box.height)
   })
-})
-
-describe('calloutFamily parity with renderShape', () => {
-  for (const kind of KINDS) {
-    for (const anchors of BOXES) {
-      const label = `${kind} ${anchors[0].x},${anchors[0].y}-${anchors[1].x},${anchors[1].y}`
-      for (const [name, style] of [
-        ['fill', FILL_ONLY],
-        ['outline', OUTLINE_ONLY],
-        ['both', BOTH],
-      ] as [string, ShapeStyle][]) {
-        it(`${label} ${name}`, () => {
-          const points = calloutFamily.insert(kind, anchors[0], anchors[1])
-          const actual = new Bitmap(60, 60)
-          calloutFamily.render(actual, kind, points, style)
-          const expected = new Bitmap(60, 60)
-          renderShape(expected, kind, anchors, style)
-          expect(actual.data).toEqual(expected.data)
-        })
-      }
-    }
-  }
 })

@@ -1,99 +1,112 @@
-import type { Point, Rect } from '../geometry'
-import { clamp, normalizeRect } from '../geometry'
-import type { ShapeKind } from '../shapes'
-import { boxHandles, fillAndStrokePolygon, resizeBox } from './shared'
-import type { ShapeFamily } from './types'
+import type { Bitmap } from '../bitmap'
+import type { Point } from '../geometry'
+import { clamp } from '../geometry'
+import { drawPolyline, fillPolygon } from '../raster'
+import type { ShapeStyle } from '../shapes'
+import type { ShapeFamily, TweakHandle } from './types'
 
-const DEFAULT_T = 0.25
-const MIN_T = 0.05
-const MAX_T = 0.45
+/** Default overall shaft thickness in image pixels for a freshly inserted arrow. */
+const DEFAULT_THICKNESS = 4
+const MIN_THICKNESS = 1
+const MAX_THICKNESS = 64
 
-/** Shaft half-height from the extra shaft anchor (its `.x`); `.y` is ignored. */
-function shaftThickness(points: readonly Point[]): number {
-  return points.length < 3 ? DEFAULT_T : points[2].x
+/** Head is at most 3x the shaft thickness long and 1.5x thick on each side. */
+const HEAD_LENGTH_FACTOR = 3
+const HEAD_HALF_FACTOR = 1.5
+
+/** Extra anchor `[2].x` stores the overall thickness; `.y` is ignored. */
+function thicknessOf(points: readonly Point[]): number {
+  return points.length >= 3 ? points[2].x : DEFAULT_THICKNESS
 }
 
-function boxOf(points: readonly Point[]): Rect {
-  return normalizeRect(points[0], points[1])
+/** Unit direction from `tail` to `tip` plus the shaft length; null when degenerate. */
+function axis(tail: Point, tip: Point): { dir: Point; length: number } | null {
+  const dx = tip.x - tail.x
+  const dy = tip.y - tail.y
+  const length = Math.hypot(dx, dy)
+  if (length === 0) return null
+  return { dir: { x: dx / length, y: dy / length }, length }
 }
 
-/**
- * The kind transform mapping unit arrow space to image space: `arrow-right`
- * maps `(u,v)` directly, `arrow-left` `(1-u,v)`, `arrow-down` `(v,u)` and
- * `arrow-up` `(v,1-u)`, all stretched over `box`.
- */
-function unitToImage(kind: ShapeKind, box: Rect, u: number, v: number): Point {
-  switch (kind) {
-    case 'arrow-left':
-      return { x: box.x + (1 - u) * box.width, y: box.y + v * box.height }
-    case 'arrow-down':
-      return { x: box.x + v * box.width, y: box.y + u * box.height }
-    case 'arrow-up':
-      return { x: box.x + v * box.width, y: box.y + (1 - u) * box.height }
-    default:
-      return { x: box.x + u * box.width, y: box.y + v * box.height }
-  }
-}
-
-/** Inverse of `unitToImage`: image position back to unit arrow space. */
-function imageToUnit(kind: ShapeKind, box: Rect, point: Point): { u: number; v: number } {
-  const u = (point.x - box.x) / box.width
-  const v = (point.y - box.y) / box.height
-  switch (kind) {
-    case 'arrow-left':
-      return { u: 1 - u, v }
-    case 'arrow-down':
-      return { u: v, v: u }
-    case 'arrow-up':
-      return { u: 1 - v, v: u }
-    default:
-      return { u, v }
-  }
-}
-
-/** Block arrow pointing towards +u with shaft half-height `t`. */
-function unitArrow(t: number): Point[] {
-  return [
-    { x: 0, y: 0.5 - t },
-    { x: 0.5, y: 0.5 - t },
-    { x: 0.5, y: 0 },
-    { x: 1, y: 0.5 },
-    { x: 0.5, y: 1 },
-    { x: 0.5, y: 0.5 + t },
-    { x: 0, y: 0.5 + t },
-  ]
-}
-
-function arrowPolygon(kind: ShapeKind, box: Rect, t: number): Point[] {
-  return unitArrow(t).map((p) => unitToImage(kind, box, p.x, p.y))
+/** Perpendicular distance from `point` to the line through `a` and `b`. */
+function perpendicularDistance(point: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const length = Math.hypot(dx, dy)
+  if (length === 0) return Math.hypot(point.x - a.x, point.y - a.y)
+  return Math.abs(dx * (point.y - a.y) - dy * (point.x - a.x)) / length
 }
 
 export const arrowFamily: ShapeFamily = {
   kinds: ['arrow-left', 'arrow-right', 'arrow-up', 'arrow-down'],
-  insert(_kind, start, end) {
-    return [start, end, { x: DEFAULT_T, y: 0 }]
+  insert(kind, start, end) {
+    const swap =
+      kind === 'arrow-right'
+        ? start.x > end.x
+        : kind === 'arrow-left'
+          ? start.x < end.x
+          : kind === 'arrow-up'
+            ? start.y < end.y
+            : start.y > end.y
+    const tail = swap ? end : start
+    const tip = swap ? start : end
+    return [tail, tip, { x: DEFAULT_THICKNESS, y: 0 }]
   },
-  handles(kind, points) {
+  handles(_kind, points): TweakHandle[] {
     if (points.length < 2) return []
-    const box = boxOf(points)
-    const t = shaftThickness(points)
-    return [...boxHandles(points), { id: 'shaft', point: unitToImage(kind, box, 0.5, 0.5 - t) }]
+    const tail = points[0]
+    const tip = points[1]
+    const thickness = thicknessOf(points)
+    const a = axis(tail, tip)
+    const perp = a ? { x: -a.dir.y, y: a.dir.x } : { x: 0, y: 1 }
+    const mid = { x: (tail.x + tip.x) / 2, y: (tail.y + tip.y) / 2 }
+    return [
+      { id: 'tail', point: tail },
+      { id: 'tip', point: tip },
+      { id: 'thickness', point: { x: mid.x + perp.x * thickness, y: mid.y + perp.y * thickness } },
+    ]
   },
-  move(kind, points, id, point) {
+  move(_kind, points, id, point) {
     if (points.length < 2) return null
-    if (id === 'shaft') {
-      const box = boxOf(points)
-      const unit = imageToUnit(kind, box, point)
-      const t = clamp(Math.abs(unit.v - 0.5), MIN_T, MAX_T)
-      return [points[0], points[1], { x: t, y: 0 }]
+    const tail = points[0]
+    const tip = points[1]
+    const thickness = thicknessOf(points)
+    switch (id) {
+      case 'tail':
+        return [point, tip, { x: thickness, y: 0 }]
+      case 'tip':
+        return [tail, point, { x: thickness, y: 0 }]
+      case 'thickness': {
+        const next = clamp(perpendicularDistance(point, tail, tip), MIN_THICKNESS, MAX_THICKNESS)
+        return [tail, tip, { x: next, y: 0 }]
+      }
+      default:
+        return null
     }
-    const resized = resizeBox(points, id, point)
-    if (!resized) return null
-    return [resized[0], resized[1], points[2] ?? { x: DEFAULT_T, y: 0 }]
   },
-  render(bitmap, kind, points, style) {
+  render(bitmap: Bitmap, _kind, points, style: ShapeStyle) {
     if (points.length < 2) return
-    const box = boxOf(points)
-    fillAndStrokePolygon(bitmap, arrowPolygon(kind, box, shaftThickness(points)), style)
+    const tail = points[0]
+    const tip = points[1]
+    const a = axis(tail, tip)
+    if (!a) return
+    const { dir, length } = a
+    const perp = { x: -dir.y, y: dir.x }
+    const thickness = thicknessOf(points)
+    const shaftHalf = thickness / 2
+    const headLen = Math.min(HEAD_LENGTH_FACTOR * thickness, 0.9 * length)
+    const headHalf = HEAD_HALF_FACTOR * thickness
+    const base = { x: tip.x - dir.x * headLen, y: tip.y - dir.y * headLen }
+    const polygon: Point[] = [
+      { x: tail.x + perp.x * shaftHalf, y: tail.y + perp.y * shaftHalf },
+      { x: base.x + perp.x * shaftHalf, y: base.y + perp.y * shaftHalf },
+      { x: base.x + perp.x * headHalf, y: base.y + perp.y * headHalf },
+      tip,
+      { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
+      { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
+      { x: tail.x - perp.x * shaftHalf, y: tail.y - perp.y * shaftHalf },
+    ]
+    if (style.fill) fillPolygon(bitmap, polygon, style.fill)
+    if (style.stroke) drawPolyline(bitmap, [...polygon, polygon[0]], style.width, style.stroke, 'round')
   },
 }

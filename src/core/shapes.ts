@@ -1,7 +1,7 @@
 import type { Bitmap } from './bitmap'
 import type { Rgba } from './color'
 import type { Point, Rect } from './geometry'
-import { normalizeRect } from './geometry'
+import { clamp, normalizeRect } from './geometry'
 import { bezierPoints, drawBezier, drawEllipse, drawLine, drawPolyline, drawRect, fillPolygon } from './raster'
 
 export type ShapeKind =
@@ -162,45 +162,131 @@ function ellipseSegments(box: Rect): number {
 }
 
 const CALLOUT_BODY = 0.78
-const TAIL_START = 0.42
-const TAIL_END = 0.25
 const TAIL_TIP = 0.15
+/** Half the tail's base width, as a fraction of the edge it sits on. */
+const TAIL_HALF = 0.09
+/** Keep the attach point this far from an edge's ends so the tail base stays on the edge. */
+const TAIL_BAND = 0.12
+/** Half the angular width of an oval callout tail. */
+const TAIL_ANGLE = 0.35
 
+type CalloutSide = 'top' | 'right' | 'bottom' | 'left'
+
+function bodyCentre(body: Rect): Point {
+  return { x: body.x + body.width / 2, y: body.y + body.height / 2 }
+}
+
+/** The edge of `body` nearest the tip, chosen by the dominant axis from the body centre. */
+function calloutSide(body: Rect, tip: Point): CalloutSide {
+  const centre = bodyCentre(body)
+  const dx = tip.x - centre.x
+  const dy = tip.y - centre.y
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left'
+  return dy >= 0 ? 'bottom' : 'top'
+}
+
+/** The clockwise edge of `body` for a side, as [from, to]. */
+function calloutEdge(body: Rect, side: CalloutSide): [Point, Point] {
+  const right = body.x + body.width
+  const bottom = body.y + body.height
+  switch (side) {
+    case 'top':
+      return [{ x: body.x, y: body.y }, { x: right, y: body.y }]
+    case 'right':
+      return [{ x: right, y: body.y }, { x: right, y: bottom }]
+    case 'bottom':
+      return [{ x: right, y: bottom }, { x: body.x, y: bottom }]
+    default:
+      return [{ x: body.x, y: bottom }, { x: body.x, y: body.y }]
+  }
+}
+
+/**
+ * A triangular tail spliced into the clockwise edge from `from` to `to`, following its
+ * direction. The two bases straddle the projection of `tip` onto the edge, held inside a
+ * central band so the tail never runs off the edge's ends.
+ */
+function calloutTail(from: Point, to: Point, tip: Point): Point[] {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const len = Math.hypot(dx, dy) || 1
+  const ux = dx / len
+  const uy = dy / len
+  const t = clamp(((tip.x - from.x) * ux + (tip.y - from.y) * uy) / len, TAIL_BAND, 1 - TAIL_BAND)
+  const attach = { x: from.x + dx * t, y: from.y + dy * t }
+  const half = TAIL_HALF * len
+  return [
+    { x: attach.x - ux * half, y: attach.y - uy * half },
+    tip,
+    { x: attach.x + ux * half, y: attach.y + uy * half },
+  ]
+}
+
+/** Rectangle body with the tail spliced into the chosen clockwise edge. */
+function calloutRect(body: Rect, side: CalloutSide, tail: Point[]): Point[] {
+  const { x, y, width: w, height: h } = body
+  const corners: Point[] = [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+  ]
+  const index = { top: 0, right: 1, bottom: 2, left: 3 }[side]
+  return [...corners.slice(0, index + 1), ...tail, ...corners.slice(index + 1)]
+}
+
+/** Rounded rectangle body with the tail spliced into the flat segment of the chosen edge. */
+function calloutRounded(body: Rect, side: CalloutSide, tail: Point[], radius?: number): Point[] {
+  const { x, y, width: w, height: h } = body
+  const r = radius ?? Math.min(w, h) * 0.2
+  const topLeft = arc(x + r, y + r, r, Math.PI)
+  const topRight = arc(x + w - r, y + r, r, -Math.PI / 2)
+  const bottomRight = arc(x + w - r, y + h - r, r, 0)
+  const bottomLeft = arc(x + r, y + h - r, r, Math.PI / 2)
+  return [
+    ...topLeft,
+    ...(side === 'top' ? tail : []),
+    ...topRight,
+    ...(side === 'right' ? tail : []),
+    ...bottomRight,
+    ...(side === 'bottom' ? tail : []),
+    ...bottomLeft,
+    ...(side === 'left' ? tail : []),
+  ]
+}
+
+/** Oval body with the tail spliced between the ellipse samples around the tip direction. */
+function calloutOval(body: Rect, tip: Point): Point[] {
+  const { x, y, width: w, height: h } = body
+  const cx = x + w / 2
+  const cy = y + h / 2
+  const rx = w / 2
+  const ry = h / 2
+  const at = (t: number) => ({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) })
+  const mid = Math.atan2(tip.y - cy, tip.x - cx)
+  const start = mid - TAIL_ANGLE
+  const end = mid + TAIL_ANGLE
+  const span = 2 * Math.PI - 2 * TAIL_ANGLE
+  const steps = Math.max(3, Math.round(ellipseSegments(body) * (span / (2 * Math.PI))))
+  const points: Point[] = [at(start), tip]
+  for (let i = 0; i < steps; i += 1) points.push(at(end + (i / steps) * span))
+  return points
+}
+
+/**
+ * The callout body is always the top `CALLOUT_BODY` of `box`, leaving room for a tail
+ * below. The tail's origin follows `tip`: it attaches to the side of the body nearest the
+ * tip and is spliced into that edge, so the result stays one closed outline with no seam.
+ */
 export function callout(kind: ShapeKind, box: Rect, tipOverride?: Point): Point[] {
   const { x, y, width: w, height: h } = box
   const body: Rect = { x, y, width: w, height: h * CALLOUT_BODY }
-  const bodyBottom = y + body.height
   const tip = tipOverride ?? { x: x + w * TAIL_TIP, y: y + h }
-  if (kind === 'callout-oval') {
-    const cx = x + w / 2
-    const cy = y + body.height / 2
-    const rx = w / 2
-    const ry = body.height / 2
-    const t0 = Math.acos((TAIL_START - 0.5) * 2)
-    const t1 = Math.acos((TAIL_END - 0.5) * 2)
-    const at = (t: number) => ({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) })
-    const n = ellipseSegments(body)
-    const points: Point[] = []
-    let tail = false
-    for (let i = 0; i < n; i += 1) {
-      const t = (i / n) * 2 * Math.PI
-      if (t >= t0 && !tail) {
-        points.push(at(t0), tip, at(t1))
-        tail = true
-      }
-      if (t < t0 || t > t1) points.push(at(t))
-    }
-    return points
-  }
-  const tail = [{ x: x + w * TAIL_START, y: bodyBottom }, tip, { x: x + w * TAIL_END, y: bodyBottom }]
-  if (kind === 'callout-rounded-rectangle') return roundedRect(body, tail)
-  return [
-    { x, y },
-    { x: x + w, y },
-    { x: x + w, y: bodyBottom },
-    ...tail,
-    { x, y: bodyBottom },
-  ]
+  if (kind === 'callout-oval') return calloutOval(body, tip)
+  const side = calloutSide(body, tip)
+  const tail = calloutTail(...calloutEdge(body, side), tip)
+  if (kind === 'callout-rounded-rectangle') return calloutRounded(body, side, tail)
+  return calloutRect(body, side, tail)
 }
 
 /**

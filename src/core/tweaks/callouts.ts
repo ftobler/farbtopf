@@ -18,6 +18,11 @@ function currentTip(points: readonly Point[]): Point {
   return points[2] ?? defaultTip(normalizeRect(points[0], points[1]))
 }
 
+/**
+ * The tip's position as a fraction of the anchor box. The resize rule keeps this unit
+ * position fixed, so resizing the body carries the tail tip along with it (a tip dragged
+ * off an edge stays off that edge by the same fraction).
+ */
 function unitPosition(box: Rect, point: Point): Point {
   return {
     x: box.width === 0 ? DEFAULT_TAIL_TIP : (point.x - box.x) / box.width,

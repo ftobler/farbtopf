@@ -2,116 +2,157 @@ import { describe, expect, it } from 'vitest'
 import { Bitmap } from '../bitmap'
 import { BLACK, rgba } from '../color'
 import type { Point } from '../geometry'
-import type { ShapeKind, ShapeStyle } from '../shapes'
-import { renderShape } from '../shapes'
+import type { ShapeStyle } from '../shapes'
 import { arrowFamily } from './arrows'
+
+type ArrowKind = 'arrow-right' | 'arrow-left' | 'arrow-up' | 'arrow-down'
 
 const RED = rgba(255, 0, 0)
 const FILL_ONLY: ShapeStyle = { width: 1, stroke: null, fill: RED }
 const BOTH: ShapeStyle = { width: 2, stroke: BLACK, fill: RED }
 
-const KINDS: readonly ShapeKind[] = ['arrow-right', 'arrow-left', 'arrow-up', 'arrow-down']
+/** Default thickness documented by the family. */
+const DEFAULT_THICKNESS = 4
 
-const SQUARE: readonly [Point, Point] = [
-  { x: 5, y: 5 },
-  { x: 34, y: 34 },
-]
-const WIDE: readonly [Point, Point] = [
-  { x: 5, y: 5 },
-  { x: 44, y: 24 },
-]
+const KINDS: readonly ArrowKind[] = ['arrow-right', 'arrow-left', 'arrow-up', 'arrow-down']
+
+const START: Point = { x: 10, y: 60 }
+const END: Point = { x: 90, y: 20 }
 
 function painted(bitmap: Bitmap, x: number, y: number): boolean {
   return bitmap.get(x, y).a !== 0
 }
 
+function columnHeight(bitmap: Bitmap, x: number, y0: number, y1: number): number {
+  let count = 0
+  for (let y = y0; y <= y1; y += 1) if (painted(bitmap, x, y)) count += 1
+  return count
+}
+
+function maxColumnHeight(bitmap: Bitmap): number {
+  let max = 0
+  for (let x = 0; x < bitmap.width; x += 1) {
+    max = Math.max(max, columnHeight(bitmap, x, 0, bitmap.height - 1))
+  }
+  return max
+}
+
+function region(bitmap: Bitmap, x0: number, y0: number, x1: number, y1: number): boolean[][] {
+  const grid: boolean[][] = []
+  for (let y = y0; y <= y1; y += 1) {
+    const row: boolean[] = []
+    for (let x = x0; x <= x1; x += 1) row.push(painted(bitmap, x, y))
+    grid.push(row)
+  }
+  return grid
+}
+
+function render(points: readonly Point[]): Bitmap {
+  const bitmap = new Bitmap(256, 128)
+  arrowFamily.render(bitmap, 'arrow-right', points, FILL_ONLY)
+  return bitmap
+}
+
 describe('arrowFamily', () => {
-  it('inserts start, end and a default shaft anchor', () => {
-    const start = { x: 3, y: 7 }
-    const end = { x: 20, y: 15 }
-    const points = arrowFamily.insert('arrow-right', start, end)
-    expect(points).toEqual([start, end, { x: 0.25, y: 0 }])
+  it('insert orients tail and tip by the kind direction, keeping each endpoint', () => {
+    const expected: Record<ArrowKind, [Point, Point]> = {
+      'arrow-right': [START, END],
+      'arrow-left': [END, START],
+      'arrow-up': [START, END],
+      'arrow-down': [END, START],
+    }
+    for (const kind of KINDS) {
+      const points = arrowFamily.insert(kind, START, END)
+      expect(points[0]).toEqual(expected[kind][0])
+      expect(points[1]).toEqual(expected[kind][1])
+      expect(points[2]).toEqual({ x: DEFAULT_THICKNESS, y: 0 })
+    }
   })
 
-  it('exposes the eight box handles plus the shaft handle', () => {
-    const points = arrowFamily.insert('arrow-right', SQUARE[0], SQUARE[1])
-    expect(arrowFamily.handles('arrow-right', points).map((h) => h.id)).toEqual([
-      'nw',
-      'n',
-      'ne',
-      'e',
-      'se',
-      's',
-      'sw',
-      'w',
-      'shaft',
+  it('exposes exactly the tail, tip and thickness handles', () => {
+    const points = arrowFamily.insert('arrow-right', { x: 10, y: 50 }, { x: 90, y: 50 })
+    const handles = arrowFamily.handles('arrow-right', points)
+    expect(handles.map((handle) => handle.id)).toEqual(['tail', 'tip', 'thickness'])
+    expect(handles[0].point).toEqual({ x: 10, y: 50 })
+    expect(handles[1].point).toEqual({ x: 90, y: 50 })
+    // Midpoint (50, 50) offset by one thickness along the shaft normal (0, 1).
+    expect(handles[2].point).toEqual({ x: 50, y: 54 })
+  })
+
+  it('moves the tail and tip without touching the thickness', () => {
+    const points = arrowFamily.insert('arrow-right', { x: 10, y: 50 }, { x: 90, y: 50 })
+    expect(arrowFamily.move('arrow-right', points, 'tail', { x: 0, y: 0 })).toEqual([
+      { x: 0, y: 0 },
+      { x: 90, y: 50 },
+      { x: DEFAULT_THICKNESS, y: 0 },
+    ])
+    expect(arrowFamily.move('arrow-right', points, 'tip', { x: 100, y: 70 })).toEqual([
+      { x: 10, y: 50 },
+      { x: 100, y: 70 },
+      { x: DEFAULT_THICKNESS, y: 0 },
     ])
   })
 
-  it('places the shaft handle at the kind-transformed notch corner', () => {
-    const box = { x: 5, y: 5, width: 30, height: 30 }
-    const expected: Record<string, Point> = {
-      'arrow-right': { x: box.x + 0.5 * box.width, y: box.y + 0.25 * box.height },
-      'arrow-left': { x: box.x + 0.5 * box.width, y: box.y + 0.25 * box.height },
-      'arrow-down': { x: box.x + 0.25 * box.width, y: box.y + 0.5 * box.height },
-      'arrow-up': { x: box.x + 0.25 * box.width, y: box.y + 0.5 * box.height },
-    }
-    for (const kind of KINDS) {
-      const points = arrowFamily.insert(kind, SQUARE[0], SQUARE[1])
-      const shaft = arrowFamily.handles(kind, points).find((h) => h.id === 'shaft')
-      expect(shaft?.point).toEqual(expected[kind])
-    }
+  it('dragging the thickness handle grows both shaft and head', () => {
+    const points = arrowFamily.insert('arrow-right', { x: 10, y: 50 }, { x: 90, y: 50 })
+    const thick = arrowFamily.move('arrow-right', points, 'thickness', { x: 50, y: 70 })
+    expect(thick).not.toBeNull()
+    expect(thick![2].x).toBeCloseTo(20)
+
+    const base = render(points)
+    const bigger = render(thick!)
+    expect(columnHeight(bigger, 30, 0, 127)).toBeGreaterThan(columnHeight(base, 30, 0, 127))
+    expect(maxColumnHeight(bigger)).toBeGreaterThan(maxColumnHeight(base))
+  })
+
+  it('clamps the thickness while dragging the handle', () => {
+    const points = arrowFamily.insert('arrow-right', { x: 10, y: 50 }, { x: 90, y: 50 })
+    const onLine = arrowFamily.move('arrow-right', points, 'thickness', { x: 50, y: 50 })
+    expect(onLine![2].x).toBe(1)
+    const far = arrowFamily.move('arrow-right', points, 'thickness', { x: 50, y: 500 })
+    expect(far![2].x).toBe(64)
+  })
+
+  it('keeps the head size fixed when the arrow is made twice as long', () => {
+    const short: readonly Point[] = [
+      { x: 60, y: 50 },
+      { x: 100, y: 50 },
+      { x: DEFAULT_THICKNESS, y: 0 },
+    ]
+    const long: readonly Point[] = [
+      { x: 20, y: 50 },
+      { x: 100, y: 50 },
+      { x: DEFAULT_THICKNESS, y: 0 },
+    ]
+    const a = render(short)
+    const b = render(long)
+    expect(region(a, 80, 35, 105, 65)).toEqual(region(b, 80, 35, 105, 65))
+    expect(columnHeight(a, 95, 0, 127)).toBe(columnHeight(b, 95, 0, 127))
+  })
+
+  it('keeps the thickness when the endpoints move', () => {
+    let points = arrowFamily.insert('arrow-right', { x: 10, y: 50 }, { x: 90, y: 50 })
+    points = arrowFamily.move('arrow-right', points, 'thickness', { x: 50, y: 65 })!
+    expect(points[2].x).toBeCloseTo(15)
+    points = arrowFamily.move('arrow-right', points, 'tail', { x: 5, y: 40 })!
+    expect(points[2].x).toBeCloseTo(15)
+    points = arrowFamily.move('arrow-right', points, 'tip', { x: 120, y: 60 })!
+    expect(points[2].x).toBeCloseTo(15)
+  })
+
+  it('renders nothing for a degenerate arrow', () => {
+    const points = [
+      { x: 5, y: 5 },
+      { x: 5, y: 5 },
+      { x: DEFAULT_THICKNESS, y: 0 },
+    ]
+    const bitmap = new Bitmap(20, 20)
+    arrowFamily.render(bitmap, 'arrow-right', points, BOTH)
+    expect(bitmap.data).toEqual(new Bitmap(20, 20).data)
   })
 
   it('returns null for an unknown handle', () => {
-    const points = arrowFamily.insert('arrow-right', SQUARE[0], SQUARE[1])
+    const points = arrowFamily.insert('arrow-right', { x: 10, y: 50 }, { x: 90, y: 50 })
     expect(arrowFamily.move('arrow-right', points, 'bogus', { x: 1, y: 1 })).toBeNull()
-  })
-
-  it('renders exactly like renderShape at the default shaft thickness', () => {
-    for (const kind of KINDS) {
-      for (const anchors of [SQUARE, WIDE]) {
-        const points = arrowFamily.insert(kind, anchors[0], anchors[1])
-        const actual = new Bitmap(50, 50)
-        arrowFamily.render(actual, kind, points, BOTH)
-        const expected = new Bitmap(50, 50)
-        renderShape(expected, kind, [anchors[0], anchors[1]], BOTH)
-        expect(actual.data).toEqual(expected.data)
-      }
-    }
-  })
-
-  it('renders exactly like renderShape at the default with fill only', () => {
-    const points = arrowFamily.insert('arrow-down', WIDE[0], WIDE[1])
-    const actual = new Bitmap(50, 50)
-    arrowFamily.render(actual, 'arrow-down', points, FILL_ONLY)
-    const expected = new Bitmap(50, 50)
-    renderShape(expected, 'arrow-down', [WIDE[0], WIDE[1]], FILL_ONLY)
-    expect(actual.data).toEqual(expected.data)
-  })
-
-  it('the shaft handle changes the shaft pixels', () => {
-    const base = arrowFamily.insert('arrow-right', SQUARE[0], SQUARE[1])
-    const thin = arrowFamily.move('arrow-right', base, 'shaft', { x: 20, y: 21.5 })
-    expect(thin).not.toBeNull()
-    expect(thin![2].x).toBeCloseTo(0.05)
-    expect(thin![2].y).toBe(0)
-
-    const wide = new Bitmap(40, 40)
-    arrowFamily.render(wide, 'arrow-right', base, FILL_ONLY)
-    const narrow = new Bitmap(40, 40)
-    arrowFamily.render(narrow, 'arrow-right', thin!, FILL_ONLY)
-
-    expect(narrow.data).not.toEqual(wide.data)
-    expect(painted(wide, 10, 13)).toBe(true)
-    expect(painted(narrow, 10, 13)).toBe(false)
-  })
-
-  it('clamps the shaft thickness while dragging the shaft handle', () => {
-    const points = arrowFamily.insert('arrow-right', SQUARE[0], SQUARE[1])
-    const huge = arrowFamily.move('arrow-right', points, 'shaft', { x: 20, y: 5 })
-    expect(huge![2].x).toBe(0.45)
-    const tiny = arrowFamily.move('arrow-right', points, 'shaft', { x: 20, y: 20 })
-    expect(tiny![2].x).toBe(0.05)
   })
 })

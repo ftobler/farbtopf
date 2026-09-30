@@ -1452,11 +1452,12 @@ describe('PaintCanvas', () => {
       up(canvas, 1, 12, 12)
     }
 
-    it('keeps a dragged rectangle live with eight handles and no history', () => {
+    it('keeps a dragged rectangle live with eight box handles, a rotate handle and no history', () => {
       const { canvas, container, onHistoryChange } = setup('shape', 30, 30)
       onHistoryChange.mockClear()
       dragRect(canvas)
-      expect(container.querySelectorAll('.shape-handle')).toHaveLength(8)
+      expect(container.querySelectorAll('.shape-handle')).toHaveLength(9)
+      expect(container.querySelectorAll('.shape-rotate-handle')).toHaveLength(1)
       expect(onHistoryChange).not.toHaveBeenCalled()
     })
 

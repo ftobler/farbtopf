@@ -2292,7 +2292,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           {shapeHandles(shape.kind, shape.points).map((handle) => (
             <circle
               key={handle.id}
-              className="shape-handle"
+              className={handle.id === 'rotate' ? 'shape-handle shape-rotate-handle' : 'shape-handle'}
               cx={(handle.point.x + 0.5) * zoom}
               cy={(handle.point.y + 0.5) * zoom}
               r={4.5}

@@ -40,19 +40,8 @@ describe('polygonFamily insert and handles', () => {
     ])
   })
 
-  it('inserts the four diamond vertices mapped into the box', () => {
-    const points = polygonFamily.insert('diamond', SQUARE_START, SQUARE_END)
-    expect(points).toEqual([
-      { x: 20, y: 5 },
-      { x: 35, y: 20 },
-      { x: 20, y: 35 },
-      { x: 5, y: 20 },
-    ])
-  })
-
-  it('exposes v0..v2 for the triangle and v0..v3 for the diamond', () => {
+  it('exposes v0..v2 for the triangle', () => {
     expect(polygonFamily.handles('triangle', polygonFamily.insert('triangle', SQUARE_START, SQUARE_END)).map((h) => h.id)).toEqual(['v0', 'v1', 'v2'])
-    expect(polygonFamily.handles('diamond', polygonFamily.insert('diamond', SQUARE_START, SQUARE_END)).map((h) => h.id)).toEqual(['v0', 'v1', 'v2', 'v3'])
   })
 
   it('right-triangle v0 is the right-angle corner', () => {
@@ -96,8 +85,6 @@ describe('polygonFamily vertex dragging', () => {
     const triangle = polygonFamily.insert('triangle', SQUARE_START, SQUARE_END)
     expect(polygonFamily.move('triangle', triangle, 'bogus', { x: 1, y: 1 })).toBeNull()
     expect(polygonFamily.move('triangle', triangle, 'v9', { x: 1, y: 1 })).toBeNull()
-    const diamond = polygonFamily.insert('diamond', SQUARE_START, SQUARE_END)
-    expect(polygonFamily.move('diamond', diamond, 'v4', { x: 1, y: 1 })).toBeNull()
   })
 })
 
@@ -105,11 +92,6 @@ describe('polygonFamily render parity', () => {
   it('triangle renders exactly like renderShape for square and non-square boxes', () => {
     parity('triangle', SQUARE_START, SQUARE_END, BOTH)
     parity('triangle', WIDE_START, WIDE_END, BOTH)
-  })
-
-  it('diamond renders exactly like renderShape for square and non-square boxes', () => {
-    parity('diamond', SQUARE_START, SQUARE_END, BOTH)
-    parity('diamond', WIDE_START, WIDE_END, BOTH)
   })
 
   it('triangle matches renderShape with a fill only', () => {

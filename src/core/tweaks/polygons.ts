@@ -13,13 +13,6 @@ const TRIANGLE: readonly Point[] = [
   { x: 0, y: 1 },
 ]
 
-const DIAMOND: readonly Point[] = [
-  { x: 0.5, y: 0 },
-  { x: 1, y: 0.5 },
-  { x: 0.5, y: 1 },
-  { x: 0, y: 0.5 },
-]
-
 function mapBox(box: Rect): (u: number, v: number) => Point {
   return (u, v) => ({ x: box.x + u * box.width, y: box.y + v * box.height })
 }
@@ -38,13 +31,12 @@ function rightTriangleVertices(start: Point, box: Rect): Point[] {
 function insertVertices(kind: ShapeKind, start: Point, end: Point): Point[] {
   const box = normalizeRect(start, end)
   if (kind === 'right-triangle') return rightTriangleVertices(start, box)
-  const unit = kind === 'diamond' ? DIAMOND : TRIANGLE
   const map = mapBox(box)
-  return unit.map((p) => map(p.x, p.y))
+  return TRIANGLE.map((p) => map(p.x, p.y))
 }
 
 export const polygonFamily: ShapeFamily = {
-  kinds: ['triangle', 'right-triangle', 'diamond'],
+  kinds: ['triangle', 'right-triangle'],
   insert(kind, start, end) {
     return insertVertices(kind, start, end)
   },
