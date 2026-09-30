@@ -145,9 +145,9 @@ function arc(cx: number, cy: number, r: number, from: number): Point[] {
 }
 
 /** Rounded rectangle, clockwise from the top-left arc; `bottom` is spliced into the bottom edge (right to left). */
-function roundedRect(box: Rect, bottom: Point[] = []): Point[] {
+function roundedRect(box: Rect, bottom: Point[] = [], radius?: number): Point[] {
   const { x, y, width: w, height: h } = box
-  const r = Math.min(w, h) * 0.2
+  const r = radius ?? Math.min(w, h) * 0.2
   return [
     ...arc(x + r, y + r, r, Math.PI),
     ...arc(x + w - r, y + r, r, -Math.PI / 2),
@@ -207,7 +207,7 @@ function callout(kind: ShapeKind, box: Rect): Point[] {
  * The closed outline of a 'drag' shape filling `box` (continuous coordinates).
  * Returns an empty list for line, polyline and freeform, which have no box outline.
  */
-export function shapePolygon(kind: ShapeKind, box: Rect): Point[] {
+export function shapePolygon(kind: ShapeKind, box: Rect, radius?: number): Point[] {
   const { x, y, width: w, height: h } = box
   const map = boxTransform(box)
   const unit = (points: readonly Point[]) => points.map((p) => map(p.x, p.y))
@@ -215,7 +215,7 @@ export function shapePolygon(kind: ShapeKind, box: Rect): Point[] {
     case 'rectangle':
       return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }]
     case 'rounded-rectangle':
-      return roundedRect(box)
+      return roundedRect(box, [], radius)
     case 'ellipse': {
       const n = ellipseSegments(box)
       const points: Point[] = []
@@ -259,7 +259,7 @@ export function shapePolygon(kind: ShapeKind, box: Rect): Point[] {
 }
 
 /** The polygon through pixel centres used for the outline, inset so a thick stroke stays inside `rect`. */
-function outlineBox(rect: Rect, width: number): Rect {
+export function outlineBox(rect: Rect, width: number): Rect {
   const t = Math.max(1, Math.floor(width))
   const before = Math.floor((t - 1) / 2)
   const after = t - 1 - before
@@ -276,7 +276,7 @@ function outlineBox(rect: Rect, width: number): Rect {
  * Continuous fill area matching an outline through pixel centres. Without a stroke it is
  * grown slightly so the edge pixels are kept; with one the stroke covers the edge.
  */
-function fillBox(outline: Rect, grow: number): Rect {
+export function fillBox(outline: Rect, grow: number): Rect {
   return {
     x: outline.x + 0.5 - grow,
     y: outline.y + 0.5 - grow,

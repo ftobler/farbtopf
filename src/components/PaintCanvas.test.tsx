@@ -132,11 +132,15 @@ describe('PaintCanvas', () => {
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
   })
 
-  it('commits a shape stroke on pointer up', () => {
+  it('places a dragged shape on Enter as one undo step', () => {
     const { ref, canvas, onHistoryChange } = setup('shape')
+    onHistoryChange.mockClear()
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 10, clientY: 10 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 10, clientY: 10 })
+    // The released shape stays live for tweaking; it is not committed yet.
+    expect(onHistoryChange).not.toHaveBeenCalled()
+    fireEvent.keyDown(window, { key: 'Enter' })
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     act(() => ref.current?.undo())
     expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)

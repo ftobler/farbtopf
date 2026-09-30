@@ -1076,7 +1076,7 @@ textarea {
   stroke-dasharray: 4 3;
 }
 
-.curve-overlay {
+.shape-overlay {
   position: absolute;
   left: 0;
   top: 0;
@@ -1084,22 +1084,10 @@ textarea {
   overflow: visible;
 }
 
-.curve-overlay .curve-guide {
-  stroke: color-mix(in srgb, var(--accent) 70%, transparent);
-  stroke-width: 1;
-  stroke-dasharray: 3 3;
-}
-
-.curve-overlay .curve-endpoint {
+.shape-overlay .shape-handle {
   fill: var(--accent);
   stroke: var(--surface);
   stroke-width: 1;
-}
-
-.curve-overlay .curve-handle {
-  fill: var(--surface);
-  stroke: var(--accent);
-  stroke-width: 1.5;
 }
 
 @keyframes selection-ants {

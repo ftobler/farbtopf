@@ -57,13 +57,14 @@ import {
   polygonSelection,
 } from '../core/selection'
 import type { SelectionMask, SelectionShape } from '../core/selection'
-import { renderShape as drawShape, shapeById } from '../core/shapes'
+import { shapeById } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
 import { isShapeTool, strokeColorFor, strokeWidthFor } from '../core/tools'
 import { backingScale } from '../core/zoom'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { bitmapFromDataUrl } from '../render/image'
+import { insertShape, moveShapeHandle, renderLiveShape, shapeHandles } from '../core/tweaks'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
@@ -215,32 +216,30 @@ interface PolylineState {
 }
 
 /**
- * A cubic bezier being placed and bent. A drag sets the straight chord p0→p3 and
- * its two control handles at the thirds; dragging a handle then bends the curve.
- * The document stays untouched until the curve is committed.
+ * A shape being placed and tweaked. A drag inserts it; on release it stays live
+ * with its handles so it can be tweaked, and the document stays untouched until
+ * it is committed by clicking away.
  */
-interface CurveState {
+interface ShapeState {
   kind: ShapeKind
   slot: 'primary' | 'secondary'
   base: Bitmap
-  p0: Point
-  p3: Point
-  c1: Point
-  c2: Point
-  phase: 'line' | 'bend'
-  /** The pointer that started the line or is dragging a handle, if any. */
+  /** Kind-specific anchor points, owned by the shape's tweak family. */
+  points: Point[]
+  mode: 'insert' | 'tweak'
+  /** The pointer that is inserting the shape or dragging a handle, if any. */
   pointerId: number | null
-  /** The endpoint dot or control handle being dragged in the bend phase. */
-  active: 'p0' | 'p3' | 'c1' | 'c2' | null
+  /** The handle being dragged in the tweak phase, if any. */
+  activeHandle: string | null
+  /** Where the insertion drag started. */
+  insertStart: Point
 }
 
-/** The part of a pending curve the overlay and dialog redraw from. */
-interface CurveMirror {
-  phase: 'line' | 'bend'
-  p0: Point
-  p3: Point
-  c1: Point
-  c2: Point
+/** The part of a pending shape the overlay redraws from. */
+interface ShapeMirror {
+  kind: ShapeKind
+  mode: 'insert' | 'tweak'
+  points: Point[]
 }
 
 interface TextEditorState {
@@ -308,10 +307,10 @@ const HISTORY_LIMIT = 80
 
 const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const HANDLE_HIT = 4
-/** Grab radius, in screen pixels, for the curve's endpoints and control handles. */
-const CURVE_DOT_HIT = 8
-/** A curve drag shorter than this many screen pixels counts as a click, not a new curve. */
-const CURVE_CLICK_SLOP = 5
+/** Grab radius, in screen pixels, for a live shape's tweak handles. */
+const SHAPE_DOT_HIT = 8
+/** An insertion drag shorter than this many screen pixels counts as a click. */
+const SHAPE_CLICK_SLOP = 5
 const DOUBLE_CLICK_MS = 300
 /** How far apart, in screen pixels, the two presses of a double-click may be. */
 const DOUBLE_CLICK_SLOP = 4
@@ -325,11 +324,6 @@ const TEXT_TOOLBAR_HEIGHT = 40
 const TEXT_TOOLBAR_GAP = 8
 /** Roughly the height of the font menu; used to decide if it fits below. */
 const TEXT_MENU_HEIGHT = 240
-
-/** The points handed to `renderShape` for a dragged shape: the start and current end. */
-function shapePoints(stroke: StrokeState, end: Point): Point[] {
-  return [stroke.start, end]
-}
 
 /** The pixels a freehand segment of `width` can touch, with room for every brush's reach. */
 function segmentBounds(from: Point, to: Point, width: number): Rect {
@@ -627,11 +621,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const canvasResizeRef = useRef<CanvasResizeDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
   const polylineRef = useRef<PolylineState | null>(null)
-  const curveRef = useRef<CurveState | null>(null)
+  const shapeRef = useRef<ShapeState | null>(null)
   // The handle is built before the pointer helpers it needs, so it calls through this.
   const clickOutsideRef = useRef<(clientX: number, clientY: number) => void>(() => {})
   const [polylineActive, setPolylineActive] = useState(false)
-  const [curve, setCurve] = useState<CurveMirror | null>(null)
+  const [shape, setShape] = useState<ShapeMirror | null>(null)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [editor, setEditor] = useState<TextEditorState | null>(null)
   const [selection, setSelection] = useState<Rect | null>(null)
@@ -956,7 +950,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       // Below 100 %, outline and fill are drawn at full strength and faded in together,
       // so where they overlap the shape is not any more opaque.
       const before = strength < 1 ? target.clone() : null
-      drawShape(target, kind, points, {
+      renderLiveShape(target, kind, points, {
         width: strokeWidthFor('shape', brushSize),
         // Open paths have no interior, so they are always stroked however the fill is set.
         stroke: shapeById(kind).closed && shapeFill === 'filled' ? null : color,
@@ -967,54 +961,55 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [brushSize, colorFor, primary, secondary, shapeFill, strength],
   )
 
-  const cancelCurveRef = useRef<() => void>(() => {})
+  const cancelShapeRef = useRef<() => void>(() => {})
 
-  /** Draws the pending curve onto a copy of the base; the live bitmap is left untouched. */
-  const previewCurve = useCallback(() => {
-    const curve = curveRef.current
-    if (!curve) return
-    const preview = curve.base.clone()
-    renderShape(preview, curve.kind, [curve.p0, curve.c1, curve.c2, curve.p3], curve.slot)
+  /** Draws the pending shape onto a copy of the base; the live bitmap is left untouched. */
+  const previewShape = useCallback(() => {
+    const shape = shapeRef.current
+    if (!shape) return
+    const preview = shape.base.clone()
+    renderShape(preview, shape.kind, shape.points, shape.slot)
     paint(preview)
-    setCurve({ phase: curve.phase, p0: curve.p0, p3: curve.p3, c1: curve.c1, c2: curve.c2 })
+    setShape({ kind: shape.kind, mode: shape.mode, points: shape.points })
   }, [paint, renderShape])
 
-  /** Draws the bent curve onto the active layer as one undo step. */
-  const commitCurve = useCallback(() => {
-    const curve = curveRef.current
-    if (!curve) return
-    curveRef.current = null
-    setCurve(null)
-    if (pointsEqual(curve.p0, curve.p3)) {
-      bitmapRef.current = curve.base
-      paint(curve.base)
+  /** Draws the placed shape onto the active layer as one undo step. */
+  const commitShape = useCallback(() => {
+    const shape = shapeRef.current
+    if (!shape) return
+    shapeRef.current = null
+    setShape(null)
+    // A shape still being inserted (too small to count) leaves the document untouched.
+    if (shape.mode === 'insert') {
+      bitmapRef.current = shape.base
+      paint(shape.base)
       return
     }
-    recordHistory(curve.base)
-    const final = curve.base.clone()
-    renderShape(final, curve.kind, [curve.p0, curve.c1, curve.c2, curve.p3], curve.slot)
+    recordHistory(shape.base)
+    const final = shape.base.clone()
+    renderShape(final, shape.kind, shape.points, shape.slot)
     bitmapRef.current = final
     paint(final)
     syncHistory()
   }, [paint, recordHistory, renderShape, syncHistory])
 
-  /** Drops the pending curve, restoring the untouched base and recording no history. */
-  const cancelCurve = useCallback(() => {
-    const curve = curveRef.current
-    if (!curve) return
-    curveRef.current = null
-    setCurve(null)
-    bitmapRef.current = curve.base
-    paint(curve.base)
+  /** Drops the pending shape, restoring the untouched base and recording no history. */
+  const cancelShape = useCallback(() => {
+    const shape = shapeRef.current
+    if (!shape) return
+    shapeRef.current = null
+    setShape(null)
+    bitmapRef.current = shape.base
+    paint(shape.base)
   }, [paint])
 
-  const commitCurveRef = useRef(commitCurve)
+  const commitShapeRef = useRef(commitShape)
   useEffect(() => {
-    commitCurveRef.current = commitCurve
-  }, [commitCurve])
+    commitShapeRef.current = commitShape
+  }, [commitShape])
   useEffect(() => {
-    cancelCurveRef.current = cancelCurve
-  }, [cancelCurve])
+    cancelShapeRef.current = cancelShape
+  }, [cancelShape])
 
   const previewPolyline = useCallback(() => {
     const polyline = polylineRef.current
@@ -1027,9 +1022,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
   const finishPolyline = useCallback(() => {
-    // A pending curve is dropped whenever a polyline is settled, so any edit action
+    // A pending shape is dropped whenever a polyline is settled, so any edit action
     // that flushes one also clears the other.
-    cancelCurveRef.current()
+    cancelShapeRef.current()
     const polyline = polylineRef.current
     if (!polyline) return
     polylineRef.current = null
@@ -1053,7 +1048,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   useEffect(() => {
     finishPolylineRef.current()
-    cancelCurveRef.current()
+    cancelShapeRef.current()
   }, [tool, shapeKind])
 
   useEffect(() => {
@@ -1071,30 +1066,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [polylineActive])
 
   useEffect(() => {
-    if (!curve) return
+    if (!shape) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' && event.key !== 'Escape') return
       const target = event.target as HTMLElement | null
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return
       event.preventDefault()
       if (event.key === 'Escape') {
-        // Escape cancels the curve and must not reach the app's select-tool shortcut.
+        // Escape cancels the shape and must not reach the app's select-tool shortcut.
         event.stopImmediatePropagation()
-        cancelCurveRef.current()
+        cancelShapeRef.current()
       } else {
-        commitCurveRef.current()
+        commitShapeRef.current()
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [curve])
+  }, [shape])
 
   const resetDocument = useCallback(
     (bitmap: Bitmap) => {
       polylineRef.current = null
       setPolylineActive(false)
-      curveRef.current = null
-      setCurve(null)
+      shapeRef.current = null
+      setShape(null)
       historyRef.current = new History<DocSnapshot>(HISTORY_LIMIT)
       editorRef.current = null
       floatingRef.current = null
@@ -1667,50 +1662,43 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         previewPolyline()
         return
       }
-      if (isShapeTool(tool) && shapeById(shapeKind).interaction === 'curve') {
-        const curve = curveRef.current
-        if (curve) {
-          // A pending curve is only retargeted by grabbing one of its four dots.
-          if (curve.phase !== 'bend') return
-          const tolerance = CURVE_DOT_HIT / zoom
-          const candidates: { handle: 'p0' | 'p3' | 'c1' | 'c2'; dot: Point }[] = [
-            { handle: 'p0', dot: curve.p0 },
-            { handle: 'p3', dot: curve.p3 },
-            { handle: 'c1', dot: curve.c1 },
-            { handle: 'c2', dot: curve.c2 },
-          ]
-          // The nearest dot wins, so a press exactly on an endpoint never grabs the
-          // adjacent control handle that overlaps it.
-          let active: 'p0' | 'p3' | 'c1' | 'c2' | null = null
+      if (isShapeTool(tool)) {
+        const shape = shapeRef.current
+        if (shape) {
+          // A pending shape is only retargeted by grabbing one of its handles.
+          if (shape.mode !== 'tweak') return
+          const tolerance = SHAPE_DOT_HIT / zoom
+          // The nearest handle wins, so a press on an endpoint never grabs a
+          // neighbouring control handle that overlaps it.
+          let active: string | null = null
           let best = Infinity
-          for (const candidate of candidates) {
-            const reach = distance(point, candidate.dot)
+          for (const handle of shapeHandles(shape.kind, shape.points)) {
+            const reach = distance(point, handle.point)
             if (reach <= tolerance && reach < best) {
               best = reach
-              active = candidate.handle
+              active = handle.id
             }
           }
           if (active) {
-            curve.pointerId = event.pointerId
-            curve.active = active
+            shape.pointerId = event.pointerId
+            shape.activeHandle = active
             return
           }
-          // A press outside the dots places the pending curve, then starts the next.
-          commitCurve()
+          // A press outside the handles places the pending shape, then starts the next.
+          commitShape()
         }
-        curveRef.current = {
+        const points = insertShape(shapeKind, point, point)
+        shapeRef.current = {
           kind: shapeKind,
           slot,
           base: doc().clone(),
-          p0: point,
-          p3: point,
-          c1: point,
-          c2: point,
-          phase: 'line',
+          points,
+          mode: 'insert',
           pointerId: event.pointerId,
-          active: null,
+          activeHandle: null,
+          insertStart: point,
         }
-        setCurve({ phase: 'line', p0: point, p3: point, c1: point, c2: point })
+        setShape({ kind: shapeKind, mode: 'insert', points })
         return
       }
       const base = doc().clone()
@@ -1728,9 +1716,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       strokeRef.current = stroke
 
-      if (isShapeTool(tool)) {
-        paint(base)
-      } else {
+      {
         recordHistory(base)
         stroke.recorded = true
         if (strength < 1) stroke.work = base.clone()
@@ -1772,7 +1758,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitCurve, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -1843,49 +1829,22 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         previewPolyline()
         return
       }
-      const curve = curveRef.current
-      if (curve) {
-        if (curve.pointerId === null || curve.pointerId !== event.pointerId) return
-        if (curve.phase === 'line') {
-          curve.p3 = point
-          const thirdX = (point.x - curve.p0.x) / 3
-          const thirdY = (point.y - curve.p0.y) / 3
-          curve.c1 = { x: curve.p0.x + thirdX, y: curve.p0.y + thirdY }
-          curve.c2 = { x: curve.p0.x + 2 * thirdX, y: curve.p0.y + 2 * thirdY }
-        } else if (curve.active === 'c1') {
-          curve.c1 = point
-        } else if (curve.active === 'c2') {
-          curve.c2 = point
-        } else if (curve.active === 'p0') {
-          // Moving an endpoint carries its adjacent handle along, preserving the tangent.
-          const dx = point.x - curve.p0.x
-          const dy = point.y - curve.p0.y
-          curve.p0 = point
-          curve.c1 = { x: curve.c1.x + dx, y: curve.c1.y + dy }
-        } else if (curve.active === 'p3') {
-          const dx = point.x - curve.p3.x
-          const dy = point.y - curve.p3.y
-          curve.p3 = point
-          curve.c2 = { x: curve.c2.x + dx, y: curve.c2.y + dy }
+      const shape = shapeRef.current
+      if (shape) {
+        if (shape.pointerId === null || shape.pointerId !== event.pointerId) return
+        if (shape.mode === 'insert') {
+          shape.points = insertShape(shape.kind, shape.insertStart, point)
+        } else if (shape.activeHandle) {
+          shape.points = moveShapeHandle(shape.kind, shape.points, shape.activeHandle, point)
         } else {
           return
         }
-        previewCurve()
+        previewShape()
         return
       }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
-      if (isShapeTool(stroke.tool)) {
-        if (!stroke.recorded) {
-          recordHistory(stroke.base.clone())
-          stroke.recorded = true
-          syncHistory()
-        }
-        stroke.points.push(point)
-        const preview = stroke.base.clone()
-        renderShape(preview, stroke.kind, shapePoints(stroke, point), stroke.slot)
-        paint(preview)
-      } else {
+      {
         const color = stroke.tool === 'eraser' ? eraseColor() : strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         const width = strokeWidthFor(stroke.tool, brushSize)
         const target = stroke.work ?? doc()
@@ -1908,7 +1867,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewCurve, previewPolyline, primary, random, recordHistory, renderPreview, renderShape, secondary, size.height, size.width, syncHistory, toEdgePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toEdgePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -1950,45 +1909,33 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         previewPolyline()
         return
       }
-      const curve = curveRef.current
-      if (curve) {
-        if (curve.pointerId !== event.pointerId) return
-        if (curve.phase === 'line') {
+      const shape = shapeRef.current
+      if (shape) {
+        if (shape.pointerId !== event.pointerId) return
+        if (shape.mode === 'insert') {
           const end = toPoint(event)
-          if (distance(end, curve.p0) * zoom < CURVE_CLICK_SLOP) {
-            cancelCurve()
+          if (distance(shape.insertStart, end) * zoom < SHAPE_CLICK_SLOP) {
+            cancelShape()
             return
           }
-          curve.p3 = end
-          const thirdX = (end.x - curve.p0.x) / 3
-          const thirdY = (end.y - curve.p0.y) / 3
-          curve.c1 = { x: curve.p0.x + thirdX, y: curve.p0.y + thirdY }
-          curve.c2 = { x: curve.p0.x + 2 * thirdX, y: curve.p0.y + 2 * thirdY }
-          curve.phase = 'bend'
+          shape.points = insertShape(shape.kind, shape.insertStart, end)
+          shape.mode = 'tweak'
         }
-        curve.active = null
-        curve.pointerId = null
-        previewCurve()
+        shape.activeHandle = null
+        shape.pointerId = null
+        previewShape()
         return
       }
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       stopSpraying()
-      if (isShapeTool(stroke.tool) && stroke.recorded) {
-        const end = toPoint(event)
-        if (!pointsEqual(end, stroke.points[stroke.points.length - 1])) stroke.points.push(end)
-        const final = stroke.base.clone()
-        renderShape(final, stroke.kind, shapePoints(stroke, end), stroke.slot)
-        bitmapRef.current = final
-        paint(final)
-        syncHistory()
-      } else if (stroke.recorded) {
+      if (stroke.recorded) {
         // Freehand strokes paint in place; refresh the layer thumbnails once they are done.
         publishLayers()
       }
       strokeRef.current = null
     },
-    [cancelCurve, paint, previewCurve, previewPolyline, publishLayers, renderShape, size.height, size.width, stopSpraying, syncHistory, text.fontSize, toPoint, updateSelection, zoom],
+    [cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toPoint, updateSelection, zoom],
   )
 
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
@@ -2008,12 +1955,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (selectRef.current) return
       const rect = currentRect()
       if (rect && hitHandle(rect, clientToCanvas(clientX, clientY), HANDLE_HIT / zoom)) return
-      commitCurve()
+      commitShape()
       commitText()
       commitFloating()
       updateSelection(null)
     },
-    [clientToCanvas, commitCurve, commitFloating, commitText, currentRect, updateSelection, zoom],
+    [clientToCanvas, commitShape, commitFloating, commitText, currentRect, updateSelection, zoom],
   )
   useEffect(() => {
     clickOutsideRef.current = handleClickOutside
@@ -2335,31 +2282,22 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           />
         </svg>
       ) : null}
-      {curve && curve.phase === 'bend' ? (
+      {shape && shape.mode === 'tweak' ? (
         <svg
-          className="curve-overlay"
+          className="shape-overlay"
           aria-hidden="true"
           width={size.width * zoom}
           height={size.height * zoom}
         >
-          <line
-            className="curve-guide"
-            x1={(curve.p0.x + 0.5) * zoom}
-            y1={(curve.p0.y + 0.5) * zoom}
-            x2={(curve.c1.x + 0.5) * zoom}
-            y2={(curve.c1.y + 0.5) * zoom}
-          />
-          <line
-            className="curve-guide"
-            x1={(curve.p3.x + 0.5) * zoom}
-            y1={(curve.p3.y + 0.5) * zoom}
-            x2={(curve.c2.x + 0.5) * zoom}
-            y2={(curve.c2.y + 0.5) * zoom}
-          />
-          <circle className="curve-endpoint" cx={(curve.p0.x + 0.5) * zoom} cy={(curve.p0.y + 0.5) * zoom} r={4.5} />
-          <circle className="curve-endpoint" cx={(curve.p3.x + 0.5) * zoom} cy={(curve.p3.y + 0.5) * zoom} r={4.5} />
-          <circle className="curve-handle" cx={(curve.c1.x + 0.5) * zoom} cy={(curve.c1.y + 0.5) * zoom} r={4.5} />
-          <circle className="curve-handle" cx={(curve.c2.x + 0.5) * zoom} cy={(curve.c2.y + 0.5) * zoom} r={4.5} />
+          {shapeHandles(shape.kind, shape.points).map((handle) => (
+            <circle
+              key={handle.id}
+              className="shape-handle"
+              cx={(handle.point.x + 0.5) * zoom}
+              cy={(handle.point.y + 0.5) * zoom}
+              r={4.5}
+            />
+          ))}
         </svg>
       ) : null}
       {editor && textToolbarPosition ? (
