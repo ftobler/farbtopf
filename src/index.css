@@ -1385,6 +1385,14 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.status-selection {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 92px;
+  font-variant-numeric: tabular-nums;
+}
+
 .status-spacer {
   flex: 1;
 }

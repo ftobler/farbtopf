@@ -1,9 +1,11 @@
 import type { Point } from '../core/geometry'
 import { ZOOM_LEVELS, nearestZoomIndex, nextZoom } from '../core/zoom'
-import { GridIcon, ZoomInIcon, ZoomOutIcon } from './icons'
+import { GridIcon, SelectIcon, ZoomInIcon, ZoomOutIcon } from './icons'
 
 export interface StatusBarProps {
   cursor: Point | null
+  /** Size of the selection (or of a free-form selection's bounding box), or null without one. */
+  selectionSize?: { width: number; height: number } | null
   width: number
   height: number
   zoom: number
@@ -15,6 +17,7 @@ export interface StatusBarProps {
 
 export function StatusBar({
   cursor,
+  selectionSize = null,
   width,
   height,
   zoom,
@@ -27,6 +30,14 @@ export function StatusBar({
     <footer className="statusbar">
       <span className="status-item status-coords">
         {cursor ? `${cursor.x}, ${cursor.y} px` : '—'}
+      </span>
+      <span className="status-item status-selection" aria-label="Selection size" title="Selection size">
+        {selectionSize ? (
+          <>
+            <SelectIcon size={14} />
+            {`${selectionSize.width} × ${selectionSize.height} px`}
+          </>
+        ) : null}
       </span>
       <span className="status-item">
         {width} × {height} px

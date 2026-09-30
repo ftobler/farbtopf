@@ -95,6 +95,7 @@ function App() {
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const [cursor, setCursor] = useState<Point | null>(null)
+  const [selectionSize, setSelectionSize] = useState<{ width: number; height: number } | null>(null)
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
   const [showScaleDialog, setShowScaleDialog] = useState(false)
@@ -667,6 +668,7 @@ function App() {
           onPickColor={handlePickColor}
           onSizeChange={onSizeChange}
           onSelectionChange={setHasSelection}
+          onSelectionSizeChange={setSelectionSize}
           onZoomClick={(direction) => setZoom((value) => nextZoom(value, direction))}
           transparentSelection={transparentSelection}
           selectionShape={selectionShape}
@@ -698,6 +700,7 @@ function App() {
 
       <StatusBar
         cursor={cursor}
+        selectionSize={selectionSize}
         width={canvasSize.width}
         height={canvasSize.height}
         zoom={zoom}

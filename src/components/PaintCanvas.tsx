@@ -126,6 +126,11 @@ export interface PaintCanvasProps {
   onPickColor: (color: Rgba, slot: 'primary' | 'secondary') => void
   onSizeChange: (width: number, height: number) => void
   onSelectionChange?: (hasSelection: boolean) => void
+  /**
+   * Size of what is being selected, for the status bar: the selection (a free-form
+   * one's bounding box), one being dragged out, or a text box. Null without any.
+   */
+  onSelectionSizeChange?: (size: { width: number; height: number } | null) => void
   /** Zoom tool click: 1 to zoom in (left button), -1 to zoom out (right button). */
   onZoomClick?: (direction: 1 | -1) => void
   transparentSelection: boolean
@@ -406,6 +411,12 @@ function placeTextBox(
   return fitTextBox(clampRect(normalizeRect(start, end), width, height), width, height)
 }
 
+/** Pixels spanned along one axis by a free-form outline being traced. */
+function lassoExtent(points: readonly Point[], axis: 'x' | 'y'): number {
+  const values = points.map((point) => point[axis])
+  return Math.max(...values) - Math.min(...values) + 1
+}
+
 /** An opaque bitmap of the selected pixels, used to rotate a selection's shape. */
 function shapeBitmap(width: number, height: number, mask: SelectionMask | null): Bitmap {
   const shape = new Bitmap(width, height)
@@ -510,6 +521,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onPickColor,
     onSizeChange,
     onSelectionChange = () => {},
+    onSelectionSizeChange,
     onZoomClick = () => {},
     transparentSelection,
     selectionShape = 'rectangle',
@@ -684,6 +696,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     },
     [onSelectionChange],
   )
+
+  const selectionWidth = textDraft?.width ?? editor?.width ?? (lasso ? lassoExtent(lasso, 'x') : selection?.width)
+  const selectionHeight = textDraft?.height ?? editor?.height ?? (lasso ? lassoExtent(lasso, 'y') : selection?.height)
+  useEffect(() => {
+    onSelectionSizeChange?.(
+      selectionWidth !== undefined && selectionHeight !== undefined
+        ? { width: selectionWidth, height: selectionHeight }
+        : null,
+    )
+  }, [onSelectionSizeChange, selectionWidth, selectionHeight])
 
   const currentRect = useCallback((): Rect | null => {
     const floating = floatingRef.current
