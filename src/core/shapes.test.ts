@@ -52,6 +52,7 @@ const CLOSED_DRAG: Record<string, { inside: Point; outside: Point[] }> = {
   rectangle: { inside: { x: 20, y: 20 }, outside: [] },
   'rounded-rectangle': { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
   ellipse: { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
+  potatoid: { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
   triangle: { inside: { x: 20, y: 25 }, outside: [TL, TR] },
   'right-triangle': { inside: { x: 10, y: 28 }, outside: [TR] },
   diamond: { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
@@ -66,9 +67,9 @@ const CLOSED_DRAG: Record<string, { inside: Point; outside: Point[] }> = {
 }
 
 describe('SHAPES', () => {
-  it('lists 20 unique shapes, each with an interaction', () => {
-    expect(SHAPES).toHaveLength(20)
-    expect(new Set(SHAPES.map((shape) => shape.id)).size).toBe(20)
+  it('lists 21 unique shapes, each with an interaction', () => {
+    expect(SHAPES).toHaveLength(21)
+    expect(new Set(SHAPES.map((shape) => shape.id)).size).toBe(21)
     for (const shape of SHAPES) {
       expect(['drag', 'polyline', 'curve']).toContain(shape.interaction)
       expect(shapeById(shape.id)).toBe(shape)

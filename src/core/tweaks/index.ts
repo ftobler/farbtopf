@@ -7,6 +7,7 @@ import { boxFamily } from './box'
 import { calloutFamily } from './callouts'
 import { curveFamily } from './curve'
 import { polygonFamily } from './polygons'
+import { potatoidFamily } from './potatoid'
 import { regularFamily } from './regular'
 import { starFamily } from './stars'
 import type { ShapeFamily, TweakHandle } from './types'
@@ -18,6 +19,7 @@ for (const family of [
   boxFamily,
   curveFamily,
   polygonFamily,
+  potatoidFamily,
   regularFamily,
   starFamily,
   arrowFamily,

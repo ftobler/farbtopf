@@ -8,6 +8,7 @@ export type ShapeKind =
   | 'line'
   | 'polyline'
   | 'ellipse'
+  | 'potatoid'
   | 'rectangle'
   | 'rounded-rectangle'
   | 'freeform'
@@ -46,6 +47,7 @@ export const SHAPES: readonly ShapeDef[] = [
   { id: 'line', label: 'Line', interaction: 'drag', closed: false },
   { id: 'polyline', label: 'Polyline', interaction: 'curve', closed: false },
   { id: 'ellipse', label: 'Ellipse', interaction: 'drag', closed: true },
+  { id: 'potatoid', label: 'Potatoid', interaction: 'drag', closed: true },
   { id: 'rectangle', label: 'Rectangle', interaction: 'drag', closed: true },
   { id: 'rounded-rectangle', label: 'Rounded rectangle', interaction: 'drag', closed: true },
   { id: 'freeform', label: 'Freeform shape', interaction: 'polyline', closed: false },
@@ -114,6 +116,77 @@ function star(tips: number, innerRatio: number): Point[] {
     points.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) })
   }
   return stretchToUnit(points)
+}
+
+/** How many draggable control points shape a potatoid. */
+export const POTATOID_CONTROLS = 5
+const POTATOID_START = -Math.PI / 2 + Math.PI / POTATOID_CONTROLS
+const POTATOID_STEP = (2 * Math.PI) / POTATOID_CONTROLS
+/** Outline samples per control span; the curve is smooth, this only controls how finely it is traced. */
+const POTATOID_SAMPLES = 16
+/** A gentle asymmetric wobble so a fresh potatoid already reads as a potato, not an ellipse. */
+const POTATOID_WOBBLE = [1.25, 0.82, 1.15, 0.85, 1.2]
+
+/**
+ * A closed uniform cubic B-spline through `control`, sampled `samples` times per span.
+ * Being a B-spline it is smooth everywhere, so dragging a control can never leave a
+ * corner or a cusp behind, and it always stays inside the control polygon.
+ */
+function closedBSpline(control: readonly Point[], samples: number): Point[] {
+  const n = control.length
+  const points: Point[] = []
+  const at = (index: number) => control[((index % n) + n) % n]
+  for (let i = 0; i < n; i += 1) {
+    const p0 = at(i - 1)
+    const p1 = at(i)
+    const p2 = at(i + 1)
+    const p3 = at(i + 2)
+    for (let s = 0; s < samples; s += 1) {
+      const t = s / samples
+      const t2 = t * t
+      const t3 = t2 * t
+      const b0 = (1 - t) ** 3
+      const b1 = 3 * t3 - 6 * t2 + 4
+      const b2 = -3 * t3 + 3 * t2 + 3 * t + 1
+      const b3 = t3
+      points.push({
+        x: (b0 * p0.x + b1 * p1.x + b2 * p2.x + b3 * p3.x) / 6,
+        y: (b0 * p0.y + b1 * p1.y + b2 * p2.y + b3 * p3.y) / 6,
+      })
+    }
+  }
+  return points
+}
+
+/** Unit-square control points whose smooth outline wraps the unit square exactly. */
+export const POTATOID_BASE_CONTROLS: readonly Point[] = (() => {
+  const raw: Point[] = []
+  for (let i = 0; i < POTATOID_CONTROLS; i += 1) {
+    const angle = POTATOID_START + i * POTATOID_STEP
+    const r = POTATOID_WOBBLE[i]
+    raw.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) })
+  }
+  const outline = closedBSpline(raw, 32)
+  const xs = outline.map((p) => p.x)
+  const ys = outline.map((p) => p.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const spanX = Math.max(...xs) - minX || 1
+  const spanY = Math.max(...ys) - minY || 1
+  return raw.map((p) => ({ x: (p.x - minX) / spanX, y: (p.y - minY) / spanY }))
+})()
+
+/**
+ * The smooth potatoid outline filling `box`. `offsets` nudge each control point in
+ * unit space; the B-spline turns those nudges into gentle bulges and dents.
+ */
+export function potatoidOutline(box: Rect, offsets: readonly Point[] = []): Point[] {
+  const map = boxTransform(box)
+  const control = POTATOID_BASE_CONTROLS.map((point, index) => ({
+    x: point.x + (offsets[index]?.x ?? 0),
+    y: point.y + (offsets[index]?.y ?? 0),
+  }))
+  return closedBSpline(control, POTATOID_SAMPLES).map((point) => map(point.x, point.y))
 }
 
 /** Block arrow pointing towards +u; v runs across the arrow. */
@@ -299,6 +372,8 @@ export function shapePolygon(kind: ShapeKind, box: Rect, radius?: number): Point
       }
       return points
     }
+    case 'potatoid':
+      return potatoidOutline(box)
     case 'triangle':
       return unit([{ x: 0.5, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }])
     case 'right-triangle':
