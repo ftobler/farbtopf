@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { Bitmap } from '../bitmap'
 import { BLACK, rgba } from '../color'
 import type { Point } from '../geometry'
 import type { ShapeKind, ShapeStyle } from '../shapes'
-import { arrowFamily } from './arrows'
+import { arrowFamily, setArrowThickness } from './arrows'
 
 const RED = rgba(255, 0, 0)
 const FILL_ONLY: ShapeStyle = { width: 1, stroke: null, fill: RED }
@@ -48,6 +48,8 @@ function fresh(kind: ShapeKind, tail: Point = TAIL, tip: Point = TIP): Point[] {
 }
 
 describe('arrowFamily', () => {
+  beforeEach(() => setArrowThickness(DEFAULT_THICKNESS))
+
   it('exposes exactly the tail, tip and thickness handles', () => {
     const points = fresh('arrow', { x: 10, y: 50 }, { x: 90, y: 50 })
     const handles = arrowFamily.handles('arrow', points)
@@ -141,6 +143,36 @@ describe('arrowFamily', () => {
     expect(columnHeight(double, 60, 0, 159)).toBeGreaterThan(columnHeight(single, 60, 0, 159))
   })
 
+  it('draws both double-arrow heads whole and symmetric about the shaft', () => {
+    const points: Point[] = [{ x: 20, y: 80 }, { x: 200, y: 80 }, { x: DEFAULT_THICKNESS, y: 0 }]
+    const bitmap = new Bitmap(240, 160)
+    arrowFamily.render(bitmap, 'arrow-double', points, FILL_ONLY)
+    // Both ends carry a full head, not just the shaft (thickness 16, head half 24).
+    expect(columnHeight(bitmap, 66, 0, 159)).toBeGreaterThan(DEFAULT_THICKNESS * 2)
+    expect(columnHeight(bitmap, 154, 0, 159)).toBeGreaterThan(DEFAULT_THICKNESS * 2)
+    // Near each tip and along the shaft there are pixels.
+    for (const x of [24, 100, 196]) expect(painted(bitmap, x, 80), `x=${x}`).toBe(true)
+    // The whole arrow is symmetric about the centre of its painted span.
+    let minY = Infinity
+    let maxY = -Infinity
+    for (let y = 0; y < bitmap.height; y += 1) {
+      for (let x = 0; x < bitmap.width; x += 1) {
+        if (painted(bitmap, x, y)) {
+          minY = Math.min(minY, y)
+          maxY = Math.max(maxY, y)
+        }
+      }
+    }
+    const sum = minY + maxY
+    for (let y = 0; y < bitmap.height; y += 1) {
+      const mirror = sum - y
+      const inRange = mirror >= 0 && mirror < bitmap.height
+      for (let x = 0; x < bitmap.width; x += 1) {
+        expect(painted(bitmap, x, y), `${x},${y}`).toBe(inRange && painted(bitmap, x, mirror))
+      }
+    }
+  })
+
   it('keeps the thickness when the endpoints move', () => {
     let points = fresh('arrow')
     points = arrowFamily.move('arrow', points, 'thickness', { x: 110, y: 100 })!
@@ -157,6 +189,15 @@ describe('arrowFamily', () => {
       const bitmap = new Bitmap(20, 20)
       arrowFamily.render(bitmap, kind, points, BOTH)
       expect(bitmap.data).toEqual(new Bitmap(20, 20).data)
+    }
+  })
+
+  it('reuses the last adjusted thickness on the next arrow', () => {
+    const points = arrowFamily.insert('arrow', { x: 10, y: 50 }, { x: 90, y: 50 })
+    const thick = arrowFamily.move('arrow', points, 'thickness', { x: 50, y: 80 })!
+    expect(thick[2].x).toBeCloseTo(30)
+    for (const kind of KINDS) {
+      expect(arrowFamily.insert(kind, { x: 10, y: 50 }, { x: 90, y: 50 })[2].x).toBeCloseTo(30)
     }
   })
 

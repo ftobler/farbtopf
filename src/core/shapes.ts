@@ -492,7 +492,7 @@ function unitArrowPolygon(tail: Point, tip: Point, t: number, doubleHeaded: bool
     { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
     { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
     { x: tailBase.x - perp.x * shaftHalf, y: tailBase.y - perp.y * shaftHalf },
-    { x: tail.x - perp.x * headHalf, y: tail.y - perp.y * headHalf },
+    { x: tailBase.x - perp.x * headHalf, y: tailBase.y - perp.y * headHalf },
   ]
 }
 

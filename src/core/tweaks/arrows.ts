@@ -10,13 +10,24 @@ const DEFAULT_THICKNESS = 16
 const MIN_THICKNESS = 1
 const MAX_THICKNESS = 256
 
+/**
+ * The thickness of the last arrow the user adjusted. A new arrow starts at this
+ * size so repeatedly drawn arrows keep matching.
+ */
+let latchedThickness = DEFAULT_THICKNESS
+
+/** Sets the thickness a freshly inserted arrow starts at (also used to reset tests). */
+export function setArrowThickness(thickness: number): void {
+  latchedThickness = clamp(thickness, MIN_THICKNESS, MAX_THICKNESS)
+}
+
 /** Head is at most 3x the shaft thickness long and 1.5x thick on each side. */
 const HEAD_LENGTH_FACTOR = 3
 const HEAD_HALF_FACTOR = 1.5
 
 /** Extra anchor `[2].x` stores the overall thickness; `.y` is ignored. */
 function thicknessOf(points: readonly Point[]): number {
-  return points.length >= 3 ? points[2].x : DEFAULT_THICKNESS
+  return points.length >= 3 ? points[2].x : latchedThickness
 }
 
 /** Unit direction from `tail` to `tip` plus the shaft length; null when degenerate. */
@@ -85,7 +96,7 @@ function arrowPolygon(kind: ShapeKind, tail: Point, tip: Point, thickness: numbe
     { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
     { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
     { x: tailBase.x - perp.x * shaftHalf, y: tailBase.y - perp.y * shaftHalf },
-    { x: tail.x - perp.x * headHalf, y: tail.y - perp.y * headHalf },
+    { x: tailBase.x - perp.x * headHalf, y: tailBase.y - perp.y * headHalf },
   ]
 }
 
@@ -93,7 +104,7 @@ export const arrowFamily: ShapeFamily = {
   kinds: ['arrow', 'arrow-double', 'arrow-axis'],
   insert(kind, start, end) {
     const tip = snapsToAxis(kind) ? snapToAxis(start, end) : end
-    return [start, tip, { x: DEFAULT_THICKNESS, y: 0 }]
+    return [start, tip, { x: latchedThickness, y: 0 }]
   },
   handles(_kind, points): TweakHandle[] {
     if (points.length < 2) return []
@@ -125,6 +136,7 @@ export const arrowFamily: ShapeFamily = {
       }
       case 'thickness': {
         const next = clamp(perpendicularDistance(point, tail, tip), MIN_THICKNESS, MAX_THICKNESS)
+        latchedThickness = next
         return [tail, tip, { x: next, y: 0 }]
       }
       default:
