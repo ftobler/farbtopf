@@ -858,6 +858,54 @@ describe('tool size and opacity sliders', () => {
   })
 })
 
+describe('brush preview while sliding', () => {
+  const preview = () => document.querySelector<HTMLElement>('.brush-preview')
+  const sizeSlider = () => screen.getByRole('slider', { name: 'Size' })
+  const opacitySlider = () => screen.getByRole('slider', { name: 'Opacity' })
+
+  it('appears in the workspace only while a slider is dragged', () => {
+    const { container } = render(<App />)
+    expect(preview()).toBeNull()
+    fireEvent.pointerDown(sizeSlider(), { button: 0, pointerId: 1, clientY: 10 })
+    expect(preview()).toBeTruthy()
+    expect(container.querySelector('.workspace')?.contains(preview())).toBe(true)
+    fireEvent.pointerUp(sizeSlider(), { pointerId: 1, clientY: 10 })
+    expect(preview()).toBeNull()
+    fireEvent.pointerDown(opacitySlider(), { button: 0, pointerId: 2, clientY: 10 })
+    expect(preview()).toBeTruthy()
+    fireEvent.pointerCancel(opacitySlider(), { pointerId: 2 })
+    expect(preview()).toBeNull()
+  })
+
+  it('shows the current size, opacity and tip of the tool', () => {
+    render(<App />)
+    fireEvent.keyDown(opacitySlider(), { key: 'PageDown' })
+    fireEvent.pointerDown(sizeSlider(), { button: 0, pointerId: 1, clientY: 10 })
+    // The track has no layout in jsdom, so pressing it keeps the size; keys change it live.
+    expect(preview()?.style.width).toBe('4px')
+    expect(preview()?.style.opacity).toBe('0.9')
+    expect(preview()?.dataset.tip).toBe('round')
+    fireEvent.keyDown(sizeSlider(), { key: 'PageUp' })
+    expect(preview()?.style.width).toBe('5px')
+    fireEvent.pointerUp(sizeSlider(), { pointerId: 1, clientY: 10 })
+  })
+
+  it('shows the eraser as a square', () => {
+    render(<App />)
+    fireEvent.keyDown(window, { key: 'e' })
+    fireEvent.pointerDown(sizeSlider(), { button: 0, pointerId: 1, clientY: 10 })
+    expect(preview()?.dataset.tip).toBe('square')
+    fireEvent.pointerUp(sizeSlider(), { pointerId: 1, clientY: 10 })
+  })
+
+  it('never touches the history', () => {
+    render(<App />)
+    fireEvent.pointerDown(sizeSlider(), { button: 0, pointerId: 1, clientY: 10 })
+    fireEvent.pointerUp(sizeSlider(), { pointerId: 1, clientY: 10 })
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
+  })
+})
+
 describe('custom color picker', () => {
   const primary = () => screen.getByLabelText('Primary color') as HTMLInputElement
   const secondary = () => screen.getByLabelText('Secondary color') as HTMLInputElement

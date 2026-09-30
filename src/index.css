@@ -828,6 +828,31 @@ textarea {
   height: 16px;
 }
 
+/* One dab of the current tool, centred in the workspace while a tool slider is dragged. */
+.brush-preview {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 7;
+  /* A thin halo keeps a tip in the canvas colour visible. */
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
+}
+
+.brush-preview-tip {
+  position: absolute;
+  image-rendering: pixelated;
+}
+
+.brush-preview-area {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--text);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
 .layers-list {
   display: flex;
   flex-direction: column;

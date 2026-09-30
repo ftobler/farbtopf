@@ -30,6 +30,7 @@ import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { Scrollbars } from './components/Scrollbars'
 import { StatusBar } from './components/StatusBar'
 import { ToolSliders } from './components/ToolSliders'
+import { BrushPreview } from './components/BrushPreview'
 import type { BrushId } from './core/brushes'
 import type { Rgba } from './core/color'
 import type { Point } from './core/geometry'
@@ -96,6 +97,8 @@ function App() {
       setToolSettings((current) => ({ ...current, [sizedTool]: { ...current[sizedTool], size: clampSize(size) } })),
     [sizedTool],
   )
+  /** True while a tool slider is being dragged; the brush preview shows meanwhile. */
+  const [sliding, setSliding] = useState(false)
   const setOpacity = useCallback(
     (value: number) =>
       setToolSettings((current) => ({
@@ -714,6 +717,17 @@ function App() {
             opacity={opacity}
             onSizeChange={setBrushSize}
             onOpacityChange={setOpacity}
+            onSlidingChange={setSliding}
+          />
+        ) : null}
+        {sliding && isSizedTool(tool) ? (
+          <BrushPreview
+            tool={tool}
+            brush={brush}
+            size={brushSize}
+            opacity={opacity}
+            color={tool === 'eraser' ? secondary : primary}
+            zoom={shownZoom}
           />
         ) : null}
         {showLayers ? (
