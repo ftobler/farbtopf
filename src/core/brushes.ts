@@ -45,6 +45,24 @@ export interface StrokeOptions {
   brush: BrushId
 }
 
+/**
+ * One puff of the airbrush: random opaque dots inside a circle `size` pixels across.
+ * The number of dots grows with the area, so the density looks the same at any size.
+ */
+export function sprayDab(bitmap: Bitmap, center: Point, size: number, color: Rgba): void {
+  const r = Math.max(1, size / 2)
+  const attempts = Math.max(8, Math.round(r * r * 0.6))
+  for (let i = 0; i < attempts; i += 1) {
+    const angle = Math.random() * Math.PI * 2
+    const distance = Math.sqrt(Math.random()) * r
+    bitmap.set(
+      Math.round(center.x + Math.cos(angle) * distance),
+      Math.round(center.y + Math.sin(angle) * distance),
+      color,
+    )
+  }
+}
+
 /** Alpha-composites `color` over the pixel at (`x`,`y`) with the given coverage. */
 function blendPixel(bitmap: Bitmap, x: number, y: number, color: Rgba, coverage: number): void {
   if (coverage <= 0 || !bitmap.contains(x, y)) return
@@ -122,7 +140,8 @@ function paintDisc(
 }
 
 function paintNaturalDab(bitmap: Bitmap, center: Point, radius: number, color: Rgba): void {
-  const bristles = Math.max(4, Math.round(radius * 3))
+  // Grows with the dab's area once that outweighs its edge, so big brushes are not threadbare.
+  const bristles = Math.max(4, Math.round(radius * 3), Math.round(radius * radius * 0.5))
   for (let i = 0; i < bristles; i += 1) {
     const angle = Math.random() * Math.PI * 2
     const distance = Math.sqrt(Math.random()) * radius

@@ -40,9 +40,9 @@ export function isShapeTool(id: ToolId): boolean {
   return id === 'shape'
 }
 
-/** Pencil is always a single pixel wide; every other tool honours the brush size. */
-export function strokeWidthFor(id: ToolId, brushSize: number): number {
-  return id === 'pencil' ? 1 : brushSize
+/** The stroke width a tool paints with: its size as whole pixels from 1 to 500. */
+export function strokeWidthFor(_id: ToolId, brushSize: number): number {
+  return Math.min(500, Math.max(1, Math.round(Number.isFinite(brushSize) ? brushSize : 1)))
 }
 
 /** The eraser always paints with the secondary colour, whatever button is used. */
@@ -62,4 +62,5 @@ export function toolById(id: ToolId): ToolDef {
   return found
 }
 
+/** Preset sizes offered by the Stroke size dropdown; a tool's size may be any value from 1 to 500. */
 export const BRUSH_SIZES = [1, 2, 3, 4, 5, 8, 12, 20, 32] as const

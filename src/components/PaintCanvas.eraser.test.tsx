@@ -111,6 +111,19 @@ describe('PaintCanvas eraser preview', () => {
     }
   })
 
+  it('erases and previews a 500 px footprint', () => {
+    const { ref, preview, hover, canvas, shown } = setup({ brushSize: 500, zoom: 2, secondary: WHITE })
+    act(() => ref.current?.loadBitmap(new Bitmap(SIZE, SIZE, BLACK)))
+    hover(21, 21)
+    // The footprint is clipped to the 20 × 20 image.
+    expect(preview()?.style.left).toBe('0px')
+    expect(preview()?.style.width).toBe(`${SIZE * 2}px`)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 21, clientY: 21 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 25, clientY: 23 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 25, clientY: 23 })
+    for (const [x, y] of [[0, 0], [19, 19], [0, 19], [10, 10]]) expect(shown(x, y)).toEqual([255, 255, 255, 255])
+  })
+
   it('follows the pointer while dragging', () => {
     const { preview, hover, canvas } = setup({ brushSize: 1, zoom: 2 })
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })

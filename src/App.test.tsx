@@ -556,6 +556,66 @@ describe('App', () => {
     expect(pressedSize()).toBe('4 px')
   })
 
+  it('keeps a size per tool', () => {
+    render(<App />)
+    const pressedSize = () => {
+      const trigger = screen.getByRole('button', { name: 'Size' })
+      fireEvent.click(trigger)
+      const option = document.querySelector<HTMLElement>('.size-option[aria-pressed="true"]')
+      const label = option?.querySelector('.size-label')?.textContent ?? null
+      fireEvent.click(trigger)
+      return label
+    }
+    expect(pressedSize()).toBe('4 px')
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    expect(pressedSize()).toBe('1 px')
+    fireEvent.keyDown(window, { key: ']' })
+    fireEvent.keyDown(window, { key: ']' })
+    expect(pressedSize()).toBe('3 px')
+    fireEvent.click(screen.getByRole('button', { name: 'Brush' }))
+    expect(pressedSize()).toBe('4 px')
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    expect(pressedSize()).toBe('3 px')
+  })
+
+  it('sizes the last sized tool while an unsized tool is active', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Eraser' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fill with color' }))
+    fireEvent.keyDown(window, { key: ']' })
+    fireEvent.click(screen.getByRole('button', { name: 'Eraser' }))
+    const trigger = screen.getByRole('button', { name: 'Size' })
+    fireEvent.click(trigger)
+    const option = document.querySelector<HTMLElement>('.size-option[aria-pressed="true"]')
+    expect(option?.querySelector('.size-label')?.textContent).toBe('5 px')
+  })
+
+  it('steps past the largest preset and shows a size that is not a preset', () => {
+    render(<App />)
+    for (let i = 0; i < 12; i += 1) fireEvent.keyDown(window, { key: ']' })
+    const trigger = screen.getByRole('button', { name: 'Size' })
+    fireEvent.click(trigger)
+    // No preset is highlighted, but the current size is shown.
+    expect(document.querySelector('.size-option[aria-pressed="true"]')).toBeNull()
+    const current = document.querySelector<HTMLElement>('.size-current')
+    expect(current?.textContent).toMatch(/^\d+ px$/)
+    const value = parseInt(current?.textContent ?? '', 10)
+    expect(value).toBeGreaterThan(32)
+    expect(value).toBeLessThanOrEqual(500)
+    // Picking a preset brings the size back to the preset.
+    fireEvent.click(screen.getByRole('button', { name: /^12 px/ }))
+    fireEvent.click(trigger)
+    expect(document.querySelector('.size-current')).toBeNull()
+    expect(document.querySelector('.size-option[aria-pressed="true"] .size-label')?.textContent).toBe('12 px')
+  })
+
+  it('never steps past 500 px', () => {
+    render(<App />)
+    for (let i = 0; i < 60; i += 1) fireEvent.keyDown(window, { key: ']' })
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    expect(document.querySelector('.size-current')?.textContent).toBe('500 px')
+  })
+
   it('changes the shape fill from the fill dropdown', () => {
     render(<App />)
     const trigger = screen.getByRole('button', { name: 'Fill' })

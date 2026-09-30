@@ -312,3 +312,24 @@ describe('shapeIconPath', () => {
     expect(new Set(paths).size).toBe(SHAPES.length)
   })
 })
+
+describe('500 px outlines', () => {
+  it('renders every shape with a 500 px stroke in reasonable time', () => {
+    const started = performance.now()
+    for (const shape of SHAPES) {
+      const bitmap = new Bitmap(900, 900)
+      const points =
+        shape.interaction === 'drag'
+          ? [{ x: 100, y: 100 }, { x: 800, y: 800 }]
+          : [{ x: 100, y: 100 }, { x: 800, y: 200 }, { x: 500, y: 800 }, { x: 150, y: 600 }]
+      renderShape(bitmap, shape.id, points, { width: 500, stroke: BLACK, fill: null })
+      // Something thick was drawn: the stroke reaches well inside the box.
+      let painted = 0
+      for (let y = 0; y < 900; y += 10) {
+        for (let x = 0; x < 900; x += 10) if (bitmap.get(x, y).a > 0) painted += 1
+      }
+      expect(painted, shape.id).toBeGreaterThan(1000)
+    }
+    expect(performance.now() - started).toBeLessThan(8000)
+  })
+})

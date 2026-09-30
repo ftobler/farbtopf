@@ -3,9 +3,15 @@ import { BLACK, WHITE } from './color'
 import { strokeColorFor, strokeWidthFor } from './tools'
 
 describe('strokeWidthFor', () => {
-  it('forces the pencil to a single pixel', () => {
+  it('honours the size for the pencil too', () => {
     expect(strokeWidthFor('pencil', 1)).toBe(1)
-    expect(strokeWidthFor('pencil', 32)).toBe(1)
+    expect(strokeWidthFor('pencil', 32)).toBe(32)
+  })
+
+  it('clamps sizes to whole pixels from 1 to 500', () => {
+    expect(strokeWidthFor('brush', 0)).toBe(1)
+    expect(strokeWidthFor('eraser', 500)).toBe(500)
+    expect(strokeWidthFor('shape', 900)).toBe(500)
   })
 
   it('honours the brush size for other tools', () => {

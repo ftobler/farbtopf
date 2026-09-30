@@ -37,7 +37,9 @@ import type { SelectionShape } from './core/selection'
 import type { ShapeKind } from './core/shapes'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
 import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
-import { TOOLS, BRUSH_SIZES, toolById } from './core/tools'
+import { TOOLS, toolById } from './core/tools'
+import { DEFAULT_TOOL_SETTINGS, clampSize, isSizedTool, stepSize } from './core/toolSettings'
+import type { SizedTool, ToolSettingsMap } from './core/toolSettings'
 import type { ShapeFill, ToolId } from './core/tools'
 import { ZOOM_LEVELS, displayZoom, nextZoom } from './core/zoom'
 import { useCustomColors } from './hooks/useCustomColors'
@@ -80,7 +82,18 @@ function App() {
   const [tool, setTool] = useState<ToolId>('brush')
   const [primary, setPrimary] = useState<Rgba>(DEFAULT_PRIMARY)
   const [secondary, setSecondary] = useState<Rgba>(DEFAULT_SECONDARY)
-  const [brushSize, setBrushSize] = useState(4)
+  // Size and opacity belong to each sized tool (see toolSettings.ts). While an unsized
+  // tool is active, the size controls keep acting on the last sized tool.
+  const [toolSettings, setToolSettings] = useState<ToolSettingsMap>(DEFAULT_TOOL_SETTINGS)
+  const [lastSizedTool, setLastSizedTool] = useState<SizedTool>('brush')
+  if (isSizedTool(tool) && tool !== lastSizedTool) setLastSizedTool(tool)
+  const sizedTool: SizedTool = isSizedTool(tool) ? tool : lastSizedTool
+  const brushSize = toolSettings[sizedTool].size
+  const setBrushSize = useCallback(
+    (size: number) =>
+      setToolSettings((current) => ({ ...current, [sizedTool]: { ...current[sizedTool], size: clampSize(size) } })),
+    [sizedTool],
+  )
   const [brush, setBrush] = useState<BrushId>('round')
   const [text, setText] = useState<TextOptions>(DEFAULT_TEXT_OPTIONS)
   const [shapeFill, setShapeFill] = useState<ShapeFill>('outline')
@@ -474,10 +487,7 @@ function App() {
 
       if (event.key === '[' || event.key === ']') {
         event.preventDefault()
-        const sizes: number[] = [...BRUSH_SIZES]
-        const index = sizes.indexOf(brushSize)
-        const next = event.key === '[' ? Math.max(0, index - 1) : Math.min(sizes.length - 1, index + 1)
-        setBrushSize(sizes[next] ?? brushSize)
+        setBrushSize(stepSize(brushSize, event.key === '[' ? -1 : 1))
         return
       }
       if (event.key === '+' || event.key === '=') {
@@ -526,6 +536,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     brushSize,
+    setBrushSize,
     contextMenu,
     handleCopyFromCanvas,
     handleCutFromCanvas,

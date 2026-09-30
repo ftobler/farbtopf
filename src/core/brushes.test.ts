@@ -8,8 +8,10 @@ import {
   createCoverageMask,
   isColorBrush,
   paintBrushStroke,
+  sprayDab,
   stampHighlighter,
 } from './brushes'
+import type { BrushId } from './brushes'
 import { BLACK, WHITE } from './color'
 
 function pixelData(bitmap: Bitmap): number[] {
@@ -231,5 +233,61 @@ describe('brushes', () => {
       paintBrushStroke(bitmap, { x: 30, y: 20 }, { x: 30, y: 20 }, { size: 20, color: BLACK, brush: 'liquify' })
     }
     expect(pixelData(bitmap)).toEqual(before)
+  })
+})
+
+describe('sprayDab', () => {
+  it('keeps the spray inside a circle of the given diameter', () => {
+    const bitmap = new Bitmap(40, 40, WHITE)
+    sprayDab(bitmap, { x: 20, y: 20 }, 10, BLACK)
+    let count = 0
+    for (let y = 0; y < 40; y += 1) {
+      for (let x = 0; x < 40; x += 1) {
+        if (bitmap.get(x, y).r === 255) continue
+        count += 1
+        expect(Math.hypot(x - 20, y - 20)).toBeLessThanOrEqual(5.75)
+      }
+    }
+    expect(count).toBeGreaterThan(5)
+  })
+
+  it('reaches out to the full radius of a 500 px spray', () => {
+    const bitmap = new Bitmap(600, 600, WHITE)
+    for (let i = 0; i < 4; i += 1) sprayDab(bitmap, { x: 300, y: 300 }, 500, BLACK)
+    let farthest = 0
+    for (let y = 0; y < 600; y += 3) {
+      for (let x = 0; x < 600; x += 3) {
+        if (bitmap.get(x, y).r < 255) farthest = Math.max(farthest, Math.hypot(x - 300, y - 300))
+      }
+    }
+    expect(farthest).toBeGreaterThan(200)
+    expect(farthest).toBeLessThanOrEqual(251)
+  })
+})
+
+describe('large brush sizes', () => {
+  const colorBrushes: BrushId[] = ['round', 'soft', 'natural', 'calligraphy', 'highlighter']
+  for (const brush of colorBrushes) {
+    it(`paints a 500 px ${brush} stroke in reasonable time`, () => {
+      const bitmap = new Bitmap(700, 700, WHITE)
+      const started = performance.now()
+      paintBrushStroke(bitmap, { x: 300, y: 350 }, { x: 400, y: 350 }, { size: 500, color: BLACK, brush })
+      expect(performance.now() - started).toBeLessThan(3000)
+      // The middle of the stroke is painted and the far corner is not.
+      let painted = 0
+      for (let y = 330; y < 370; y += 1) {
+        for (let x = 330; x < 370; x += 1) if (bitmap.get(x, y).r < 255) painted += 1
+      }
+      expect(painted).toBeGreaterThan(40 * 40 * 0.1)
+      expect(bitmap.get(2, 2)).toEqual(WHITE)
+    })
+  }
+
+  it('makes a 500 px round stroke 500 px tall', () => {
+    const bitmap = new Bitmap(700, 700, WHITE)
+    paintBrushStroke(bitmap, { x: 340, y: 350 }, { x: 360, y: 350 }, { size: 500, color: BLACK, brush: 'round' })
+    expect(bitmap.get(350, 350 - 248)).toEqual(BLACK)
+    expect(bitmap.get(350, 350 + 248)).toEqual(BLACK)
+    expect(bitmap.get(350, 350 - 255)).toEqual(WHITE)
   })
 })

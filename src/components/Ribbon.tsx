@@ -442,6 +442,12 @@ export function Ribbon({
             >
               {(close) => (
                 <div className="size-menu" style={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* The presets only set the size; any other current size (from the slider) is shown on top. */}
+                  {(BRUSH_SIZES as readonly number[]).includes(brushSize) ? null : (
+                    <div className="size-current" title="Current size">
+                      {brushSize} px
+                    </div>
+                  )}
                   {BRUSH_SIZES.map((size) => (
                     <button
                       key={size}

@@ -81,6 +81,108 @@ export function strokePoint(
   stamp(bitmap, Math.round(point.x), Math.round(point.y), size, color, shape)
 }
 
+/**
+ * For each row of a stamp, the first and last column it covers (relative to the stamp's
+ * top-left corner). Mirrors `stamp` exactly; every row of a stamp is non-empty.
+ */
+function stampRows(size: number, shape: BrushShape): { left: Int32Array; right: Int32Array } {
+  const s = Math.max(1, Math.floor(size))
+  const left = new Int32Array(s)
+  const right = new Int32Array(s)
+  const threshold = s % 2 === 0 ? s / 2 - 0.25 : (s - 1) / 2
+  for (let j = 0; j < s; j += 1) {
+    if (shape !== 'round' || s <= 2) {
+      left[j] = 0
+      right[j] = s - 1
+      continue
+    }
+    let first = s
+    let last = -1
+    for (let i = 0; i < s; i += 1) {
+      const dx = i - (s - 1) / 2
+      const dy = j - (s - 1) / 2
+      if (dx * dx + dy * dy > threshold * threshold) continue
+      if (first === s) first = i
+      last = i
+    }
+    left[j] = first
+    right[j] = last
+  }
+  return { left, right }
+}
+
+/**
+ * Paints the same pixels as stamping at every point of every segment, but row span by
+ * row span, so a 500 px stroke costs about its area rather than area × length.
+ *
+ * Along one Bresenham segment consecutive stamps move at most one pixel and every stamp
+ * row is non-empty, so on each image row the stamps of a segment cover one unbroken run.
+ */
+function strokeSegments(
+  bitmap: Bitmap,
+  vertices: readonly Point[],
+  size: number,
+  color: Rgba,
+  shape: BrushShape,
+): void {
+  const s = Math.max(1, Math.floor(size))
+  const offset = Math.floor((s - 1) / 2)
+  const { left, right } = stampRows(s, shape)
+  const runs: number[][] = []
+  for (let v = 0; v < vertices.length - 1; v += 1) {
+    const points = linePointsBetween(vertices[v], vertices[v + 1])
+    let minY = Infinity
+    let maxY = -Infinity
+    for (const p of points) {
+      minY = Math.min(minY, p.y)
+      maxY = Math.max(maxY, p.y)
+    }
+    const top = Math.max(0, minY - offset)
+    const bottom = Math.min(bitmap.height - 1, maxY - offset + s - 1)
+    if (top > bottom) continue
+    const lo = new Float64Array(bottom - top + 1).fill(Infinity)
+    const hi = new Float64Array(bottom - top + 1).fill(-Infinity)
+    for (const p of points) {
+      const from = Math.max(0, top - (p.y - offset))
+      const to = Math.min(s - 1, bottom - (p.y - offset))
+      const x0 = p.x - offset
+      for (let j = from; j <= to; j += 1) {
+        const row = p.y - offset + j - top
+        const a = x0 + left[j]
+        const b = x0 + right[j]
+        if (a < lo[row]) lo[row] = a
+        if (b > hi[row]) hi[row] = b
+      }
+    }
+    for (let row = 0; row < lo.length; row += 1) {
+      if (lo[row] > hi[row]) continue
+      const y = top + row
+      ;(runs[y] ??= []).push(lo[row], hi[row])
+    }
+  }
+  for (let y = 0; y < runs.length; y += 1) {
+    const row = runs[y]
+    if (!row) continue
+    // Merge the runs of all segments so each pixel is written once.
+    const pairs: [number, number][] = []
+    for (let i = 0; i < row.length; i += 2) pairs.push([row[i], row[i + 1]])
+    pairs.sort((a, b) => a[0] - b[0])
+    let [start, end] = pairs[0]
+    const flush = () => {
+      for (let x = Math.max(0, start); x <= Math.min(bitmap.width - 1, end); x += 1) bitmap.set(x, y, color)
+    }
+    for (let i = 1; i < pairs.length; i += 1) {
+      if (pairs[i][0] <= end + 1) {
+        end = Math.max(end, pairs[i][1])
+        continue
+      }
+      flush()
+      ;[start, end] = pairs[i]
+    }
+    flush()
+  }
+}
+
 export function drawLine(
   bitmap: Bitmap,
   from: Point,
@@ -89,7 +191,7 @@ export function drawLine(
   color: Rgba,
   shape: BrushShape = 'round',
 ): void {
-  for (const point of linePointsBetween(from, to)) stamp(bitmap, point.x, point.y, size, color, shape)
+  strokeSegments(bitmap, [from, to], size, color, shape)
 }
 
 export function drawPolyline(
@@ -104,9 +206,7 @@ export function drawPolyline(
     strokePoint(bitmap, points[0], size, color, shape)
     return
   }
-  for (let i = 1; i < points.length; i += 1) {
-    drawLine(bitmap, points[i - 1], points[i], size, color, shape)
-  }
+  strokeSegments(bitmap, points, size, color, shape)
 }
 
 function fillSpan(bitmap: Bitmap, y: number, x0: number, x1: number, color: Rgba, thickness = 1): void {

@@ -16,6 +16,7 @@ import {
   compositeHighlighter,
   createCoverageMask,
   paintBrushStroke,
+  sprayDab,
   stampHighlighter,
 } from '../core/brushes'
 import type { BrushId, CoverageMask } from '../core/brushes'
@@ -272,20 +273,6 @@ function shapePoints(stroke: StrokeState, end: Point): Point[] {
 
 function strokeShape(tool: ToolId): BrushShape {
   return tool === 'pencil' || tool === 'eraser' ? 'square' : 'round'
-}
-
-function spray(bitmap: Bitmap, center: Point, radius: number, color: Rgba): void {
-  const r = Math.max(1, radius)
-  const attempts = Math.max(8, Math.round(r * r * 0.6))
-  for (let i = 0; i < attempts; i += 1) {
-    const angle = Math.random() * Math.PI * 2
-    const distance = Math.sqrt(Math.random()) * r
-    bitmap.set(
-      Math.round(center.x + Math.cos(angle) * distance),
-      Math.round(center.y + Math.sin(angle) * distance),
-      color,
-    )
-  }
 }
 
 function clampRect(rect: Rect, width: number, height: number): Rect {
@@ -1468,7 +1455,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const color = tool === 'eraser' ? eraseColor() : strokeColorFor(tool, slot, primary, secondary)
         const width = strokeWidthFor(tool, brushSize)
         if (tool === 'airbrush') {
-          spray(doc(), point, brushSize, color)
+          sprayDab(doc(), point, width, color)
         } else if (tool === 'brush' && brush === 'highlighter') {
           const mask = createCoverageMask(base.width, base.height)
           stampHighlighter(mask, point, point, width)
@@ -1570,7 +1557,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const color = stroke.tool === 'eraser' ? eraseColor() : strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         const width = strokeWidthFor(stroke.tool, brushSize)
         if (stroke.tool === 'airbrush') {
-          spray(doc(), point, brushSize, color)
+          sprayDab(doc(), point, width, color)
         } else if (stroke.tool === 'brush' && brush === 'highlighter' && stroke.highlighter) {
           stampHighlighter(stroke.highlighter, stroke.last, point, width)
           bitmapRef.current = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)

@@ -563,6 +563,16 @@ textarea {
   white-space: nowrap;
 }
 
+.size-current {
+  padding: 4px 8px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .size-option:hover {
   background: var(--hover);
 }

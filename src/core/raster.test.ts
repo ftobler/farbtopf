@@ -16,6 +16,7 @@ import {
   floodFill,
   invertColors,
   linePoints,
+  linePointsBetween,
   rotate90,
   rotate180,
   rotate270,
@@ -98,6 +99,39 @@ describe('drawLine', () => {
     expect(bitmap.get(0, 0)).toEqual(BLACK)
     expect(bitmap.get(2, 2)).toEqual(BLACK)
     expect(bitmap.get(4, 4)).toEqual(BLACK)
+  })
+  it('covers exactly the union of stamps along the line', () => {
+    // The fast span-based line must match stamping at every line pixel.
+    const cases = [
+      { from: { x: 3, y: 4 }, to: { x: 40, y: 17 }, size: 7 },
+      { from: { x: 30, y: 2 }, to: { x: 5, y: 45 }, size: 12 },
+      { from: { x: 10, y: 10 }, to: { x: 38, y: 38 }, size: 20 },
+      { from: { x: 25, y: 25 }, to: { x: 25, y: 25 }, size: 9 },
+      { from: { x: -5, y: 20 }, to: { x: 60, y: 22 }, size: 16 },
+      { from: { x: 20, y: 5 }, to: { x: 21, y: 44 }, size: 2 },
+    ]
+    for (const shape of ['round', 'square'] as const) {
+      for (const { from, to, size } of cases) {
+        const fast = new Bitmap(50, 50)
+        drawLine(fast, from, to, size, BLACK, shape)
+        const naive = new Bitmap(50, 50)
+        for (const p of linePointsBetween(from, to)) stamp(naive, p.x, p.y, size, BLACK, shape)
+        expect(fast.data).toEqual(naive.data)
+      }
+    }
+  })
+
+  it('draws a 500 px stroke quickly and at full width', () => {
+    const bitmap = new Bitmap(800, 800, WHITE)
+    const started = performance.now()
+    drawLine(bitmap, { x: 150, y: 400 }, { x: 650, y: 400 }, 500, BLACK, 'round')
+    drawLine(bitmap, { x: 150, y: 150 }, { x: 650, y: 650 }, 500, BLACK, 'square')
+    expect(performance.now() - started).toBeLessThan(1500)
+    // The round line reaches 250 px above and below its centre line.
+    expect(bitmap.get(400, 400 - 249)).toEqual(BLACK)
+    expect(bitmap.get(400, 400 + 249)).toEqual(BLACK)
+    expect(bitmap.get(400, 400 + 260)).toEqual(BLACK) // covered by the square diagonal
+    expect(bitmap.get(0, 799)).toEqual(WHITE)
   })
 })
 
