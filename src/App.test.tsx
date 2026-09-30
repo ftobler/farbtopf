@@ -163,6 +163,7 @@ describe('App', () => {
       'Calligraphy pen',
       'Highlighter pen',
       'Spray can',
+      'Pixelate',
       'Selective blurring',
       'Smudge',
       'Liquify',
@@ -187,6 +188,15 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Brush' }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
     expect(screen.getByRole('menuitem', { name: 'Spray can' }).classList.contains('menu-item-checked')).toBe(true)
+  })
+
+  it('offers the pixelate brush with its icon in the brushes menu', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Brush options' }))
+    const pixelate = screen.getByRole('menuitem', { name: 'Pixelate' })
+    expect(pixelate.querySelector('.menu-item-icon svg')).toBeTruthy()
+    fireEvent.click(pixelate)
+    expect(screen.getByRole('button', { name: 'Brush' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('shows the floating text controls only while a text box is open', () => {

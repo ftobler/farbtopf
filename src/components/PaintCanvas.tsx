@@ -1510,7 +1510,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (stroke.work) stroke.work = result
           else bitmapRef.current = result
         } else if (tool === 'brush') {
-          paintBrushStroke(target, point, point, { size: width, color, brush, random })
+          paintBrushStroke(target, point, point, { size: width, color, brush, random, source: base })
           if (brush === 'spray') {
             stopSpraying()
             sprayTimerRef.current = window.setInterval(() => {
@@ -1630,7 +1630,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (stroke.work) stroke.work = result
           else bitmapRef.current = result
         } else if (stroke.tool === 'brush') {
-          paintBrushStroke(target, stroke.last, point, { size: width, color, brush, random })
+          paintBrushStroke(target, stroke.last, point, { size: width, color, brush, random, source: stroke.base })
         } else {
           drawLine(target, stroke.last, point, width, color, strokeShape(stroke.tool))
         }

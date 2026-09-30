@@ -10,6 +10,7 @@ export type BrushId =
   | 'calligraphy'
   | 'highlighter'
   | 'spray'
+  | 'pixelate'
   | 'blur'
   | 'smudge'
   | 'liquify'
@@ -26,6 +27,7 @@ export const BRUSHES: readonly BrushDef[] = [
   { id: 'calligraphy', label: 'Calligraphy pen' },
   { id: 'highlighter', label: 'Highlighter pen' },
   { id: 'spray', label: 'Spray can' },
+  { id: 'pixelate', label: 'Pixelate' },
   { id: 'blur', label: 'Selective blurring' },
   { id: 'smudge', label: 'Smudge' },
   { id: 'liquify', label: 'Liquify' },
@@ -39,7 +41,7 @@ export function brushById(id: BrushId): BrushDef {
 
 /** Brushes that lay down the primary/secondary colour; the rest only distort pixels. */
 export function isColorBrush(id: BrushId): boolean {
-  return id !== 'blur' && id !== 'smudge' && id !== 'liquify'
+  return id !== 'blur' && id !== 'smudge' && id !== 'liquify' && id !== 'pixelate'
 }
 
 export interface StrokeOptions {
@@ -48,6 +50,11 @@ export interface StrokeOptions {
   brush: BrushId
   /** Random source for the random brushes; Math.random by default. */
   random?: Random
+  /**
+   * The pixels as they were when the stroke started. Pixelate reads from it so that
+   * dabs overlapping within a stroke never re-average already pixelated blocks.
+   */
+  source?: Bitmap
 }
 
 /**
@@ -86,6 +93,73 @@ export const SPRAY_TICK_MS = 30
 export function sprayCanDots(size: number): number {
   const r = Math.max(0.5, size / 2)
   return Math.max(1, Math.round(Math.PI * r * r * 0.05))
+}
+
+/**
+ * Mosaic block size for the pixelate brush: a quarter of the brush size, at least 2 px,
+ * so a brush always spans about four blocks across whatever its size.
+ */
+export function pixelateBlockSize(size: number): number {
+  return Math.max(2, Math.round(size / 4))
+}
+
+/** Average of one mosaic block of `source`, weighting colour by alpha. */
+function blockAverage(source: Bitmap, bx: number, by: number, block: number): Rgba {
+  let r = 0
+  let g = 0
+  let b = 0
+  let a = 0
+  let count = 0
+  const x1 = Math.min(source.width, bx + block)
+  const y1 = Math.min(source.height, by + block)
+  for (let y = by; y < y1; y += 1) {
+    for (let x = bx; x < x1; x += 1) {
+      const i = (y * source.width + x) * 4
+      const alpha = source.data[i + 3]
+      r += source.data[i] * alpha
+      g += source.data[i + 1] * alpha
+      b += source.data[i + 2] * alpha
+      a += alpha
+      count += 1
+    }
+  }
+  if (a === 0) return { r: 0, g: 0, b: 0, a: 0 }
+  return { r: r / a, g: g / a, b: b / a, a: a / count }
+}
+
+/**
+ * One pixelate dab: every pixel within the round dab takes the average colour of its
+ * mosaic block in `source`. Blocks sit on one image-wide grid starting at (0, 0), and
+ * averages always come from `source` (the stroke-start pixels), so overlapping dabs,
+ * and later strokes over untouched blocks, give the same flat blocks with no smearing.
+ */
+export function pixelateDab(
+  bitmap: Bitmap,
+  source: Bitmap,
+  center: Point,
+  size: number,
+  cache: Map<number, Rgba> = new Map(),
+): void {
+  const block = pixelateBlockSize(size)
+  const radius = Math.max(0.5, size / 2)
+  const cx = Math.round(center.x)
+  const cy = Math.round(center.y)
+  const reach = Math.ceil(radius)
+  const columns = Math.ceil(source.width / block)
+  for (let y = Math.max(0, cy - reach); y <= Math.min(bitmap.height - 1, cy + reach); y += 1) {
+    for (let x = Math.max(0, cx - reach); x <= Math.min(bitmap.width - 1, cx + reach); x += 1) {
+      if (Math.hypot(x - cx, y - cy) > radius) continue
+      const bx = Math.floor(x / block)
+      const by = Math.floor(y / block)
+      const key = by * columns + bx
+      let average = cache.get(key)
+      if (!average) {
+        average = blockAverage(source, bx * block, by * block, block)
+        cache.set(key, average)
+      }
+      bitmap.set(x, y, average)
+    }
+  }
 }
 
 /** Alpha-composites `color` over the pixel at (`x`,`y`) with the given coverage. */
@@ -457,6 +531,14 @@ export function paintBrushStroke(bitmap: Bitmap, from: Point, to: Point, options
       const mask = createCoverageMask(bitmap.width, bitmap.height)
       stampHighlighter(mask, from, to, options.size)
       bitmap.data.set(compositeHighlighter(bitmap, mask, color, HIGHLIGHTER_ALPHA).data)
+      return
+    }
+    case 'pixelate': {
+      const source = options.source ?? bitmap.clone()
+      const cache = new Map<number, Rgba>()
+      for (const point of segmentPoints(from, to, Math.max(1, radius / 2))) {
+        pixelateDab(bitmap, source, point, options.size, cache)
+      }
       return
     }
     case 'blur': {

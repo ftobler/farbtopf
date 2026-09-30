@@ -311,6 +311,23 @@ export function SprayCanIcon(props: IconProps) {
   )
 }
 
+/** The pixelate brush: a mosaic of blocks in three shades. */
+export function PixelateIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="1.5" />
+      <path d="M4 9.33h16M4 14.67h16M9.33 4v16M14.67 4v16" strokeWidth={1.2} />
+      <g fill="currentColor" stroke="none">
+        <rect x="4" y="4" width="5.33" height="5.33" />
+        <rect x="14.67" y="9.33" width="5.33" height="5.33" />
+        <rect x="9.33" y="14.67" width="5.33" height="5.33" />
+      </g>
+      <rect x="9.33" y="4" width="5.33" height="5.33" fill="currentColor" stroke="none" opacity={0.45} />
+      <rect x="4" y="14.67" width="5.33" height="5.33" fill="currentColor" stroke="none" opacity={0.45} />
+    </Svg>
+  )
+}
+
 /** Stroke size: three dots growing from small to large. */
 export function SizeIcon({ className, ...props }: IconProps) {
   return (

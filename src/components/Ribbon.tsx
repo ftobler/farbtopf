@@ -13,6 +13,7 @@ import type { IconProps } from './icons'
 import {
   AirbrushIcon,
   SprayCanIcon,
+  PixelateIcon,
   BrushIcon,
   CopyIcon,
   CropIcon,
@@ -55,6 +56,7 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
 /** Icons for the brushes that have one in the brushes menu. */
 const BRUSH_ICONS: Partial<Record<BrushId, ComponentType<IconProps>>> = {
   spray: SprayCanIcon,
+  pixelate: PixelateIcon,
 }
 
 const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'eraser', 'picker', 'zoom']

@@ -9,6 +9,8 @@ import {
   isColorBrush,
   paintBrushStroke,
   SPRAY_TICK_MS,
+  pixelateBlockSize,
+  pixelateDab,
   sprayCanDots,
   sprayDab,
   stampHighlighter,
@@ -56,6 +58,7 @@ describe('brushes', () => {
       'calligraphy',
       'highlighter',
       'spray',
+      'pixelate',
       'blur',
       'smudge',
       'liquify',
@@ -67,6 +70,7 @@ describe('brushes', () => {
       'Calligraphy pen',
       'Highlighter pen',
       'Spray can',
+      'Pixelate',
       'Selective blurring',
       'Smudge',
       'Liquify',
@@ -348,5 +352,92 @@ describe('spray can', () => {
         if (a.get(x, y).r < 255) expect(Math.hypot(x - 30, y - 20)).toBeLessThanOrEqual(5.75)
       }
     }
+  })
+})
+
+describe('pixelate', () => {
+  /** A fine checkerboard of black and white pixels. */
+  const checker = (w: number, h: number) => {
+    const bitmap = new Bitmap(w, h, WHITE)
+    for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) if ((x + y) % 2 === 0) bitmap.set(x, y, BLACK)
+    return bitmap
+  }
+
+  it('only moves pixels around', () => {
+    expect(isColorBrush('pixelate')).toBe(false)
+  })
+
+  it('derives the block size from the brush size', () => {
+    expect(pixelateBlockSize(1)).toBe(2)
+    expect(pixelateBlockSize(4)).toBe(2)
+    expect(pixelateBlockSize(16)).toBe(4)
+    expect(pixelateBlockSize(40)).toBe(10)
+    expect(pixelateBlockSize(500)).toBe(125)
+  })
+
+  it('fills each covered block with the average colour of its pixels', () => {
+    const source = checker(40, 40)
+    const bitmap = source.clone()
+    pixelateDab(bitmap, source, { x: 20, y: 20 }, 16)
+    // Block size 4: a 4x4 checker block averages to mid grey.
+    const p = bitmap.get(20, 20)
+    expect(Math.abs(p.r - 127.5)).toBeLessThanOrEqual(1)
+    expect(p.a).toBe(255)
+    // The whole block containing (20, 20), i.e. 20..23, is one colour.
+    for (let y = 20; y < 24; y += 1) for (let x = 20; x < 24; x += 1) expect(bitmap.get(x, y)).toEqual(p)
+    // Far outside the dab nothing changed.
+    expect(bitmap.get(0, 0)).toEqual(source.get(0, 0))
+    expect(bitmap.get(39, 39)).toEqual(source.get(39, 39))
+  })
+
+  it('averages to the real block colour', () => {
+    const source = new Bitmap(16, 16, WHITE)
+    // Block (4..7, 4..7): one quarter red.
+    for (let y = 4; y < 6; y += 1) for (let x = 4; x < 6; x += 1) source.set(x, y, { r: 255, g: 0, b: 0, a: 255 })
+    const bitmap = source.clone()
+    pixelateDab(bitmap, source, { x: 6, y: 6 }, 16)
+    const p = bitmap.get(7, 7)
+    expect(p.r).toBe(255)
+    expect(Math.abs(p.g - 191)).toBeLessThanOrEqual(1)
+  })
+
+  it('aligns blocks to one grid across the image', () => {
+    const source = checker(48, 48)
+    const a = source.clone()
+    pixelateDab(a, source, { x: 21, y: 22 }, 16)
+    const b = source.clone()
+    pixelateDab(b, source, { x: 23, y: 19 }, 16)
+    // Pixels changed by both dabs agree, because both use the same block grid.
+    for (let y = 0; y < 48; y += 1) {
+      for (let x = 0; x < 48; x += 1) {
+        const changedA = a.get(x, y).r !== source.get(x, y).r
+        const changedB = b.get(x, y).r !== source.get(x, y).r
+        if (changedA && changedB) expect(a.get(x, y)).toEqual(b.get(x, y))
+      }
+    }
+  })
+
+  it('does not smear when dabs of one stroke overlap', () => {
+    const source = checker(60, 30)
+    const once = source.clone()
+    pixelateDab(once, source, { x: 30, y: 15 }, 20)
+    const again = once.clone()
+    for (let i = 0; i < 5; i += 1) pixelateDab(again, source, { x: 30 + i, y: 15 }, 20)
+    for (let y = 0; y < 30; y += 1) {
+      for (let x = 0; x < 60; x += 1) {
+        if (once.get(x, y).r !== source.get(x, y).r) expect(again.get(x, y)).toEqual(once.get(x, y))
+      }
+    }
+  })
+
+  it('pixelates along a stroke from the stroke-start pixels', () => {
+    const source = checker(60, 30)
+    const bitmap = source.clone()
+    paintBrushStroke(bitmap, { x: 10, y: 15 }, { x: 50, y: 15 }, { size: 12, color: BLACK, brush: 'pixelate', source })
+    // Block size 3; every covered block is one flat colour.
+    const grey = bitmap.get(30, 15)
+    expect(grey.r).toBeGreaterThan(80)
+    expect(grey.r).toBeLessThan(180)
+    expect(bitmap.get(0, 0)).toEqual(source.get(0, 0))
   })
 })
