@@ -536,9 +536,10 @@ function App() {
 
       if (event.key === 'Escape') {
         // While the context menu is open Escape only dismisses it; it must not
-        // also clear the canvas selection.
+        // also clear the canvas selection or switch tools.
         if (contextMenu) return
         canvasRef.current?.clearSelection()
+        setTool('select')
         return
       }
       if (event.key === 'Delete') {

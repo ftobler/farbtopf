@@ -322,6 +322,18 @@ describe('App', () => {
     expect(pencil.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('returns to the selection tool on Escape', () => {
+    render(<App />)
+    const brush = screen.getByRole('button', { name: 'Brush' })
+    fireEvent.click(brush)
+    expect(brush.getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+
+    expect(screen.getByRole('button', { name: 'Select' }).getAttribute('aria-pressed')).toBe('true')
+    expect(brush.getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('changes zoom with the status bar slider and resets it', () => {
     render(<App />)
     const slider = screen.getByRole('slider', { name: 'Zoom' })
@@ -806,6 +818,19 @@ describe('App', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
     expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('keeps the active tool when Escape dismisses the context menu', () => {
+    const { container } = render(<App />)
+    const brush = screen.getByRole('button', { name: 'Brush' })
+    fireEvent.click(brush)
+    expect(brush.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(brush.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Select' }).getAttribute('aria-pressed')).toBe('false')
   })
 
   it('does not clear the selection when Escape dismisses a ribbon dropdown', () => {
