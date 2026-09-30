@@ -31,6 +31,7 @@ import {
   RotateIcon,
   ScaleIcon,
   SelectIcon,
+  StrokeSizeIcon,
   FreeformSelectIcon,
   TextIcon,
 } from './icons'
@@ -433,16 +434,9 @@ export function Ribbon({
           />
           <div className="shape-options">
             <Dropdown
-              title="Outline size"
+              title="Stroke size"
               ariaLabel="Size"
-              trigger={
-                <span className="size-preview" aria-hidden="true">
-                  <span
-                    className="size-dot"
-                    style={{ width: Math.min(brushSize, 24), height: Math.min(brushSize, 24) }}
-                  />
-                </span>
-              }
+              trigger={<StrokeSizeIcon size={18} />}
             >
               {(close) => (
                 <div className="size-menu" style={{ display: 'flex', flexDirection: 'column' }}>

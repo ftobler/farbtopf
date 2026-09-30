@@ -242,6 +242,15 @@ export function OutlineFilledIcon(props: IconProps) {
   )
 }
 
+/** A smooth wavy pen stroke (one and a half sine periods), used for the stroke size control. */
+export function StrokeSizeIcon(props: IconProps) {
+  return (
+    <Svg className="stroke-size-icon" {...props}>
+      <path d="M3 12C5 5.5 7 5.5 9 12S13 18.5 15 12s4-6.5 6 0" />
+    </Svg>
+  )
+}
+
 export function UndoIcon(props: IconProps) {
   return (
     <Svg {...props}>
