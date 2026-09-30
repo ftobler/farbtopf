@@ -72,6 +72,12 @@ export interface PaintCanvasHandle {
   newDocument: (width: number, height: number) => void
   loadBitmap: (bitmap: Bitmap) => void
   loadDataUrl: (src: string) => Promise<void>
+  /**
+   * Pastes `bitmap` as a floating selection at the top-left of the visible part of
+   * the image. The canvas only grows, just enough, when the paste does not fit.
+   */
+  pasteBitmap: (bitmap: Bitmap) => void
+  pasteDataUrl: (src: string) => Promise<void>
   clear: () => void
   undo: () => void
   redo: () => void
@@ -1062,6 +1068,63 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [applyToLayers, commitFloating, finishPolyline, resizeTo, updateSelection],
   )
 
+  /** The image pixel at the top-left corner of the workspace, clamped into the image. */
+  const visibleOrigin = useCallback((): Point => {
+    const canvas = canvasRef.current
+    const workspace = canvas?.closest('.workspace')
+    if (!canvas || !(workspace instanceof HTMLElement)) return { x: 0, y: 0 }
+    const canvasRect = canvas.getBoundingClientRect()
+    const workspaceRect = workspace.getBoundingClientRect()
+    const { width, height } = doc()
+    if (canvasRect.width === 0 || canvasRect.height === 0) return { x: 0, y: 0 }
+    const x = Math.ceil(((workspaceRect.left - canvasRect.left) * width) / canvasRect.width)
+    const y = Math.ceil(((workspaceRect.top - canvasRect.top) * height) / canvasRect.height)
+    return { x: Math.max(0, x), y: Math.max(0, y) }
+  }, [doc])
+
+  const pasteImage = useCallback(
+    (pasted: Bitmap) => {
+      finishPolyline()
+      commitFloating()
+      setLasso(null)
+      const origin = visibleOrigin()
+      const current = doc()
+      const width = Math.max(current.width, pasted.width)
+      const height = Math.max(current.height, pasted.height)
+      if (width !== current.width || height !== current.height) {
+        // Grow the canvas and lift the paste as a single undo step: the snapshot
+        // taken by applyToLayers is the only one recorded.
+        applyToLayers((bitmap, bottom) => resizeTo(bitmap, { x: 0, y: 0, width, height }, bottom ? WHITE : undefined))
+      } else {
+        recordHistory(current.clone())
+      }
+      const base = doc()
+      const bitmap = transparentSelection
+        ? extractRegion(pasted, { x: 0, y: 0, width: pasted.width, height: pasted.height }, secondary)
+        : pasted.clone()
+      const x = clamp(origin.x, 0, width - bitmap.width)
+      const y = clamp(origin.y, 0, height - bitmap.height)
+      floatingRef.current = { source: bitmap, bitmap, x, y, base }
+      renderPreview()
+      updateSelection({ x, y, width: bitmap.width, height: bitmap.height })
+      syncHistory()
+    },
+    [
+      applyToLayers,
+      commitFloating,
+      doc,
+      finishPolyline,
+      recordHistory,
+      renderPreview,
+      resizeTo,
+      secondary,
+      syncHistory,
+      transparentSelection,
+      updateSelection,
+      visibleOrigin,
+    ],
+  )
+
   useImperativeHandle(
     ref,
     () => ({
@@ -1073,6 +1136,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       async loadDataUrl(src) {
         resetDocument(await bitmapFromDataUrl(src))
+      },
+      pasteBitmap(bitmap) {
+        pasteImage(bitmap)
+      },
+      async pasteDataUrl(src) {
+        pasteImage(await bitmapFromDataUrl(src))
       },
       clear() {
         finishPolyline()
@@ -1338,6 +1407,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       eraseColor,
       finishPolyline,
       paint,
+      pasteImage,
       renderPreview,
       resetDocument,
       secondary,

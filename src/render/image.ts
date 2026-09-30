@@ -27,7 +27,7 @@ export function bitmapFromDataUrl(src: string): Promise<Bitmap> {
   })
 }
 
-export function readFileAsDataUrl(file: File): Promise<string> {
+export function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))

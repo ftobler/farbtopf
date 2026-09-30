@@ -194,6 +194,22 @@ function App() {
     [notify],
   )
 
+  /** Pastes an image file as a floating selection that the select tool can move. */
+  const pasteFile = useCallback(
+    async (file: Blob) => {
+      try {
+        const dataUrl = await readFileAsDataUrl(file)
+        const handle = canvasRef.current
+        if (!handle) return
+        setTool('select')
+        await handle.pasteDataUrl(dataUrl)
+      } catch {
+        notify('Could not paste that image')
+      }
+    },
+    [notify],
+  )
+
   const handlePasteFromClipboard = useCallback(async () => {
     if (!navigator.clipboard?.read) {
       notify('Clipboard paste is not supported here')
@@ -204,16 +220,14 @@ function App() {
       for (const item of items) {
         const type = item.types.find((entry) => entry.startsWith('image/'))
         if (!type) continue
-        const blob = await item.getType(type)
-        const extension = type.split('/')[1] ?? 'png'
-        await openFile(new File([blob], `pasted.${extension}`, { type }))
+        await pasteFile(await item.getType(type))
         return
       }
       notify('No image in the clipboard')
     } catch {
       notify('Could not paste from the clipboard')
     }
-  }, [notify, openFile])
+  }, [notify, pasteFile])
 
   const copyDataUrl = useCallback(
     async (dataUrl: string | undefined) => {
@@ -580,7 +594,7 @@ function App() {
           const file = item.getAsFile()
           if (file) {
             event.preventDefault()
-            void openFile(file)
+            void pasteFile(file)
             return
           }
         }
@@ -588,7 +602,7 @@ function App() {
     }
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
-  }, [openFile])
+  }, [pasteFile])
 
   const toolLabel = useMemo(() => toolById(tool).label, [tool])
 
