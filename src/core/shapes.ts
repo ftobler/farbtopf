@@ -16,10 +16,9 @@ export type ShapeKind =
   | 'diamond'
   | 'pentagon'
   | 'heptagon'
-  | 'arrow-left'
-  | 'arrow-right'
-  | 'arrow-up'
-  | 'arrow-down'
+  | 'arrow'
+  | 'arrow-double'
+  | 'arrow-axis'
   | 'star-4'
   | 'star-5'
   | 'star-6'
@@ -55,10 +54,9 @@ export const SHAPES: readonly ShapeDef[] = [
   { id: 'diamond', label: 'Diamond', interaction: 'drag', closed: true },
   { id: 'pentagon', label: 'Pentagon', interaction: 'drag', closed: true },
   { id: 'heptagon', label: 'Heptagon', interaction: 'drag', closed: true },
-  { id: 'arrow-left', label: 'Left arrow', interaction: 'drag', closed: true },
-  { id: 'arrow-right', label: 'Right arrow', interaction: 'drag', closed: true },
-  { id: 'arrow-up', label: 'Up arrow', interaction: 'drag', closed: true },
-  { id: 'arrow-down', label: 'Down arrow', interaction: 'drag', closed: true },
+  { id: 'arrow', label: 'Arrow', interaction: 'drag', closed: true },
+  { id: 'arrow-double', label: 'Double arrow', interaction: 'drag', closed: true },
+  { id: 'arrow-axis', label: '90° arrow', interaction: 'drag', closed: true },
   { id: 'star-4', label: 'Four-point star', interaction: 'drag', closed: true },
   { id: 'star-5', label: 'Five-point star', interaction: 'drag', closed: true },
   { id: 'star-6', label: 'Six-point star', interaction: 'drag', closed: true },
@@ -119,16 +117,6 @@ function star(tips: number, innerRatio: number): Point[] {
 }
 
 /** Block arrow pointing towards +u; v runs across the arrow. */
-const ARROW: readonly Point[] = [
-  { x: 0, y: 0.25 },
-  { x: 0.5, y: 0.25 },
-  { x: 0.5, y: 0 },
-  { x: 1, y: 0.5 },
-  { x: 0.5, y: 1 },
-  { x: 0.5, y: 0.75 },
-  { x: 0, y: 0.75 },
-]
-
 function arcSegments(radius: number): number {
   return Math.min(32, Math.max(3, Math.ceil(radius / 2)))
 }
@@ -321,14 +309,6 @@ export function shapePolygon(kind: ShapeKind, box: Rect, radius?: number): Point
       return unit(regularPolygon(5))
     case 'heptagon':
       return unit(regularPolygon(7))
-    case 'arrow-right':
-      return ARROW.map((p) => map(p.x, p.y))
-    case 'arrow-left':
-      return ARROW.map((p) => map(1 - p.x, p.y))
-    case 'arrow-down':
-      return ARROW.map((p) => map(p.y, p.x))
-    case 'arrow-up':
-      return ARROW.map((p) => map(p.y, 1 - p.x))
     case 'star-4':
       return unit(star(4, 0.4))
     case 'star-5':
@@ -476,6 +456,60 @@ function pathData(points: readonly Point[], closed: boolean): string {
   return closed ? `${d}Z` : d
 }
 
+/** Unit-space outline of a line-arrow from `tail` to `tip` with shaft thickness `t`. */
+function unitArrowPolygon(tail: Point, tip: Point, t: number, doubleHeaded: boolean): Point[] {
+  const dx = tip.x - tail.x
+  const dy = tip.y - tail.y
+  const length = Math.hypot(dx, dy) || 1
+  const dir = { x: dx / length, y: dy / length }
+  const perp = { x: -dir.y, y: dir.x }
+  const shaftHalf = t / 2
+  const headHalf = 1.5 * t
+  const headLen = Math.min(3 * t, (doubleHeaded ? 0.45 : 0.9) * length)
+  const base = { x: tip.x - dir.x * headLen, y: tip.y - dir.y * headLen }
+  const head: Point[] = [
+    { x: base.x + perp.x * shaftHalf, y: base.y + perp.y * shaftHalf },
+    { x: base.x + perp.x * headHalf, y: base.y + perp.y * headHalf },
+    tip,
+    { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
+    { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
+  ]
+  if (!doubleHeaded) {
+    return [
+      { x: tail.x + perp.x * shaftHalf, y: tail.y + perp.y * shaftHalf },
+      ...head,
+      { x: tail.x - perp.x * shaftHalf, y: tail.y - perp.y * shaftHalf },
+    ]
+  }
+  const tailBase = { x: tail.x + dir.x * headLen, y: tail.y + dir.y * headLen }
+  return [
+    tail,
+    { x: tailBase.x + perp.x * headHalf, y: tailBase.y + perp.y * headHalf },
+    { x: tailBase.x + perp.x * shaftHalf, y: tailBase.y + perp.y * shaftHalf },
+    { x: base.x + perp.x * shaftHalf, y: base.y + perp.y * shaftHalf },
+    { x: base.x + perp.x * headHalf, y: base.y + perp.y * headHalf },
+    tip,
+    { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
+    { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
+    { x: tailBase.x - perp.x * shaftHalf, y: tailBase.y - perp.y * shaftHalf },
+    { x: tail.x - perp.x * headHalf, y: tail.y - perp.y * headHalf },
+  ]
+}
+
+/** Scales `points` uniformly to fit inside `box`, centred, preserving aspect ratio. */
+function fitToBox(points: readonly Point[], box: Rect): Point[] {
+  const xs = points.map((p) => p.x)
+  const ys = points.map((p) => p.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const spanX = Math.max(...xs) - minX || 1
+  const spanY = Math.max(...ys) - minY || 1
+  const scale = Math.min(box.width / spanX, box.height / spanY)
+  const offsetX = box.x + (box.width - spanX * scale) / 2
+  const offsetY = box.y + (box.height - spanY * scale) / 2
+  return points.map((p) => ({ x: offsetX + (p.x - minX) * scale, y: offsetY + (p.y - minY) * scale }))
+}
+
 /** SVG path data for the shape's gallery icon inside a `size`×`size` box. */
 export function shapeIconPath(kind: ShapeKind, size = 24): string {
   const m = size * 0.12
@@ -484,5 +518,12 @@ export function shapeIconPath(kind: ShapeKind, size = 24): string {
   if (kind === 'line') return pathData([map(0, 1), map(1, 0)], false)
   if (kind === 'polyline') return pathData(CURVE_ICON.map((p) => map(p.x, p.y)), false)
   if (kind === 'freeform') return pathData(POLYLINE_ICON.map((p) => map(p.x, p.y)), false)
+  if (kind === 'arrow' || kind === 'arrow-double' || kind === 'arrow-axis') {
+    const axis = kind === 'arrow-axis'
+    const tail: Point = axis ? { x: 0, y: 0.5 } : { x: 0, y: 1 }
+    const tip: Point = axis ? { x: 1, y: 0.5 } : { x: 1, y: 0 }
+    const arrow = unitArrowPolygon(tail, tip, 0.16, kind === 'arrow-double')
+    return pathData(fitToBox(arrow, box), true)
+  }
   return pathData(shapePolygon(kind, box), true)
 }

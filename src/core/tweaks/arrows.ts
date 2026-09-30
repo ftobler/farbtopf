@@ -2,13 +2,13 @@ import type { Bitmap } from '../bitmap'
 import type { Point } from '../geometry'
 import { clamp } from '../geometry'
 import { drawPolyline, fillPolygon } from '../raster'
-import type { ShapeStyle } from '../shapes'
+import type { ShapeKind, ShapeStyle } from '../shapes'
 import type { ShapeFamily, TweakHandle } from './types'
 
 /** Default overall shaft thickness in image pixels for a freshly inserted arrow. */
-const DEFAULT_THICKNESS = 4
+const DEFAULT_THICKNESS = 16
 const MIN_THICKNESS = 1
-const MAX_THICKNESS = 64
+const MAX_THICKNESS = 256
 
 /** Head is at most 3x the shaft thickness long and 1.5x thick on each side. */
 const HEAD_LENGTH_FACTOR = 3
@@ -37,20 +37,63 @@ function perpendicularDistance(point: Point, a: Point, b: Point): number {
   return Math.abs(dx * (point.y - a.y) - dy * (point.x - a.x)) / length
 }
 
+/** Snaps `point` so the `anchor`→`point` segment is horizontal or vertical. */
+function snapToAxis(anchor: Point, point: Point): Point {
+  return Math.abs(point.x - anchor.x) >= Math.abs(point.y - anchor.y)
+    ? { x: point.x, y: anchor.y }
+    : { x: anchor.x, y: point.y }
+}
+
+function doubleHeaded(kind: ShapeKind): boolean {
+  return kind === 'arrow-double'
+}
+
+function snapsToAxis(kind: ShapeKind): boolean {
+  return kind === 'arrow-axis'
+}
+
+/** Shaft-and-head outline in image space; `kind` decides one or two heads. */
+function arrowPolygon(kind: ShapeKind, tail: Point, tip: Point, thickness: number): Point[] | null {
+  const a = axis(tail, tip)
+  if (!a) return null
+  const { dir, length } = a
+  const perp = { x: -dir.y, y: dir.x }
+  const shaftHalf = thickness / 2
+  const headHalf = HEAD_HALF_FACTOR * thickness
+  const double = doubleHeaded(kind)
+  const headLen = Math.min(HEAD_LENGTH_FACTOR * thickness, (double ? 0.45 : 0.9) * length)
+  const base = { x: tip.x - dir.x * headLen, y: tip.y - dir.y * headLen }
+  if (!double) {
+    return [
+      { x: tail.x + perp.x * shaftHalf, y: tail.y + perp.y * shaftHalf },
+      { x: base.x + perp.x * shaftHalf, y: base.y + perp.y * shaftHalf },
+      { x: base.x + perp.x * headHalf, y: base.y + perp.y * headHalf },
+      tip,
+      { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
+      { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
+      { x: tail.x - perp.x * shaftHalf, y: tail.y - perp.y * shaftHalf },
+    ]
+  }
+  const tailBase = { x: tail.x + dir.x * headLen, y: tail.y + dir.y * headLen }
+  return [
+    tail,
+    { x: tailBase.x + perp.x * headHalf, y: tailBase.y + perp.y * headHalf },
+    { x: tailBase.x + perp.x * shaftHalf, y: tailBase.y + perp.y * shaftHalf },
+    { x: base.x + perp.x * shaftHalf, y: base.y + perp.y * shaftHalf },
+    { x: base.x + perp.x * headHalf, y: base.y + perp.y * headHalf },
+    tip,
+    { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
+    { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
+    { x: tailBase.x - perp.x * shaftHalf, y: tailBase.y - perp.y * shaftHalf },
+    { x: tail.x - perp.x * headHalf, y: tail.y - perp.y * headHalf },
+  ]
+}
+
 export const arrowFamily: ShapeFamily = {
-  kinds: ['arrow-left', 'arrow-right', 'arrow-up', 'arrow-down'],
+  kinds: ['arrow', 'arrow-double', 'arrow-axis'],
   insert(kind, start, end) {
-    const swap =
-      kind === 'arrow-right'
-        ? start.x > end.x
-        : kind === 'arrow-left'
-          ? start.x < end.x
-          : kind === 'arrow-up'
-            ? start.y < end.y
-            : start.y > end.y
-    const tail = swap ? end : start
-    const tip = swap ? start : end
-    return [tail, tip, { x: DEFAULT_THICKNESS, y: 0 }]
+    const tip = snapsToAxis(kind) ? snapToAxis(start, end) : end
+    return [start, tip, { x: DEFAULT_THICKNESS, y: 0 }]
   },
   handles(_kind, points): TweakHandle[] {
     if (points.length < 2) return []
@@ -66,16 +109,20 @@ export const arrowFamily: ShapeFamily = {
       { id: 'thickness', point: { x: mid.x + perp.x * thickness, y: mid.y + perp.y * thickness } },
     ]
   },
-  move(_kind, points, id, point) {
+  move(kind, points, id, point) {
     if (points.length < 2) return null
     const tail = points[0]
     const tip = points[1]
     const thickness = thicknessOf(points)
     switch (id) {
-      case 'tail':
-        return [point, tip, { x: thickness, y: 0 }]
-      case 'tip':
-        return [tail, point, { x: thickness, y: 0 }]
+      case 'tail': {
+        const next = snapsToAxis(kind) ? snapToAxis(tip, point) : point
+        return [next, tip, { x: thickness, y: 0 }]
+      }
+      case 'tip': {
+        const next = snapsToAxis(kind) ? snapToAxis(tail, point) : point
+        return [tail, next, { x: thickness, y: 0 }]
+      }
       case 'thickness': {
         const next = clamp(perpendicularDistance(point, tail, tip), MIN_THICKNESS, MAX_THICKNESS)
         return [tail, tip, { x: next, y: 0 }]
@@ -84,28 +131,10 @@ export const arrowFamily: ShapeFamily = {
         return null
     }
   },
-  render(bitmap: Bitmap, _kind, points, style: ShapeStyle) {
+  render(bitmap: Bitmap, kind, points, style: ShapeStyle) {
     if (points.length < 2) return
-    const tail = points[0]
-    const tip = points[1]
-    const a = axis(tail, tip)
-    if (!a) return
-    const { dir, length } = a
-    const perp = { x: -dir.y, y: dir.x }
-    const thickness = thicknessOf(points)
-    const shaftHalf = thickness / 2
-    const headLen = Math.min(HEAD_LENGTH_FACTOR * thickness, 0.9 * length)
-    const headHalf = HEAD_HALF_FACTOR * thickness
-    const base = { x: tip.x - dir.x * headLen, y: tip.y - dir.y * headLen }
-    const polygon: Point[] = [
-      { x: tail.x + perp.x * shaftHalf, y: tail.y + perp.y * shaftHalf },
-      { x: base.x + perp.x * shaftHalf, y: base.y + perp.y * shaftHalf },
-      { x: base.x + perp.x * headHalf, y: base.y + perp.y * headHalf },
-      tip,
-      { x: base.x - perp.x * headHalf, y: base.y - perp.y * headHalf },
-      { x: base.x - perp.x * shaftHalf, y: base.y - perp.y * shaftHalf },
-      { x: tail.x - perp.x * shaftHalf, y: tail.y - perp.y * shaftHalf },
-    ]
+    const polygon = arrowPolygon(kind, points[0], points[1], thicknessOf(points))
+    if (!polygon) return
     if (style.fill) fillPolygon(bitmap, polygon, style.fill)
     if (style.stroke) drawPolyline(bitmap, [...polygon, polygon[0]], style.width, style.stroke, 'round')
   },

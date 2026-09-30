@@ -44,6 +44,9 @@ const TR: Point = { x: 34, y: 5 }
 const BL: Point = { x: 5, y: 34 }
 const BR: Point = { x: 34, y: 34 }
 
+/** The line-arrows render through the tweak engine, so core tests skip them. */
+const ARROW_KINDS = new Set<ShapeKind>(['arrow', 'arrow-double', 'arrow-axis'])
+
 /** A point known to be inside each closed drag shape, and box corners known to be outside. */
 const CLOSED_DRAG: Record<string, { inside: Point; outside: Point[] }> = {
   rectangle: { inside: { x: 20, y: 20 }, outside: [] },
@@ -54,10 +57,6 @@ const CLOSED_DRAG: Record<string, { inside: Point; outside: Point[] }> = {
   diamond: { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
   pentagon: { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
   heptagon: { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
-  'arrow-left': { inside: { x: 20, y: 20 }, outside: [TL, BL] },
-  'arrow-right': { inside: { x: 20, y: 20 }, outside: [TR, BR] },
-  'arrow-up': { inside: { x: 20, y: 20 }, outside: [TL, TR] },
-  'arrow-down': { inside: { x: 20, y: 20 }, outside: [BL, BR] },
   'star-4': { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
   'star-5': { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
   'star-6': { inside: { x: 20, y: 20 }, outside: [TL, TR, BL, BR] },
@@ -67,9 +66,9 @@ const CLOSED_DRAG: Record<string, { inside: Point; outside: Point[] }> = {
 }
 
 describe('SHAPES', () => {
-  it('lists 21 unique shapes, each with an interaction', () => {
-    expect(SHAPES).toHaveLength(21)
-    expect(new Set(SHAPES.map((shape) => shape.id)).size).toBe(21)
+  it('lists 20 unique shapes, each with an interaction', () => {
+    expect(SHAPES).toHaveLength(20)
+    expect(new Set(SHAPES.map((shape) => shape.id)).size).toBe(20)
     for (const shape of SHAPES) {
       expect(['drag', 'polyline', 'curve']).toContain(shape.interaction)
       expect(shapeById(shape.id)).toBe(shape)
@@ -77,7 +76,10 @@ describe('SHAPES', () => {
   })
 
   it('covers every closed drag shape in these tests', () => {
-    const closedDrag = SHAPES.filter((s) => s.closed && s.interaction === 'drag').map((s) => s.id)
+    // The three line-arrows render through the tweak engine, so they are covered there.
+    const closedDrag = SHAPES.filter(
+      (s) => s.closed && s.interaction === 'drag' && !ARROW_KINDS.has(s.id),
+    ).map((s) => s.id)
     expect(closedDrag.sort()).toEqual(Object.keys(CLOSED_DRAG).sort())
   })
 })
@@ -169,34 +171,6 @@ describe('renderShape closed drag shapes', () => {
     drawEllipse(expected, rect, 1, RED, true)
     drawEllipse(expected, rect, 2, BLACK, false)
     expect(actual.data).toEqual(expected.data)
-  })
-
-  it('points the arrows in the named direction', () => {
-    const right = draw('arrow-right', BOTH)
-    expect(painted(right, 34, 20)).toBe(true)
-    expect(painted(right, 34, 8)).toBe(false)
-    expect(painted(right, 34, 31)).toBe(false)
-    expect(painted(right, 5, 8)).toBe(false)
-    expect(painted(right, 5, 20)).toBe(true)
-
-    const left = draw('arrow-left', BOTH)
-    expect(painted(left, 5, 20)).toBe(true)
-    expect(painted(left, 5, 8)).toBe(false)
-    expect(painted(left, 5, 31)).toBe(false)
-    expect(painted(left, 34, 20)).toBe(true)
-
-    const up = draw('arrow-up', BOTH)
-    expect(painted(up, 20, 5)).toBe(true)
-    expect(painted(up, 8, 5)).toBe(false)
-    expect(painted(up, 31, 5)).toBe(false)
-    expect(painted(up, 8, 34)).toBe(false)
-    expect(painted(up, 20, 34)).toBe(true)
-
-    const down = draw('arrow-down', BOTH)
-    expect(painted(down, 20, 34)).toBe(true)
-    expect(painted(down, 8, 34)).toBe(false)
-    expect(painted(down, 31, 34)).toBe(false)
-    expect(painted(down, 20, 5)).toBe(true)
   })
 
   it('draws callout tails reaching the bottom-left of the box', () => {
@@ -338,6 +312,7 @@ describe('500 px outlines', () => {
   it('renders every shape with a 500 px stroke in reasonable time', () => {
     const started = performance.now()
     for (const shape of SHAPES) {
+      if (ARROW_KINDS.has(shape.id)) continue
       const bitmap = new Bitmap(900, 900)
       const points =
         shape.interaction === 'drag'
