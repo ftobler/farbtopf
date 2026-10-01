@@ -111,17 +111,6 @@ describe('PaintCanvas', () => {
     expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
   })
 
-  it('never acts on a right click with a painting tool', () => {
-    const { canvas, onZoomClick } = setup('brush', 20, 20)
-    const context = { putImageData: vi.fn() }
-    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
-    context.putImageData.mockClear()
-    fireEvent.pointerDown(canvas, { button: 2, pointerId: 3, clientX: 5, clientY: 5 })
-    fireEvent.pointerUp(canvas, { button: 2, pointerId: 3, clientX: 5, clientY: 5 })
-    expect(context.putImageData).not.toHaveBeenCalled()
-    expect(onZoomClick).not.toHaveBeenCalled()
-  })
-
   it('records history when a freehand stroke is drawn', () => {
     const { canvas, onHistoryChange } = setup('brush')
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })

@@ -41,7 +41,7 @@ export function isShapeTool(id: ToolId): boolean {
 }
 
 /** Tools that act on a right click (with the secondary colour, or zooming out) rather than open the context menu. */
-const RIGHT_CLICK_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['zoom', 'fill', 'picker', 'eraser'])
+const RIGHT_CLICK_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['zoom', 'fill', 'picker', 'eraser', 'pencil', 'brush', 'airbrush'])
 
 export function rightClickActs(id: ToolId): boolean {
   return RIGHT_CLICK_TOOLS.has(id)

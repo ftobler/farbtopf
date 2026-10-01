@@ -39,6 +39,9 @@ describe('rightClickActs', () => {
     expect(rightClickActs('fill')).toBe(true)
     expect(rightClickActs('picker')).toBe(true)
     expect(rightClickActs('eraser')).toBe(true)
+    expect(rightClickActs('pencil')).toBe(true)
+    expect(rightClickActs('brush')).toBe(true)
+    expect(rightClickActs('airbrush')).toBe(true)
   })
 
   it('is false for the tools that leave a right click to the context menu', () => {

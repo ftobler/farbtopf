@@ -368,6 +368,24 @@ describe('App', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('paints with the secondary colour on a right click with the brush instead of opening the context menu', () => {
+    const { container } = render(<App />)
+    for (const name of ['Pencil', 'Brush']) {
+      fireEvent.click(screen.getByRole('button', { name }))
+      const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+      expect(fireEvent.contextMenu(canvas, { clientX: 5, clientY: 5 })).toBe(false)
+      expect(screen.queryByRole('menu')).toBeNull()
+    }
+  })
+
+  it('still opens the context menu on a right click with the select tool', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+    fireEvent.contextMenu(canvas, { clientX: 5, clientY: 5 })
+    expect(screen.getByRole('menu')).toBeTruthy()
+  })
+
   it('stacks the primary colour above the secondary colour', () => {
     const { container } = render(<App />)
     const swatches = [...container.querySelectorAll('.current-colors .color-swatch')]
@@ -781,6 +799,7 @@ describe('App', () => {
 
   it('opens the canvas context menu on right-click with the expected items', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     const workspace = container.querySelector('.workspace') as HTMLElement
     fireEvent.contextMenu(workspace, { clientX: 120, clientY: 80 })
     const menu = screen.getByRole('menu')
@@ -816,6 +835,7 @@ describe('App', () => {
 
   it('blurs from the context menu through the blur dialog', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
     fireEvent.click(screen.getByRole('menuitem', { name: 'Blur image' }))
     expect(screen.queryByRole('menu')).toBeNull()
@@ -830,6 +850,7 @@ describe('App', () => {
 
   it('marks the document as unsaved after a blur', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     expect(document.title).toBe('Farbtopf')
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
     fireEvent.click(screen.getByRole('menuitem', { name: 'Blur image' }))
@@ -839,6 +860,7 @@ describe('App', () => {
 
   it('cancels the blur dialog with Escape', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
     fireEvent.click(screen.getByRole('menuitem', { name: 'Blur image' }))
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -848,6 +870,7 @@ describe('App', () => {
 
   it('shows an icon next to every canvas context menu entry', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 40, clientY: 40 })
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Rotate' }))
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Flip' }))
@@ -862,6 +885,7 @@ describe('App', () => {
 
   it('opens the rotate submenu from the context menu', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 40, clientY: 40 })
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Rotate' }))
     expect(screen.getByRole('menuitem', { name: 'Rotate left 90°' })).toBeTruthy()
@@ -871,6 +895,7 @@ describe('App', () => {
 
   it('runs a context menu action and closes the menu', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
     fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
     expect(screen.queryByRole('menu')).toBeNull()
@@ -879,6 +904,7 @@ describe('App', () => {
 
   it('closes the context menu on Escape', () => {
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
     expect(screen.getByRole('menu')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -899,6 +925,7 @@ describe('App', () => {
     } as DOMRect)
     try {
       const { container } = render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: 'Select' }))
       fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, {
         clientX: 99999,
         clientY: 99999,
@@ -925,6 +952,7 @@ describe('App', () => {
     } as DOMRect)
     try {
       const { container } = render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: 'Select' }))
       fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
       fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Rotate' }))
       const panel = screen.getByRole('menuitem', { name: 'Rotate left 90°' }).closest('.menu-submenu-panel')
@@ -948,14 +976,14 @@ describe('App', () => {
 
   it('keeps the active tool when Escape dismisses the context menu', () => {
     const { container } = render(<App />)
-    const brush = screen.getByRole('button', { name: 'Brush' })
-    fireEvent.click(brush)
-    expect(brush.getAttribute('aria-pressed')).toBe('true')
+    const textTool = screen.getByRole('button', { name: 'Text' })
+    fireEvent.click(textTool)
+    expect(textTool.getAttribute('aria-pressed')).toBe('true')
     fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
     expect(screen.getByRole('menu')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
-    expect(brush.getAttribute('aria-pressed')).toBe('true')
+    expect(textTool.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: 'Select' }).getAttribute('aria-pressed')).toBe('false')
   })
 
