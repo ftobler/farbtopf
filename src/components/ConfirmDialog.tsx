@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 export interface ConfirmDialogProps {
   open: boolean
@@ -10,6 +11,10 @@ export interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({ open, title, message, confirmLabel, onCancel, onConfirm }: ConfirmDialogProps) {
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalFocus(open, modalRef)
+
   useEffect(() => {
     if (!open) return
     const handleKey = (event: KeyboardEvent) => {
@@ -31,6 +36,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, onCancel, on
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        ref={modalRef}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="modal-title">{title}</h2>

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MAX_CANVAS } from '../core/palette'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 export interface CanvasSizeDialogProps {
   open: boolean
@@ -23,6 +24,9 @@ function parseSize(text: string): number | null {
 export function CanvasSizeDialog({ open, initialWidth, initialHeight, onCancel, onApply }: CanvasSizeDialogProps) {
   const [widthText, setWidthText] = useState(String(initialWidth))
   const [heightText, setHeightText] = useState(String(initialHeight))
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalFocus(open, modalRef)
 
   useEffect(() => {
     if (!open) return
@@ -53,6 +57,7 @@ export function CanvasSizeDialog({ open, initialWidth, initialHeight, onCancel, 
         role="dialog"
         aria-modal="true"
         aria-label="Canvas size"
+        ref={modalRef}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="modal-title">Canvas size</h2>

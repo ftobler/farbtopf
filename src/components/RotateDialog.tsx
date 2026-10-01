@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 export interface RotateDialogProps {
   open: boolean
@@ -16,6 +17,9 @@ function parseDegrees(text: string): number | null {
 export function RotateDialog({ open, initialDegrees, onCancel, onApply }: RotateDialogProps) {
   const [text, setText] = useState(String(initialDegrees))
   const [wasOpen, setWasOpen] = useState(open)
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalFocus(open, modalRef)
 
   if (open && !wasOpen) {
     setWasOpen(true)
@@ -50,6 +54,7 @@ export function RotateDialog({ open, initialDegrees, onCancel, onApply }: Rotate
         role="dialog"
         aria-modal="true"
         aria-label="Rotate"
+        ref={modalRef}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="modal-title">Rotate</h2>

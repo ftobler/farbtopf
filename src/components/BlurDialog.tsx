@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BLUR_RADIUS_MAX, BLUR_RADIUS_MIN, blurSigma } from '../core/blur'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 export interface BlurDialogProps {
   open: boolean
@@ -21,6 +22,9 @@ function parseRadius(text: string): number | null {
 export function BlurDialog({ open, title, initialRadius, onCancel, onApply }: BlurDialogProps) {
   const [text, setText] = useState(String(initialRadius))
   const [wasOpen, setWasOpen] = useState(open)
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalFocus(open, modalRef)
 
   if (open && !wasOpen) {
     setWasOpen(true)
@@ -55,6 +59,7 @@ export function BlurDialog({ open, title, initialRadius, onCancel, onApply }: Bl
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        ref={modalRef}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="modal-title">{title}</h2>

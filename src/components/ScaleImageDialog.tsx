@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MAX_CANVAS } from '../core/palette'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 export interface ScaleImageDialogProps {
   open: boolean
@@ -50,6 +51,9 @@ export function ScaleImageDialog({
   const [horizontal, setHorizontal] = useState('100')
   const [vertical, setVertical] = useState('100')
   const [wasOpen, setWasOpen] = useState(open)
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalFocus(open, modalRef)
 
   if (open && !wasOpen) {
     setWasOpen(true)
@@ -131,6 +135,7 @@ export function ScaleImageDialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        ref={modalRef}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="modal-title">{title}</h2>

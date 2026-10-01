@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CANVAS_PRESETS, MAX_CANVAS, MIN_CANVAS } from '../core/palette'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 export interface NewCanvasDialogProps {
   open: boolean
@@ -23,6 +24,9 @@ export function NewCanvasDialog({
 }: NewCanvasDialogProps) {
   const [width, setWidth] = useState(initialWidth)
   const [height, setHeight] = useState(initialHeight)
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useModalFocus(open, modalRef)
 
   useEffect(() => {
     if (!open) return
@@ -47,6 +51,7 @@ export function NewCanvasDialog({
         role="dialog"
         aria-modal="true"
         aria-label="New image"
+        ref={modalRef}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="modal-title">New image</h2>
