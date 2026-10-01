@@ -19,16 +19,6 @@ export interface Selection {
   mask: SelectionMask | null
 }
 
-function pointInPolygon(x: number, y: number, points: readonly Point[]): boolean {
-  let inside = false
-  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
-    const a = points[i]
-    const b = points[j]
-    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside
-  }
-  return inside
-}
-
 /**
  * Shrinks a canvas-sized selection flag array to its tight bounds. Returns null
  * when nothing is selected and drops the mask when the bounds are fully selected.
@@ -64,13 +54,53 @@ function tighten(flags: Uint8Array, width: number, height: number): Selection | 
 /** Rasterises a free-form outline (pixel centres inside the polygon) on a canvas. */
 export function polygonSelection(points: readonly Point[], width: number, height: number): Selection | null {
   if (points.length < 3) return null
-  const flags = new Uint8Array(width * height)
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (pointInPolygon(x + 0.5, y + 0.5, points)) flags[y * width + x] = 1
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const p of points) {
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.y > maxY) maxY = p.y
+  }
+  const originX = Math.max(0, Math.floor(minX))
+  const originY = Math.max(0, Math.floor(minY))
+  const endX = Math.min(width - 1, Math.ceil(maxX))
+  const endY = Math.min(height - 1, Math.ceil(maxY))
+  if (originX > endX || originY > endY) return null
+  const boxWidth = endX - originX + 1
+  const boxHeight = endY - originY + 1
+  const flags = new Uint8Array(boxWidth * boxHeight)
+  const crossings: number[] = []
+  for (let py = originY; py <= endY; py += 1) {
+    const sy = py + 0.5
+    crossings.length = 0
+    for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+      const a = points[i]
+      const b = points[j]
+      if (a.y > sy === b.y > sy) continue
+      crossings.push(((b.x - a.x) * (sy - a.y)) / (b.y - a.y) + a.x)
+    }
+    crossings.sort((a, b) => a - b)
+    const row = (py - originY) * boxWidth
+    for (let i = 0; i + 1 < crossings.length; i += 2) {
+      const left = Math.max(originX, Math.ceil(crossings[i] - 0.5))
+      const right = Math.min(endX, Math.ceil(crossings[i + 1] - 0.5) - 1)
+      for (let px = left; px <= right; px += 1) flags[row + px - originX] = 1
     }
   }
-  return tighten(flags, width, height)
+  const tight = tighten(flags, boxWidth, boxHeight)
+  if (!tight) return null
+  return {
+    rect: {
+      x: tight.rect.x + originX,
+      y: tight.rect.y + originY,
+      width: tight.rect.width,
+      height: tight.rect.height,
+    },
+    mask: tight.mask,
+  }
 }
 
 /** Whether canvas pixel (`x`,`y`) is part of the selection. */

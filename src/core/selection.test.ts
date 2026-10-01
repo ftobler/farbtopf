@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bitmap } from './bitmap'
 import { BLACK, WHITE } from './color'
+import type { Point, Rect } from './geometry'
 import {
   applyMask,
   fillSelection,
@@ -9,7 +10,7 @@ import {
   isSelected,
   polygonSelection,
 } from './selection'
-import type { SelectionMask } from './selection'
+import type { Selection, SelectionMask } from './selection'
 
 function maskFrom(rows: string[]): SelectionMask {
   const width = rows[0].length
@@ -29,6 +30,62 @@ function maskRows(mask: SelectionMask): string[] {
     rows.push(row)
   }
   return rows
+}
+
+function referencePointInPolygon(x: number, y: number, points: readonly Point[]): boolean {
+  let crossings = 0
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const a = points[i]
+    const b = points[j]
+    if (a.y > y !== b.y > y) {
+      const crossingX = ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x
+      if (x < crossingX) crossings += 1
+    }
+  }
+  return crossings % 2 === 1
+}
+
+function referenceSelection(points: readonly Point[], width: number, height: number): Selection | null {
+  const flags = new Uint8Array(width * height)
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (referencePointInPolygon(x + 0.5, y + 0.5, points)) flags[y * width + x] = 1
+    }
+  }
+  let left = width
+  let top = height
+  let right = -1
+  let bottom = -1
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!flags[y * width + x]) continue
+      if (x < left) left = x
+      if (x > right) right = x
+      if (y < top) top = y
+      if (y > bottom) bottom = y
+    }
+  }
+  if (right < 0) return null
+  const rect: Rect = { x: left, y: top, width: right - left + 1, height: bottom - top + 1 }
+  const data = new Uint8Array(rect.width * rect.height)
+  let full = true
+  for (let y = 0; y < rect.height; y += 1) {
+    for (let x = 0; x < rect.width; x += 1) {
+      const value = flags[(rect.y + y) * width + rect.x + x]
+      data[y * rect.width + x] = value
+      if (!value) full = false
+    }
+  }
+  return { rect, mask: full ? null : { width: rect.width, height: rect.height, data } }
+}
+
+function circlePoints(count: number, cx: number, cy: number, r: number): Point[] {
+  const points: Point[] = []
+  for (let i = 0; i < count; i += 1) {
+    const angle = (2 * Math.PI * i) / count
+    points.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+  }
+  return points
 }
 
 describe('polygonSelection', () => {
@@ -77,6 +134,90 @@ describe('polygonSelection', () => {
         10,
       ),
     ).toBeNull()
+  })
+
+  it('matches a brute-force rasterisation for assorted polygons', () => {
+    const cases: Point[][] = [
+      [
+        { x: 1, y: 1 },
+        { x: 6, y: 1 },
+        { x: 6, y: 3 },
+        { x: 3, y: 3 },
+        { x: 3, y: 6 },
+        { x: 1, y: 6 },
+      ],
+      [
+        { x: -4, y: 2 },
+        { x: 5, y: 2 },
+        { x: 5, y: 7 },
+        { x: 4, y: 7 },
+        { x: 4, y: 4 },
+        { x: -4, y: 4 },
+      ],
+      [
+        { x: -5, y: -5 },
+        { x: 15, y: -5 },
+        { x: 15, y: 15 },
+        { x: -5, y: 15 },
+      ],
+      [
+        { x: 1, y: 1 },
+        { x: 8, y: 8 },
+        { x: 1, y: 8 },
+        { x: 8, y: 1 },
+      ],
+      [
+        { x: 20, y: 20 },
+        { x: 25, y: 20 },
+        { x: 20, y: 25 },
+      ],
+      [
+        { x: 0, y: 0 },
+        { x: 9.5, y: 0 },
+        { x: 9.5, y: 9.5 },
+        { x: 0, y: 9.5 },
+      ],
+      circlePoints(24, 5, 5, 4),
+    ]
+    for (const points of cases) {
+      expect(polygonSelection(points, 10, 10)).toEqual(referenceSelection(points, 10, 10))
+    }
+  })
+
+  it('matches a brute-force rasterisation on a non-square canvas', () => {
+    const points: Point[] = [
+      { x: 2, y: -1 },
+      { x: 11, y: 3 },
+      { x: 7, y: 12 },
+      { x: -2, y: 6 },
+    ]
+    expect(polygonSelection(points, 9, 14)).toEqual(referenceSelection(points, 9, 14))
+  })
+
+  it('returns the tight rect for a small polygon on a large canvas', () => {
+    const size = 2048
+    const result = polygonSelection(
+      [
+        { x: 1000, y: 1500 },
+        { x: 1003, y: 1500 },
+        { x: 1000, y: 1503 },
+      ],
+      size,
+      size,
+    )
+    expect(result?.rect).toEqual({ x: 1000, y: 1500, width: 2, height: 2 })
+    expect(maskRows(result!.mask!)).toEqual(['##', '#.'])
+  })
+
+  it('rasterises a large canvas with a detailed lasso within a generous budget', () => {
+    const size = 2048
+    const points = circlePoints(500, 1024, 1024, 600)
+    const start = performance.now()
+    const result = polygonSelection(points, size, size)
+    const elapsed = performance.now() - start
+    expect(result?.rect.x).toBe(424)
+    expect(result?.rect.width).toBe(1200)
+    expect(elapsed).toBeLessThan(2000)
   })
 })
 
