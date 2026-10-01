@@ -51,6 +51,15 @@ export function LayersPanel({ layers, active, onSelect, onAdd, onDelete, onMove 
   const [dragging, setDragging] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; index: number } | null>(null)
   const canDelete = layers.length > 1
+  const itemRefs = useRef(new Map<number, HTMLLIElement>())
+  const pendingFocus = useRef<number | null>(null)
+
+  useEffect(() => {
+    const id = pendingFocus.current
+    if (id === null) return
+    pendingFocus.current = null
+    itemRefs.current.get(id)?.focus()
+  })
 
   return (
     <aside
@@ -81,20 +90,41 @@ export function LayersPanel({ layers, active, onSelect, onAdd, onDelete, onMove 
           .map(({ layer, index }) => (
             <li
               key={layer.id}
+              ref={(element) => {
+                if (element) itemRefs.current.set(layer.id, element)
+                else itemRefs.current.delete(layer.id)
+              }}
               role="option"
               tabIndex={0}
               aria-selected={index === active}
               aria-label={layer.name}
-              title={layer.name}
+              aria-keyshortcuts="ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown"
+              title={`${layer.name} (Alt+Arrow to reorder)`}
               className={`layers-item${index === active ? ' active' : ''}${index === dragging ? ' dragging' : ''}`}
               draggable
               onClick={() => onSelect(index)}
               onKeyDown={(event) => {
-                if (event.key !== 'Delete' && event.key !== 'Backspace') return
-                // Keeps the workspace's own Delete shortcut from also clearing the image selection.
+                if (event.key === 'Delete' || event.key === 'Backspace') {
+                  // Keeps the workspace's own Delete shortcut from also clearing the image selection.
+                  event.preventDefault()
+                  event.stopPropagation()
+                  if (canDelete) onDelete(index)
+                  return
+                }
+                const step = event.key === 'ArrowUp' ? 1 : event.key === 'ArrowDown' ? -1 : 0
+                if (step === 0) return
+                const to = index + step
+                if (to < 0 || to >= layers.length) return
                 event.preventDefault()
                 event.stopPropagation()
-                if (canDelete) onDelete(index)
+                if (event.altKey) {
+                  // Keep the moved layer focused once the parent re-renders the re-ordered stack.
+                  pendingFocus.current = layer.id
+                  onMove(index, to)
+                } else {
+                  onSelect(to)
+                  itemRefs.current.get(layers[to].id)?.focus()
+                }
               }}
               onContextMenu={(event) => {
                 event.preventDefault()

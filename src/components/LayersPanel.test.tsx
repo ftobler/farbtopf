@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Bitmap } from '../core/bitmap'
+import { moveItem } from '../core/layers'
 import { LayersPanel } from './LayersPanel'
 
 const layer = (id: number, name: string) => ({ id, name, thumbnail: new Bitmap(8, 6) })
@@ -10,6 +12,26 @@ function setup(active = 1, layers = LAYERS) {
   const handlers = { onSelect: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn(), onMove: vi.fn() }
   render(<LayersPanel layers={layers} active={active} {...handlers} />)
   return handlers
+}
+
+function ControlledLayers({ initial = LAYERS, active = 1 }: { initial?: typeof LAYERS; active?: number }) {
+  const [state, setState] = useState({ list: initial, active })
+  return (
+    <LayersPanel
+      layers={state.list}
+      active={state.active}
+      onSelect={(index) => setState((current) => ({ ...current, active: index }))}
+      onAdd={vi.fn()}
+      onDelete={vi.fn()}
+      onMove={(from, to) =>
+        setState((current) => {
+          const id = current.list[from].id
+          const list = moveItem(current.list, from, to)
+          return { list, active: list.findIndex((item) => item.id === id) }
+        })
+      }
+    />
+  )
 }
 
 const rows = () => within(screen.getByRole('listbox', { name: 'Layers' })).getAllByRole('option')
@@ -96,5 +118,64 @@ describe('LayersPanel', () => {
     fireEvent.dragOver(rows()[0])
     fireEvent.drop(rows()[0])
     expect(onMove).toHaveBeenCalledWith(0, 2)
+  })
+
+  it('selects the visual previous and next layer with the arrow keys', () => {
+    const { onSelect } = setup(1)
+    fireEvent.keyDown(rows()[1], { key: 'ArrowUp' })
+    expect(onSelect).toHaveBeenLastCalledWith(2)
+    fireEvent.keyDown(rows()[1], { key: 'ArrowDown' })
+    expect(onSelect).toHaveBeenLastCalledWith(0)
+  })
+
+  it('moves the active highlight with the arrow keys', () => {
+    render(<ControlledLayers active={1} />)
+    fireEvent.keyDown(rows()[1], { key: 'ArrowUp' })
+    expect(rows()[0].getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(rows()[0], { key: 'ArrowDown' })
+    expect(rows()[1].getAttribute('aria-selected')).toBe('true')
+    expect(rows()[0].getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('ignores arrow keys at the ends of the list', () => {
+    const { onSelect } = setup(1)
+    fireEvent.keyDown(rows()[0], { key: 'ArrowUp' })
+    fireEvent.keyDown(rows()[2], { key: 'ArrowDown' })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('moves a layer visually up with Alt+ArrowUp', () => {
+    const { onMove } = setup(1)
+    fireEvent.keyDown(rows()[1], { key: 'ArrowUp', altKey: true })
+    expect(onMove).toHaveBeenCalledWith(1, 2)
+  })
+
+  it('moves a layer visually down with Alt+ArrowDown', () => {
+    const { onMove } = setup(1)
+    fireEvent.keyDown(rows()[1], { key: 'ArrowDown', altKey: true })
+    expect(onMove).toHaveBeenCalledWith(1, 0)
+  })
+
+  it('does not move a layer past the top or bottom', () => {
+    const { onMove } = setup(1)
+    fireEvent.keyDown(rows()[0], { key: 'ArrowUp', altKey: true })
+    fireEvent.keyDown(rows()[2], { key: 'ArrowDown', altKey: true })
+    expect(onMove).not.toHaveBeenCalled()
+  })
+
+  it('keeps the moved layer focused and selected', () => {
+    render(<ControlledLayers active={1} />)
+    const focused = rows()[1]
+    focused.focus()
+    fireEvent.keyDown(focused, { key: 'ArrowUp', altKey: true })
+    expect(rows()[0].getAttribute('aria-label')).toBe('Layer 2')
+    const moved = screen.getByRole('option', { name: 'Layer 2' })
+    expect(moved.getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(moved)
+  })
+
+  it('advertises the keyboard shortcuts', () => {
+    setup()
+    expect(rows()[0].getAttribute('aria-keyshortcuts')).toBe('ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown')
   })
 })
