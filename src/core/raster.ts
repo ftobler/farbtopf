@@ -493,6 +493,17 @@ export function extractRegion(source: Bitmap, rect: Rect, key: Rgba | null = nul
   return result
 }
 
+/**
+ * Scales a bitmap down proportionally so its longer side fits within `maxEdge`,
+ * or returns it unchanged when it already fits. Never upscales.
+ */
+export function fitWithin(source: Bitmap, maxEdge: number): Bitmap {
+  const longest = Math.max(source.width, source.height)
+  if (longest <= maxEdge) return source
+  const factor = Math.min(1, maxEdge / longest)
+  return scale(source, source.width * factor, source.height * factor)
+}
+
 /** Scales a bitmap with nearest-neighbour sampling (keeps the pixel-art look). */
 export function scale(source: Bitmap, width: number, height: number): Bitmap {
   const w = Math.max(1, Math.floor(width))

@@ -14,6 +14,7 @@ import {
   ellipseSpans,
   extractRegion,
   fillPolygon,
+  fitWithin,
   flipHorizontal,
   flipVertical,
   floodFill,
@@ -398,6 +399,36 @@ describe('blit / crop / scale', () => {
     expect(out.width).toBe(4)
     expect(out.get(0, 0)).toEqual(rgba(255, 0, 0))
     expect(out.get(3, 3)).toEqual(BLACK)
+  })
+})
+
+describe('fitWithin', () => {
+  it('scales a bitmap down proportionally so its longer side fits the limit', () => {
+    const out = fitWithin(new Bitmap(100, 50, BLACK), 40)
+    expect(out.width).toBe(40)
+    expect(out.height).toBe(20)
+  })
+
+  it('fits a portrait bitmap by its longer side', () => {
+    const out = fitWithin(new Bitmap(50, 100, BLACK), 40)
+    expect(out.width).toBe(20)
+    expect(out.height).toBe(40)
+  })
+
+  it('returns the bitmap unchanged when it already fits', () => {
+    const source = new Bitmap(30, 20, BLACK)
+    expect(fitWithin(source, 40)).toBe(source)
+  })
+
+  it('does not upscale a bitmap smaller than the limit', () => {
+    const source = new Bitmap(10, 10, BLACK)
+    expect(fitWithin(source, 40)).toBe(source)
+  })
+
+  it('keeps both sides at least one pixel', () => {
+    const out = fitWithin(new Bitmap(100, 1, BLACK), 10)
+    expect(out.width).toBe(10)
+    expect(out.height).toBe(1)
   })
 })
 

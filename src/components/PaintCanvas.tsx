@@ -37,6 +37,7 @@ import {
   crop,
   drawLine,
   extractRegion,
+  fitWithin,
   flipHorizontal,
   flipVertical,
   floodFill,
@@ -1448,16 +1449,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         resetDocument(new Bitmap(width, height, WHITE))
       },
       loadBitmap(bitmap) {
-        resetDocument(bitmap)
+        resetDocument(fitWithin(bitmap, MAX_CANVAS))
       },
       async loadDataUrl(src) {
-        resetDocument(await bitmapFromDataUrl(src))
+        resetDocument(fitWithin(await bitmapFromDataUrl(src), MAX_CANVAS))
       },
       pasteBitmap(bitmap) {
-        pasteImage(bitmap)
+        pasteImage(fitWithin(bitmap, MAX_CANVAS))
       },
       async pasteDataUrl(src) {
-        pasteImage(await bitmapFromDataUrl(src))
+        pasteImage(fitWithin(await bitmapFromDataUrl(src), MAX_CANVAS))
       },
       clear() {
         acceptPending()
