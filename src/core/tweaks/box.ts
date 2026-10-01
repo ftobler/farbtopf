@@ -4,12 +4,10 @@ import { normalizeRect } from '../geometry'
 import { drawEllipse, drawPolyline, fillPolygon } from '../raster'
 import type { ShapeKind, ShapeStyle } from '../shapes'
 import { fillBox, outlineBox, renderShape, shapePolygon } from '../shapes'
-import { boxHandles, resizeBox } from './shared'
+import { DEFAULT_RADIUS_RATIO, RADIUS_ID, boxHandles, maxRadius, resizeBox, scaleRadius } from './shared'
 import type { ShapeFamily, TweakHandle } from './types'
 
-const RADIUS_ID = 'radius'
 const ROTATE_ID = 'rotate'
-const DEFAULT_RADIUS_RATIO = 0.2
 const ROTATE_HANDLE_OFFSET = 18
 
 function radiusFromPoints(points: readonly Point[]): number {
@@ -19,16 +17,6 @@ function radiusFromPoints(points: readonly Point[]): number {
 
 function rotationFromPoints(points: readonly Point[]): number {
   return points.length >= 3 ? points[2].y : 0
-}
-
-function maxRadius(box: Rect): number {
-  return Math.min(box.width, box.height) / 2 - 1
-}
-
-function scaleRadius(radius: number, from: Rect, to: Rect): number {
-  const base = Math.min(from.width, from.height)
-  if (base <= 0) return 0
-  return Math.max(0, (radius * Math.min(to.width, to.height)) / base)
 }
 
 function boxCentre(points: readonly Point[]): Point {

@@ -139,4 +139,17 @@ describe('PaintCanvas pending shape follows the toolbar', () => {
     setProps({ primary: RED })
     expect(shown(15, 15)).toEqual(rgbaOf(RED))
   })
+
+  it('re-renders a pending rounded callout when its radius handle moves, keeping it through a restyle', () => {
+    const { shown, drag, setProps, commit } = setup({ shapeKind: 'callout-rounded-rectangle' })
+    drag([5, 5], [25, 25])
+    expect(shown(5, 5)).toEqual(rgbaOf(WHITE))
+    // The radius handle sits at the body corner inset by the default radius (about 3px).
+    drag([8, 8], [5, 5])
+    expect(shown(5, 5)).toEqual(rgbaOf(BLACK))
+    setProps({ primary: RED })
+    expect(shown(5, 5)).toEqual(rgbaOf(RED))
+    commit()
+    expect(shown(5, 5)).toEqual(rgbaOf(RED))
+  })
 })

@@ -237,10 +237,15 @@ function bodyCentre(body: Rect): Point {
   return { x: body.x + body.width / 2, y: body.y + body.height / 2 }
 }
 
-/** The callout body's clockwise outline. */
-function calloutBody(kind: ShapeKind, body: Rect): Point[] {
+/** The body part of a callout filling `box`: its top `CALLOUT_BODY`, leaving room for the tail below. */
+export function calloutBodyBox(box: Rect): Rect {
+  return { x: box.x, y: box.y, width: box.width, height: box.height * CALLOUT_BODY }
+}
+
+/** The callout body's clockwise outline; `radius` rounds the rounded callout's corners. */
+function calloutBody(kind: ShapeKind, body: Rect, radius?: number): Point[] {
   const { x, y, width: w, height: h } = body
-  if (kind === 'callout-rounded-rectangle') return roundedRect(body)
+  if (kind === 'callout-rounded-rectangle') return roundedRect(body, [], radius)
   if (kind === 'callout-oval') {
     const segments = ellipseSegments(body)
     const points: Point[] = []
@@ -313,13 +318,14 @@ function tailSide(base: Point, tip: Point, control?: Point): Point[] {
  * The callout body is always the top `CALLOUT_BODY` of `box`, leaving room for a tail
  * below. The tail is a wedge running from the body centre to `tip`, merged with the body
  * into one closed outline with no seam, so it leaves the body wherever the tip points,
- * corners included. The oval's tail has rounded, inward-curving sides.
+ * corners included. The oval's tail has rounded, inward-curving sides. `radius` sets the
+ * rounded callout's corner radius (a fifth of the body's smaller side by default).
  */
-export function callout(kind: ShapeKind, box: Rect, tipOverride?: Point): Point[] {
+export function callout(kind: ShapeKind, box: Rect, tipOverride?: Point, radius?: number): Point[] {
   const { x, y, width: w, height: h } = box
-  const body: Rect = { x, y, width: w, height: h * CALLOUT_BODY }
+  const body = calloutBodyBox(box)
   const tip = tipOverride ?? { x: x + w * TAIL_TIP, y: y + h }
-  const outline = calloutBody(kind, body)
+  const outline = calloutBody(kind, body, radius)
   const centre = bodyCentre(body)
   const length = Math.hypot(tip.x - centre.x, tip.y - centre.y)
   if (length === 0) return outline

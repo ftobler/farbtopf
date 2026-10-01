@@ -5,6 +5,23 @@ import type { ShapeStyle } from '../shapes'
 import { fillBox, outlineBox } from '../shapes'
 import type { TweakHandle } from './types'
 
+/** Handle id for a rounded shape's corner radius. */
+export const RADIUS_ID = 'radius'
+/** A fresh rounded shape's corner radius, as a fraction of its smaller side. */
+export const DEFAULT_RADIUS_RATIO = 0.2
+
+/** The largest corner radius that still leaves a straight edge on the box's smaller side. */
+export function maxRadius(box: Rect): number {
+  return Math.min(box.width, box.height) / 2 - 1
+}
+
+/** Scales a corner radius drawn for box `from` to the same rounding on box `to`. */
+export function scaleRadius(radius: number, from: Rect, to: Rect): number {
+  const base = Math.min(from.width, from.height)
+  if (base <= 0) return 0
+  return Math.max(0, (radius * Math.min(to.width, to.height)) / base)
+}
+
 const BOX_HANDLE_IDS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
 
 /** The eight resize handles around the box spanned by the two anchor corners. */

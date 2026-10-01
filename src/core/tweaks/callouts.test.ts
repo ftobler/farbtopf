@@ -4,6 +4,8 @@ import { BLACK, rgba } from '../color'
 import { normalizeRect } from '../geometry'
 import type { Point } from '../geometry'
 import type { ShapeKind, ShapeStyle } from '../shapes'
+import { fillPolygon } from '../raster'
+import { callout, fillBox, outlineBox } from '../shapes'
 import { calloutFamily } from './callouts'
 
 const RED = rgba(255, 0, 0)
@@ -58,6 +60,26 @@ describe('calloutFamily handles', () => {
       'w',
       'tail',
     ])
+  })
+
+  it('adds a radius handle to the rounded callout only', () => {
+    const rounded = calloutFamily.insert('callout-rounded-rectangle', SQUARE[0], SQUARE[1])
+    expect(calloutFamily.handles('callout-rounded-rectangle', rounded).map((h) => h.id)).toEqual([
+      'nw',
+      'n',
+      'ne',
+      'e',
+      'se',
+      's',
+      'sw',
+      'w',
+      'tail',
+      'radius',
+    ])
+    for (const kind of ['callout-rectangle', 'callout-oval'] as ShapeKind[]) {
+      const points = calloutFamily.insert(kind, SQUARE[0], SQUARE[1])
+      expect(calloutFamily.handles(kind, points).some((h) => h.id === 'radius'), kind).toBe(false)
+    }
   })
 
   it('returns the current tail tip as the tail handle', () => {
@@ -150,5 +172,95 @@ describe('calloutFamily tail', () => {
     const box = normalizeRect(resized[0], resized[1])
     expect(resized[2].x).toBeCloseTo(box.x + 0.15 * box.width)
     expect(resized[2].y).toBeCloseTo(box.y + box.height)
+  })
+})
+
+describe('calloutFamily rounded radius', () => {
+  const KIND: ShapeKind = 'callout-rounded-rectangle'
+  // The body is the top 78% of the 30px box: (5, 5) with size 30 x 23.4.
+  const BODY_SIDE = 30 * 0.78
+
+  function withRadius(x: number): Point[] {
+    const points = calloutFamily.insert(KIND, SQUARE[0], SQUARE[1])
+    return calloutFamily.move(KIND, points, 'radius', { x, y: 5 })!
+  }
+
+  function renderPoints(points: readonly Point[], style: ShapeStyle = FILL_ONLY): Bitmap {
+    const bitmap = new Bitmap(60, 60)
+    calloutFamily.render(bitmap, KIND, points, style)
+    return bitmap
+  }
+
+  it('inserts the default body radius as a fourth anchor', () => {
+    const points = calloutFamily.insert(KIND, SQUARE[0], SQUARE[1])
+    expect(points).toHaveLength(4)
+    expect(points[3].x).toBeCloseTo(BODY_SIDE * 0.2)
+    expect(calloutFamily.insert('callout-rectangle', SQUARE[0], SQUARE[1])).toHaveLength(3)
+  })
+
+  it('places the radius handle at the body corner inset by the radius', () => {
+    const points = calloutFamily.insert(KIND, SQUARE[0], SQUARE[1])
+    const handle = calloutFamily.handles(KIND, points).find((h) => h.id === 'radius')!
+    expect(handle.point.x).toBeCloseTo(5 + points[3].x)
+    expect(handle.point.y).toBeCloseTo(5 + points[3].x)
+  })
+
+  it('draws the default radius exactly like the plain rounded callout outline', () => {
+    const points = calloutFamily.insert(KIND, SQUARE[0], SQUARE[1])
+    const box = normalizeRect(SQUARE[0], SQUARE[1])
+    const actual = new Bitmap(60, 60)
+    calloutFamily.render(actual, KIND, points, FILL_ONLY)
+    const expected = new Bitmap(60, 60)
+    fillPolygon(expected, callout(KIND, fillBox(outlineBox(box, 1), 0.25), points[2]), RED)
+    expect(actual.data).toEqual(expected.data)
+  })
+
+  it('dragging the radius handle sets the radius, clamped to the body', () => {
+    expect(withRadius(5 + 8)[3].x).toBeCloseTo(8)
+    expect(withRadius(0)[3].x).toBe(0)
+    expect(withRadius(100)[3].x).toBeCloseTo(BODY_SIDE / 2 - 1)
+    const moved = withRadius(5 + 8)
+    expect(moved[2]).toEqual(calloutFamily.insert(KIND, SQUARE[0], SQUARE[1])[2])
+  })
+
+  it('the radius changes the drawn corner pixels', () => {
+    const square = renderPoints(withRadius(0))
+    const round = renderPoints(withRadius(100))
+    expect(painted(square, 5, 5)).toBe(true)
+    expect(painted(round, 6, 6)).toBe(false)
+    expect(painted(round, 19, 16)).toBe(true)
+  })
+
+  it('keeps the radius on resize, clamped to the smaller body', () => {
+    const points = withRadius(5 + 6)
+    const bigger = calloutFamily.move(KIND, points, 'se', { x: 54, y: 54 })!
+    expect(bigger[3].x).toBeCloseTo(6)
+    const smaller = calloutFamily.move(KIND, withRadius(100), 'se', { x: 15, y: 15 })!
+    const body = 11 * 0.78
+    expect(smaller[3].x).toBeCloseTo(body / 2 - 1)
+  })
+
+  it('keeps the tail attached for any radius', () => {
+    for (const radius of [0, 4, 100]) {
+      const points = withRadius(5 + radius)
+      for (const tip of [
+        { x: 20, y: 44 },
+        { x: 52, y: 50 },
+        { x: -6, y: -6 },
+        { x: 46, y: 20 },
+      ]) {
+        const moved = calloutFamily.move(KIND, points, 'tail', tip)!
+        expect(moved[3]).toEqual(points[3])
+        const bitmap = renderPoints(moved)
+        // The tail paints a continuous run from the body centre towards the tip.
+        const centre = { x: 19.5, y: 16.3 }
+        for (let t = 0; t <= 0.9; t += 0.05) {
+          const x = Math.floor(centre.x + (tip.x - centre.x) * t)
+          const y = Math.floor(centre.y + (tip.y - centre.y) * t)
+          if (x < 0 || y < 0) continue
+          expect(painted(bitmap, x, y), `r=${radius} tip=${tip.x},${tip.y} t=${t.toFixed(2)}`).toBe(true)
+        }
+      }
+    }
   })
 })
