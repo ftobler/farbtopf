@@ -25,3 +25,8 @@ dist-ssr
 
 # Local agent worktrees
 .claude/
+
+# local ignored folders
+temp/
+feature/
+scratch/
