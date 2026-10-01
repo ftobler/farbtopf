@@ -110,6 +110,8 @@ export interface PaintCanvasHandle {
   blur: (radius: number) => void
   cropToSelection: () => void
   getSelection: () => Rect | null
+  /** True while a shape is drawn but not yet placed: one with handles, or an unfinished freeform shape. */
+  hasPendingShape: () => boolean
   clearSelection: () => void
   /**
    * A primary press on the workspace outside the image, at client coordinates:
@@ -1414,6 +1416,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         // From the bitmap, not state: callers ask right after loading, before a re-render.
         const { width, height } = doc()
         return { width, height }
+      },
+      hasPendingShape() {
+        return shapeRef.current !== null || polylineRef.current !== null
       },
       flip(axis) {
         finishPolyline()

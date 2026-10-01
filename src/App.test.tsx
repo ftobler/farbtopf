@@ -386,6 +386,27 @@ describe('App', () => {
     expect(screen.getByRole('menu')).toBeTruthy()
   })
 
+  it('swallows a right click while a shape is pending, opening the menu only without one', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }))
+    const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+    canvas.setPointerCapture = vi.fn()
+    canvas.releasePointerCapture = vi.fn()
+    fireEvent.contextMenu(canvas, { clientX: 5, clientY: 5 })
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 5, clientY: 5 })
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerDown(canvas, { button: 2, buttons: 2, pointerId: 1, clientX: 60, clientY: 60 })
+    expect(fireEvent.contextMenu(canvas, { clientX: 60, clientY: 60 })).toBe(false)
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 1, clientX: 60, clientY: 60 })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
+  })
+
   it('stacks the primary colour above the secondary colour', () => {
     const { container } = render(<App />)
     const swatches = [...container.querySelectorAll('.current-colors .color-swatch')]

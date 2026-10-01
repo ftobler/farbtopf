@@ -3,6 +3,7 @@ import { act, fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrushId } from '../core/brushes'
 import type { Rgba } from '../core/color'
+import type { ShapeKind } from '../core/shapes'
 import type { ToolId } from '../core/tools'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
@@ -12,7 +13,7 @@ const RED: Rgba = { r: 255, g: 0, b: 0, a: 255 }
 const BLUE: Rgba = { r: 0, g: 0, b: 255, a: 255 }
 const WHITE_PIXEL = { r: 255, g: 255, b: 255, a: 255 }
 
-function setup(tool: ToolId, brush: BrushId = 'round') {
+function setup(tool: ToolId, brush: BrushId = 'round', shapeKind: ShapeKind = 'rectangle') {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
   const onPickColor = vi.fn()
@@ -26,6 +27,7 @@ function setup(tool: ToolId, brush: BrushId = 'round') {
       secondary={BLUE}
       brushSize={3}
       brush={brush}
+      shapeKind={shapeKind}
       random={() => 0.5}
       shapeFill="outline"
       zoom={1}
@@ -164,5 +166,41 @@ describe('PaintCanvas right click', () => {
     act(() => ref.current?.undo())
     expect(shown(9, 5)).toEqual(WHITE_PIXEL)
     expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+  })
+
+  it('leaves a pending shape untouched: no commit, no new shape, no handle drag', () => {
+    const { ref, context, shown, rightClick, rightDrag, leftDrag, onHistoryChange } = setup('shape')
+    leftDrag({ x: 3, y: 3 }, { x: 15, y: 15 })
+    expect(ref.current?.hasPendingShape()).toBe(true)
+    const calls = onHistoryChange.mock.calls.length
+    const paints = context.putImageData.mock.calls.length
+    rightClick(18, 18)
+    rightClick(15, 15)
+    rightDrag({ x: 15, y: 15 }, { x: 18, y: 10 })
+    rightDrag({ x: 18, y: 18 }, { x: 10, y: 10 })
+    expect(ref.current?.hasPendingShape()).toBe(true)
+    expect(onHistoryChange.mock.calls.length).toBe(calls)
+    expect(context.putImageData.mock.calls.length).toBe(paints)
+    act(() => fireEvent.keyDown(window, { key: 'Enter' }))
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    expect(shown(3, 9)).toEqual(RED)
+    expect(shown(15, 9)).toEqual(RED)
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('reports an unfinished freeform shape as pending', () => {
+    const { ref, rightClick, leftDrag } = setup('shape', 'round', 'freeform')
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    leftDrag({ x: 3, y: 3 }, { x: 15, y: 15 })
+    expect(ref.current?.hasPendingShape()).toBe(true)
+    rightClick(18, 18)
+    expect(ref.current?.hasPendingShape()).toBe(true)
+  })
+
+  it('starts no shape on a right-button drag', () => {
+    const { ref, rightDrag, onHistoryChange } = setup('shape')
+    rightDrag({ x: 3, y: 3 }, { x: 15, y: 15 })
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
   })
 })

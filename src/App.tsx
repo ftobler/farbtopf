@@ -446,8 +446,9 @@ function App() {
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       event.preventDefault()
-      // Tools that act on a right-click (zoom out, secondary colour) get no menu over it.
-      if (rightClickActs(tool)) return
+      // Tools that act on a right-click (zoom out, secondary colour) get no menu over it,
+      // and a right-click leaves a pending shape alone, menu included.
+      if (rightClickActs(tool) || canvasRef.current?.hasPendingShape()) return
       setContextMenu({ x: event.clientX, y: event.clientY })
     },
     [tool],
