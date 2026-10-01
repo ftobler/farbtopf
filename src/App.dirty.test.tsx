@@ -144,3 +144,102 @@ describe('App unsaved changes', () => {
     expect(warnsOnLeave()).toBe(false)
   })
 })
+
+describe('App unsaved changes with something pending', () => {
+  function paintCanvas(container: HTMLElement) {
+    const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+    canvas.setPointerCapture = vi.fn()
+    canvas.releasePointerCapture = vi.fn()
+    return canvas
+  }
+
+  function drawPendingRectangle(container: HTMLElement) {
+    fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }))
+    const canvas = paintCanvas(container)
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 5, clientY: 5 })
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+  }
+
+  function startFreeform(container: HTMLElement) {
+    fireEvent.click(screen.getByRole('button', { name: 'Freeform shape' }))
+    const canvas = paintCanvas(container)
+    for (const x of [5, 30]) {
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: 10 })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: 10 })
+    }
+  }
+
+  function openTextBox(container: HTMLElement) {
+    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+    const canvas = paintCanvas(container)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+    return container.querySelector('.text-editor') as HTMLTextAreaElement
+  }
+
+  it('counts a pending shape as unsaved work', () => {
+    const { container } = render(<App />)
+    drawPendingRectangle(container)
+    expect(warnsOnLeave()).toBe(true)
+    expect(document.title).toBe('*Farbtopf')
+  })
+
+  it('is clean again once the pending shape is discarded with Escape', () => {
+    const { container } = render(<App />)
+    drawPendingRectangle(container)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(warnsOnLeave()).toBe(false)
+    expect(document.title).toBe('Farbtopf')
+  })
+
+  it('stays dirty after discarding a pending shape when an earlier edit is unsaved', async () => {
+    const { container } = render(<App />)
+    await edit()
+    drawPendingRectangle(container)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(warnsOnLeave()).toBe(true)
+  })
+
+  it('stays dirty once the pending shape is placed', () => {
+    const { container } = render(<App />)
+    drawPendingRectangle(container)
+    fireEvent.keyDown(document, { key: 'Enter' })
+    expect(warnsOnLeave()).toBe(true)
+  })
+
+  it('counts a freeform shape in progress as unsaved work', () => {
+    const { container } = render(<App />)
+    startFreeform(container)
+    expect(warnsOnLeave()).toBe(true)
+  })
+
+  it('counts an open text box with text as unsaved work, and is clean once it is discarded', () => {
+    const { container } = render(<App />)
+    const editor = openTextBox(container)
+    expect(warnsOnLeave()).toBe(false)
+    fireEvent.change(editor, { target: { value: 'Hello' } })
+    expect(warnsOnLeave()).toBe(true)
+    expect(document.title).toBe('*Farbtopf')
+    fireEvent.keyDown(editor, { key: 'Escape' })
+    expect(warnsOnLeave()).toBe(false)
+  })
+
+  it('is clean after saving with a shape pending', async () => {
+    const { container } = render(<App />)
+    const handle = fakeHandle('drawing.png')
+    window.showSaveFilePicker = vi.fn(async () => asHandle(handle))
+    drawPendingRectangle(container)
+    await pressSave()
+    await waitFor(() => expect(screen.getByText('Saved drawing.png')).toBeTruthy())
+    expect(warnsOnLeave()).toBe(false)
+  })
+
+  it('is clean after creating a new image over a pending shape', () => {
+    const { container } = render(<App />)
+    drawPendingRectangle(container)
+    fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(warnsOnLeave()).toBe(false)
+  })
+})

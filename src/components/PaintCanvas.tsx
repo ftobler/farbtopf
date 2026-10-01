@@ -184,6 +184,11 @@ export interface PaintCanvasProps {
   onLayersChange?: (layers: LayerInfo[], active: number) => void
   /** Called whenever the image is edited, i.e. a change is recorded or undone/redone; not for a new or loaded document. */
   onDocumentChange?: () => void
+  /**
+   * Reports whether unplaced work is on the canvas: a pending shape or curve, or an
+   * open text box with text in it. Placing it is reported by `onDocumentChange`.
+   */
+  onPendingChange?: (pending: boolean) => void
 }
 
 /** An undo step: the whole layer stack and which layer was active. */
@@ -703,6 +708,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onPanChange,
     onLayersChange,
     onDocumentChange,
+    onPendingChange,
   },
   ref,
 ) {
@@ -2374,6 +2380,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [])
 
   const editorOpen = editor !== null
+
+  const pending = shape !== null || polylineActive || (editor !== null && editor.value.trim().length > 0)
+  useEffect(() => {
+    onPendingChange?.(pending)
+  }, [onPendingChange, pending])
 
   useEffect(() => {
     if (!editorOpen) return

@@ -167,7 +167,9 @@ function App() {
   const revisionRef = useRef(0)
   const [savedRevision, setSavedRevision] = useState(0)
   const [revision, setRevision] = useState(0)
-  const dirty = revision !== savedRevision
+  /** Unplaced work on the canvas (a pending shape, an open text box with text) is unsaved too. */
+  const [pending, setPending] = useState(false)
+  const dirty = revision !== savedRevision || pending
 
   const handleDocumentChange = useCallback(() => {
     revisionRef.current += 1
@@ -922,6 +924,7 @@ function App() {
           onPanChange={setPan}
           onLayersChange={handleLayersChange}
           onDocumentChange={handleDocumentChange}
+          onPendingChange={setPending}
         />
         <Scrollbars
           workspaceRef={workspaceRef}
