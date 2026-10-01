@@ -57,4 +57,65 @@ describe('History', () => {
     expect(history.canUndo).toBe(false)
     expect(history.canRedo).toBe(false)
   })
+
+  it('evicts the oldest entries when the byte budget is exceeded', () => {
+    const history = new History<number>(10, { maxBytes: 25, sizeOf: () => 10 })
+    history.record(1)
+    history.record(2)
+    history.record(3)
+    expect(history.depth).toBe(2)
+    expect(history.bytes).toBe(20)
+    expect(history.canUndo).toBe(true)
+    expect(history.undo(4)).toBe(3)
+    expect(history.undo(3)).toBe(2)
+    expect(history.canUndo).toBe(false)
+  })
+
+  it('still applies the step-count limit alongside the byte budget', () => {
+    const history = new History<number>(2, { maxBytes: 1000, sizeOf: () => 10 })
+    history.record(1)
+    history.record(2)
+    history.record(3)
+    expect(history.depth).toBe(2)
+    expect(history.undo(4)).toBe(3)
+    expect(history.undo(3)).toBe(2)
+    expect(history.canUndo).toBe(false)
+  })
+
+  it('keeps a single state that is larger than the byte budget', () => {
+    const history = new History<number>(10, { maxBytes: 5, sizeOf: () => 10 })
+    history.record(1)
+    expect(history.depth).toBe(1)
+    expect(history.canUndo).toBe(true)
+    history.record(2)
+    expect(history.depth).toBe(1)
+    expect(history.undo(3)).toBe(2)
+  })
+
+  it('does not apply a byte budget without a sizeOf', () => {
+    const history = new History<number>(2, { maxBytes: 5 })
+    history.record(1)
+    history.record(2)
+    history.record(3)
+    expect(history.depth).toBe(2)
+    expect(history.bytes).toBe(0)
+  })
+
+  it('does not evict by bytes without a budget', () => {
+    const history = new History<number>(10, { sizeOf: () => 10 })
+    history.record(1)
+    history.record(2)
+    history.record(3)
+    expect(history.depth).toBe(3)
+  })
+
+  it('behaves as before with the single-argument constructor', () => {
+    const history = new History<number>(2)
+    history.record(1)
+    history.record(2)
+    history.record(3)
+    expect(history.depth).toBe(2)
+    expect(history.bytes).toBe(0)
+    expect(history.undo(4)).toBe(3)
+  })
 })

@@ -29,7 +29,7 @@ import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
-import { compositeLayers, drawOver, moveItem, thumbnail } from '../core/layers'
+import { compositeLayers, drawOver, moveItem, snapshotBytes, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
   blit,
@@ -360,6 +360,7 @@ interface CanvasResizeDrag {
 }
 
 const HISTORY_LIMIT = 80
+const HISTORY_MAX_BYTES = 256 * 1024 * 1024
 
 const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const HANDLE_HIT = 4
@@ -717,7 +718,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const offscreenRef = useRef<HTMLCanvasElement | null>(null)
   const miniatureRef = useRef<HTMLCanvasElement | null>(null)
   const bitmapRef = useRef<Bitmap | null>(null)
-  const historyRef = useRef(new History<DocSnapshot>(HISTORY_LIMIT))
+  const historyRef = useRef(
+    new History<DocSnapshot>(HISTORY_LIMIT, { maxBytes: HISTORY_MAX_BYTES, sizeOf: snapshotBytes }),
+  )
   /** The layer stack, bottom first. The active entry's bitmap may be stale: `bitmapRef` holds the live one. */
   const layersRef = useRef<Layer[]>([])
   const activeRef = useRef(0)
@@ -1295,7 +1298,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setPolylineActive(false)
       shapeRef.current = null
       setShape(null)
-      historyRef.current = new History<DocSnapshot>(HISTORY_LIMIT)
+      historyRef.current = new History<DocSnapshot>(HISTORY_LIMIT, {
+        maxBytes: HISTORY_MAX_BYTES,
+        sizeOf: snapshotBytes,
+      })
       editorRef.current = null
       floatingRef.current = null
       setEditor(null)

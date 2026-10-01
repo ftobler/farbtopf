@@ -16,6 +16,15 @@ export interface LayerInfo {
   thumbnail: Bitmap
 }
 
+/**
+ * Estimated bytes a history snapshot adds: only the active layer is cloned per
+ * step, the other layer objects are shared with the live stack.
+ */
+export function snapshotBytes(snapshot: { layers: readonly Layer[]; active: number }): number {
+  const active = snapshot.layers[snapshot.active]
+  return active ? active.bitmap.width * active.bitmap.height * 4 : 0
+}
+
 /** Largest edge of a layer thumbnail, in pixels. */
 export const THUMBNAIL_SIZE = 64
 

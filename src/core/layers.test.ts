@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bitmap } from './bitmap'
 import { BLACK, TRANSPARENT, WHITE } from './color'
-import { compositeLayers, moveItem, thumbnail } from './layers'
+import { compositeLayers, moveItem, snapshotBytes, thumbnail } from './layers'
 
 describe('compositeLayers', () => {
   it('draws the bottom-most layer first', () => {
@@ -77,5 +77,25 @@ describe('moveItem', () => {
     expect(moveItem(list, 1, 9)).toEqual(['a', 'c', 'b'])
     expect(moveItem(list, 1, -3)).toEqual(['b', 'a', 'c'])
     expect(list).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('snapshotBytes', () => {
+  const layer = (id: number, width: number, height: number) => ({
+    id,
+    name: `Layer ${id}`,
+    bitmap: new Bitmap(width, height),
+  })
+
+  it('counts only the active layer bitmap', () => {
+    expect(snapshotBytes({ layers: [layer(1, 4, 4), layer(2, 2, 2)], active: 1 })).toBe(2 * 2 * 4)
+  })
+
+  it('counts the first layer when it is active', () => {
+    expect(snapshotBytes({ layers: [layer(1, 4, 4), layer(2, 2, 2)], active: 0 })).toBe(4 * 4 * 4)
+  })
+
+  it('returns zero when the active layer is missing', () => {
+    expect(snapshotBytes({ layers: [layer(1, 4, 4)], active: 5 })).toBe(0)
   })
 })
