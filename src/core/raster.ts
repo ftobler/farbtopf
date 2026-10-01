@@ -411,7 +411,7 @@ export function floodFill(
   if (!bitmap.contains(sx, sy)) return 0
   const { width, height, data } = bitmap
   const target = bitmap.get(sx, sy)
-  if (colorsEqual(target, color, tolerance)) return 0
+  if (colorsEqual(target, color, 0)) return 0
 
   const startIndex = (sy * width + sx) * 4
   const targetR = data[startIndex]
@@ -423,7 +423,13 @@ export function floodFill(
   const fillB = clampByte(color.b)
   const fillA = clampByte(color.a)
 
+  // Filling can leave a pixel still within `tolerance` of the target (when the
+  // fill colour is close to the start colour), so track visited pixels to fill
+  // each one at most once and keep the span scan from revisiting them forever.
+  const visited = new Uint8Array(width * height)
+
   const matches = (index: number): boolean => {
+    if (visited[index]) return false
     const i = index * 4
     return (
       Math.abs(data[i] - targetR) <= tolerance &&
@@ -470,7 +476,9 @@ export function floodFill(
     let right = seedX
     while (right < width - 1 && matches(y * width + right + 1)) right += 1
     for (let x = left; x <= right; x += 1) {
-      const i = (y * width + x) * 4
+      const index = y * width + x
+      visited[index] = 1
+      const i = index * 4
       data[i] = fillR
       data[i + 1] = fillG
       data[i + 2] = fillB

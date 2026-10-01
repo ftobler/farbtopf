@@ -375,6 +375,28 @@ describe('floodFill', () => {
     expect(changed).toBe(9)
   })
 
+  it('recolors when the fill colour is within tolerance of the start but not equal', () => {
+    const bitmap = new Bitmap(3, 3)
+    bitmap.fill(rgba(100, 100, 100))
+    const fill = rgba(108, 108, 108)
+    const changed = floodFill(bitmap, { x: 1, y: 1 }, fill, 10)
+    expect(changed).toBe(9)
+    for (let y = 0; y < 3; y += 1) {
+      for (let x = 0; x < 3; x += 1) {
+        expect(bitmap.get(x, y), `pixel ${x},${y}`).toEqual(fill)
+      }
+    }
+  })
+
+  it('terminates and fills each pixel once when the fill colour still matches the target within tolerance', () => {
+    const bitmap = new Bitmap(8, 8)
+    bitmap.fill(rgba(100, 100, 100))
+    const fill = rgba(105, 105, 105)
+    const changed = floodFill(bitmap, { x: 0, y: 0 }, fill, 20)
+    expect(changed).toBe(64)
+    expect(countColor(bitmap, fill)).toBe(64)
+  })
+
   it('returns 0 when the start is outside the bitmap', () => {
     const bitmap = new Bitmap(4, 4, WHITE)
     expect(floodFill(bitmap, { x: -1, y: 0 }, BLACK)).toBe(0)
@@ -384,6 +406,12 @@ describe('floodFill', () => {
   it('returns 0 when the start already matches the fill color', () => {
     const bitmap = new Bitmap(4, 4, BLACK)
     expect(floodFill(bitmap, { x: 2, y: 2 }, BLACK)).toBe(0)
+  })
+
+  it('returns 0 when the fill colour exactly matches the start even with tolerance', () => {
+    const bitmap = new Bitmap(3, 3)
+    bitmap.fill(rgba(100, 100, 100))
+    expect(floodFill(bitmap, { x: 1, y: 1 }, rgba(100, 100, 100), 10)).toBe(0)
   })
 })
 
@@ -398,13 +426,17 @@ describe('floodFill equivalence with reference fill', () => {
     const sy = Math.floor(start.y)
     if (!bitmap.contains(sx, sy)) return 0
     const target = bitmap.get(sx, sy)
-    if (colorsEqual(target, color, tolerance)) return 0
+    if (colorsEqual(target, color, 0)) return 0
+    const visited = new Uint8Array(bitmap.width * bitmap.height)
     const stack: Point[] = [{ x: sx, y: sy }]
     let changed = 0
     while (stack.length > 0) {
       const { x, y } = stack.pop() as Point
       if (!bitmap.contains(x, y)) continue
+      const index = y * bitmap.width + x
+      if (visited[index]) continue
       if (!colorsEqual(bitmap.get(x, y), target, tolerance)) continue
+      visited[index] = 1
       bitmap.set(x, y, color)
       changed += 1
       stack.push(
@@ -492,6 +524,14 @@ describe('floodFill equivalence with reference fill', () => {
     for (const tolerance of [0, 4, 12, 30]) {
       expectMatchesReference(build, { x: 0, y: 0 }, rgba(10, 20, 30), tolerance)
     }
+  })
+
+  it('matches the reference when the fill colour is within tolerance of the start', () => {
+    const build = (bitmap: Bitmap): void => {
+      bitmap.fill(rgba(100, 100, 100))
+      for (let y = 0; y < 20; y += 1) bitmap.set(9, y, BLACK)
+    }
+    expectMatchesReference(build, { x: 0, y: 0 }, rgba(108, 108, 108), 10)
   })
 })
 
