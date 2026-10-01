@@ -524,7 +524,8 @@ function paintLiquifySegment(
 /**
  * Paints one segment of a freehand stroke with the chosen brush. Colour brushes lay
  * down dabs along the segment; the distorting brushes sample a snapshot of the
- * bitmap so a single segment never feeds back into itself.
+ * bitmap so a segment never reads its own output. The highlighter is not handled
+ * here: the caller accumulates a stroke-wide coverage mask and composites it once.
  */
 export function paintBrushStroke(bitmap: Bitmap, from: Point, to: Point, options: StrokeOptions): void {
   const radius = Math.max(0.5, options.size / 2)
@@ -554,12 +555,6 @@ export function paintBrushStroke(bitmap: Bitmap, from: Point, to: Point, options
       // Classic spray can: dots only where the pointer is; the timer keeps adding more.
       sprayDab(bitmap, to, options.size, color, options.random ?? Math.random, sprayCanDots(options.size))
       return
-    case 'highlighter': {
-      const mask = createCoverageMask(bitmap.width, bitmap.height)
-      stampHighlighter(mask, from, to, options.size)
-      bitmap.data.set(compositeHighlighter(bitmap, mask, color, HIGHLIGHTER_ALPHA).data)
-      return
-    }
     case 'pixelate': {
       const source = options.source ?? bitmap.clone()
       const cache = new Map<number, Rgba>()

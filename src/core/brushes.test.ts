@@ -132,14 +132,6 @@ describe('brushes', () => {
     expect(bitmap.get(20, 20).r).toBeLessThan(255)
   })
 
-  it('leaves translucent ink with the highlighter', () => {
-    const bitmap = new Bitmap(40, 40, WHITE)
-    paintBrushStroke(bitmap, { x: 20, y: 20 }, { x: 20, y: 20 }, { size: 12, color: BLACK, brush: 'highlighter' })
-    const painted = bitmap.get(20, 20).r
-    expect(painted).toBeGreaterThan(0)
-    expect(painted).toBeLessThan(255)
-  })
-
   it('softens a hard edge with selective blurring', () => {
     const bitmap = new Bitmap(40, 40, WHITE)
     bitmap.set(20, 20, BLACK)
@@ -306,7 +298,7 @@ describe('sprayDab', () => {
 })
 
 describe('large brush sizes', () => {
-  const colorBrushes: BrushId[] = ['round', 'soft', 'natural', 'calligraphy', 'highlighter']
+  const colorBrushes: BrushId[] = ['round', 'soft', 'natural', 'calligraphy']
   for (const brush of colorBrushes) {
     it(`paints a 500 px ${brush} stroke in reasonable time`, () => {
       const bitmap = new Bitmap(700, 700, WHITE)
