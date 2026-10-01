@@ -156,6 +156,19 @@ function App() {
   const [message, setMessage] = useState<string | null>(null)
   /** Name of the file the document came from or was saved to; null for a new image. */
   const [fileName, setFileName] = useState<string | null>(null)
+  /** Counts edits; the document is dirty while it differs from the count at the last save, open or New. */
+  const revisionRef = useRef(0)
+  const [savedRevision, setSavedRevision] = useState(0)
+  const [revision, setRevision] = useState(0)
+  const dirty = revision !== savedRevision
+
+  const handleDocumentChange = useCallback(() => {
+    revisionRef.current += 1
+    setRevision(revisionRef.current)
+  }, [])
+
+  /** Marks the document as saved at `at` (now by default); edits made since keep it dirty. */
+  const markSaved = useCallback((at: number = revisionRef.current) => setSavedRevision(at), [])
 
   const notify = useCallback((text: string) => {
     setMessage(text)
@@ -170,8 +183,19 @@ function App() {
   }, [])
 
   useEffect(() => {
-    document.title = fileName ? `${fileName} - Farbtopf` : 'Farbtopf'
-  }, [fileName])
+    document.title = `${dirty ? '*' : ''}${fileName ? `${fileName} - ` : ''}Farbtopf`
+  }, [dirty, fileName])
+
+  useEffect(() => {
+    if (!dirty) return
+    // Makes the browser ask before leaving the page with unsaved changes.
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = true
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [dirty])
 
   useEffect(() => {
     const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -187,9 +211,10 @@ function App() {
       setNewDialogOpen(false)
       fileHandleRef.current = null
       setFileName(null)
+      markSaved()
       notify(`New ${width} × ${height} canvas`)
     },
-    [notify],
+    [markSaved, notify],
   )
 
   const openFile = useCallback(
@@ -206,12 +231,13 @@ function App() {
         setCursor(null)
         fileHandleRef.current = handle
         setFileName(file.name)
+        markSaved()
         notify(`Opened ${file.name}`)
       } catch {
         notify('Could not open that image')
       }
     },
-    [notify],
+    [markSaved, notify],
   )
 
   /** Pastes an image file as a floating selection that the select tool can move. */
@@ -314,9 +340,11 @@ function App() {
       try {
         const dataUrl = canvasRef.current?.toDataUrl(imageMimeFor(handle.name))
         if (!dataUrl) return
+        const saving = revisionRef.current
         await writeFile(handle, dataUrlToBlob(dataUrl))
         fileHandleRef.current = handle
         setFileName(handle.name)
+        markSaved(saving)
         notify(`Saved ${handle.name}`)
       } catch (error) {
         if (error instanceof DOMException && error.name === 'NotAllowedError') {
@@ -326,14 +354,18 @@ function App() {
         }
       }
     },
-    [notify],
+    [markSaved, notify],
   )
 
   const handleSaveAs = useCallback(async () => {
     if (!canSaveFiles()) {
-      // Without the File System Access API a download is the only way to save.
+      // Without the File System Access API a download is the only way to save,
+      // so here it counts as saving (unlike File > Download).
       const name = downloadPng()
-      if (name) notify(`Saved ${name}`)
+      if (name) {
+        markSaved()
+        notify(`Saved ${name}`)
+      }
       return
     }
     let handle: FileSystemFileHandle | null
@@ -344,7 +376,7 @@ function App() {
       return
     }
     if (handle) await saveToHandle(handle)
-  }, [downloadPng, fileName, notify, saveToHandle])
+  }, [downloadPng, fileName, markSaved, notify, saveToHandle])
 
   const handleSave = useCallback(async () => {
     const handle = fileHandleRef.current
@@ -855,6 +887,7 @@ function App() {
           showMiniature={showMiniature}
           onPanChange={setPan}
           onLayersChange={handleLayersChange}
+          onDocumentChange={handleDocumentChange}
         />
         <Scrollbars
           workspaceRef={workspaceRef}

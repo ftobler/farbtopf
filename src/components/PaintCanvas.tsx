@@ -173,6 +173,8 @@ export interface PaintCanvasProps {
   onPanChange?: (pan: Point) => void
   /** Reports the layer stack (bottom first) and the index of the active layer. */
   onLayersChange?: (layers: LayerInfo[], active: number) => void
+  /** Called whenever the image is edited, i.e. a change is recorded or undone/redone; not for a new or loaded document. */
+  onDocumentChange?: () => void
 }
 
 /** An undo step: the whole layer stack and which layer was active. */
@@ -653,6 +655,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     showMiniature = false,
     onPanChange,
     onLayersChange,
+    onDocumentChange,
   },
   ref,
 ) {
@@ -788,8 +791,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (before: Bitmap) => {
       const stack = layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: before } : layer))
       historyRef.current.record({ layers: stack, active: activeRef.current })
+      onDocumentChange?.()
     },
-    [layers],
+    [layers, onDocumentChange],
   )
 
   /** What erasing leaves behind: the secondary colour on the bottom layer, transparency above it. */
@@ -1370,7 +1374,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           updateSelection(null)
         }
         const previous = historyRef.current.undo({ layers: currentLayers(), active: activeRef.current })
-        if (previous) restore(previous)
+        if (previous) {
+          restore(previous)
+          onDocumentChange?.()
+        }
       },
       redo() {
         finishPolyline()
@@ -1379,7 +1386,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           updateSelection(null)
         }
         const next = historyRef.current.redo({ layers: currentLayers(), active: activeRef.current })
-        if (next) restore(next)
+        if (next) {
+          restore(next)
+          onDocumentChange?.()
+        }
       },
       toDataUrl(type = 'image/png') {
         finishPolyline()
@@ -1619,6 +1629,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       ensureFloating,
       eraseColor,
       finishPolyline,
+      onDocumentChange,
       paint,
       pasteImage,
       renderPreview,
@@ -2160,6 +2171,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
       if (!drag.recorded) {
         historyRef.current.record(drag.source)
+        onDocumentChange?.()
         drag.recorded = true
         syncHistory()
       }
@@ -2184,7 +2196,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         onPanChange({ x: px, y: py })
       }
     },
-    [onPanChange, onSizeChange, resizeTo, setLayers, syncHistory, zoom],
+    [onDocumentChange, onPanChange, onSizeChange, resizeTo, setLayers, syncHistory, zoom],
   )
 
   const handleCanvasResizeUp = useCallback(
