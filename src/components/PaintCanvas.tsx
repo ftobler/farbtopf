@@ -1141,7 +1141,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   useEffect(() => {
     paint(doc())
-  }, [size, paint, doc])
+  }, [size, paint, doc, pixelRatio])
 
   // The part of the image currently visible in the workspace, in image pixels.
   useEffect(() => {

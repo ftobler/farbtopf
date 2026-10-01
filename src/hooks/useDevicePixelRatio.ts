@@ -11,8 +11,18 @@ export function useDevicePixelRatio(): number {
   useEffect(() => {
     const update = () => setRatio(currentRatio())
     window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
+
+    if (typeof window.matchMedia !== 'function') {
+      return () => window.removeEventListener('resize', update)
+    }
+
+    const query = window.matchMedia(`(resolution: ${ratio}dppx)`)
+    query.addEventListener('change', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      query.removeEventListener('change', update)
+    }
+  }, [ratio])
 
   return ratio
 }
