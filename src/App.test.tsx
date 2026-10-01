@@ -662,6 +662,18 @@ describe('App', () => {
     expect(gallery.compareDocumentPosition(stack!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it('sizes the stroke and fill triggers alike, giving the fill icon the wave icon’s footprint', () => {
+    render(<App />)
+    const size = screen.getByRole('button', { name: 'Size' })
+    const fill = screen.getByRole('button', { name: 'Fill' })
+    expect(size.className).toBe(fill.className)
+    expect(fill.classList.contains('shape-option-trigger')).toBe(true)
+    const sizeIcon = size.querySelector('svg')!
+    const fillIcon = fill.querySelector('svg')!
+    expect(fillIcon.getAttribute('width')).toBe(sizeIcon.getAttribute('width'))
+    expect(fillIcon.getAttribute('height')).toBe(sizeIcon.getAttribute('height'))
+  })
+
   it('renders the size dropdown as a single column with text labels', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Size' }))

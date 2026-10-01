@@ -485,6 +485,7 @@ export function Ribbon({
             <Dropdown
               title="Stroke size"
               ariaLabel="Size"
+              triggerClassName="dropdown-trigger shape-option-trigger"
               trigger={<StrokeSizeIcon size={18} />}
             >
               {(close) => (
@@ -516,7 +517,9 @@ export function Ribbon({
             <Dropdown
               title="Fill"
               ariaLabel="Fill"
-              trigger={<ShapeFillIcon size={18} />}
+              triggerClassName="dropdown-trigger shape-option-trigger"
+              /* A 36px wide slot like the wave icon's, the square glyph centred in it, so both triggers match. */
+              trigger={<ShapeFillIcon size={18} width={36} />}
             >
               {(close) => (
                 <>

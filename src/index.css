@@ -392,6 +392,12 @@ textarea {
   position: relative;
 }
 
+/* The stroke size and fill triggers stack in one column; stretch both to its width so they line up. */
+.shape-option-trigger {
+  width: 100%;
+  justify-content: center;
+}
+
 .dropdown-trigger {
   display: inline-flex;
   align-items: center;
