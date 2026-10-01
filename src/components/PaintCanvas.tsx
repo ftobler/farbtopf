@@ -680,13 +680,25 @@ function OverflowLayer({ overflow, zoom, onPointerDown, onPointerMove }: Overflo
   )
 }
 
+/** JPEG has no alpha, so transparent pixels must be flattened onto a solid background. */
+function isJpeg(type: string): boolean {
+  return type === 'image/jpeg' || type === 'image/jpg'
+}
+
+/** Draws `bitmap` over an opaque white surface, matching the app's background. */
+function flattenOnWhite(bitmap: Bitmap): Bitmap {
+  const background = new Bitmap(bitmap.width, bitmap.height, WHITE)
+  drawOver(background, bitmap)
+  return background
+}
+
 function bitmapToDataUrl(bitmap: Bitmap, type = 'image/png'): string {
   const canvas = document.createElement('canvas')
   canvas.width = bitmap.width
   canvas.height = bitmap.height
   const context = canvas.getContext('2d')
   if (!context) return ''
-  context.putImageData(bitmap.toImageData(), 0, 0)
+  context.putImageData((isJpeg(type) ? flattenOnWhite(bitmap) : bitmap).toImageData(), 0, 0)
   return canvas.toDataURL(type)
 }
 

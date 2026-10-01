@@ -89,4 +89,18 @@ describe('PaintCanvas toDataUrl', () => {
 
     expect(ref.current?.toDataUrl()).toBe('data:image/png;base64,20x20:0,255,0,255')
   })
+
+  it('fills transparent pixels with white when encoding JPEG', () => {
+    const ref = setup()
+    act(() => ref.current?.loadBitmap(new Bitmap(20, 20)))
+
+    expect(ref.current?.toDataUrl('image/jpeg')).toBe('data:image/png;base64,20x20:255,255,255,255')
+  })
+
+  it('keeps transparent pixels transparent when encoding PNG', () => {
+    const ref = setup()
+    act(() => ref.current?.loadBitmap(new Bitmap(20, 20)))
+
+    expect(ref.current?.toDataUrl()).toBe('data:image/png;base64,20x20:0,0,0,0')
+  })
 })
