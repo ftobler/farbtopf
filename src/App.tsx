@@ -715,6 +715,10 @@ function App() {
         return
       }
 
+      // Alt+<key> combinations belong to the browser/OS, not to the plain
+      // single-key shortcuts below. Ctrl/Meta combinations were handled above.
+      if (event.altKey) return
+
       if (event.key === '[' || event.key === ']') {
         event.preventDefault()
         setBrushSize(stepSize(brushSize, event.key === '[' ? -1 : 1))

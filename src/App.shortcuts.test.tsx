@@ -59,7 +59,7 @@ function setup() {
   return { pixel, paintBlack, select }
 }
 
-const press = (key: string, options: { ctrlKey?: boolean; shiftKey?: boolean; metaKey?: boolean } = {}) =>
+const press = (key: string, options: { ctrlKey?: boolean; shiftKey?: boolean; metaKey?: boolean; altKey?: boolean } = {}) =>
   fireEvent.keyDown(window, { key, ...options })
 const ctrl = (key: string, shiftKey = false) => press(key, { ctrlKey: true, shiftKey })
 
@@ -167,6 +167,50 @@ describe('App keyboard shortcuts', () => {
     expect(pixel(9, 20)).toEqual(BLACK)
     expect(pixel(130, 64)).toEqual(BLACK)
     expect(selectionSize()).toBe('')
+  })
+
+  describe('while Alt is held', () => {
+    it('does not switch tools with tool-letter shortcuts', () => {
+      setup()
+      expect(pressed('Brush')).toBe(true)
+      press('f', { altKey: true })
+      expect(pressed('Fill with color')).toBe(false)
+      expect(pressed('Brush')).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Eraser' }))
+      expect(pressed('Eraser')).toBe(true)
+      press('b', { altKey: true })
+      expect(pressed('Brush')).toBe(false)
+      expect(pressed('Eraser')).toBe(true)
+    })
+
+    it('still switches tools with the same letters without Alt', () => {
+      setup()
+      expect(pressed('Brush')).toBe(true)
+      press('f')
+      expect(pressed('Fill with color')).toBe(true)
+      press('b')
+      expect(pressed('Brush')).toBe(true)
+    })
+
+    it('does not delete the selection with Alt+Delete', () => {
+      const { pixel, paintBlack, select } = setup()
+      paintBlack()
+      select()
+      press('Delete', { altKey: true })
+      expect(selectionSize()).toBe('120 × 45 px')
+      expect(pixel(10, 20)).toEqual(BLACK)
+    })
+
+    it('does not run the other plain shortcuts', () => {
+      setup()
+      expect(gridOn()).toBe(false)
+      press('g', { altKey: true })
+      expect(gridOn()).toBe(false)
+      press('x', { altKey: true })
+      expect([primary(), secondary()]).toEqual(['#000000', '#ffffff'])
+      press('+', { altKey: true })
+      expect(zoomLabel()).toBe('100%')
+    })
   })
 
   describe('while typing in a field', () => {
