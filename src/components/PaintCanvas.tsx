@@ -1190,6 +1190,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     paint(doc())
   }, [doc, paint])
 
+  const cancelPolylineRef = useRef(cancelPolyline)
+  useEffect(() => {
+    cancelPolylineRef.current = cancelPolyline
+  }, [cancelPolyline])
+
   const finishPolylineRef = useRef(finishPolyline)
   useEffect(() => {
     finishPolylineRef.current = finishPolyline
@@ -1247,11 +1252,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (event.key !== 'Enter' && event.key !== 'Escape') return
       const target = event.target as HTMLElement | null
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return
-      // Escape keeps what has been drawn, like Enter: MS Paint has no way to take back a vertex either.
       event.preventDefault()
-      // The app leaves Escape to a pending shape; stopping here keeps that independent of listener order.
-      if (event.key === 'Escape') event.stopImmediatePropagation()
-      finishPolylineRef.current()
+      if (event.key === 'Escape') {
+        // Escape cancels the shape in progress, like any pending shape, and must not
+        // reach the app's select-tool shortcut; stopping here keeps that independent
+        // of listener order.
+        event.stopImmediatePropagation()
+        cancelPolylineRef.current()
+      } else {
+        finishPolylineRef.current()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

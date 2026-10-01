@@ -832,14 +832,16 @@ describe('PaintCanvas', () => {
       expect(onHistoryChange).toHaveBeenCalledTimes(1)
     })
 
-    it('finishes a freeform shape on Escape, keeping what was drawn', () => {
-      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
+    it('discards a freeform shape in progress on Escape without history', () => {
+      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragFirstSegment(canvas)
-      fireEvent.keyDown(window, { key: 'Escape' })
       expect(pixel(7, 2)).toEqual(black)
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(pixel(7, 2)).toEqual(white)
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      expect(ref.current?.hasPendingShape()).toBe(false)
     })
 
     it('previews the next segment while hovering but leaves it out when finished', () => {

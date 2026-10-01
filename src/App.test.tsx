@@ -443,6 +443,35 @@ describe('App', () => {
       expect(stillPending()).toBe(true)
     })
 
+    function startFreeform(container: HTMLElement) {
+      fireEvent.click(screen.getByRole('button', { name: 'Freeform shape' }))
+      const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+      canvas.setPointerCapture = vi.fn()
+      canvas.releasePointerCapture = vi.fn()
+      for (const x of [5, 30]) {
+        fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: 10 })
+        fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: 10 })
+      }
+    }
+
+    it('closes an open menu and leaves a freeform shape in progress', () => {
+      const { container } = render(<App />)
+      startFreeform(container)
+      fireEvent.click(screen.getByRole('button', { name: 'Fill' }))
+      expect(screen.queryAllByRole('menuitem').length).toBeGreaterThan(0)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryAllByRole('menuitem')).toHaveLength(0)
+      expect(stillPending()).toBe(true)
+    })
+
+    it('discards a freeform shape in progress and stays on the shape tool', () => {
+      const { container } = render(<App />)
+      startFreeform(container)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(stillPending()).toBe(false)
+      expect(screen.getByRole('button', { name: 'Select' }).getAttribute('aria-pressed')).toBe('false')
+    })
+
     it('otherwise discards the shape and stays on the shape tool', () => {
       const { container } = render(<App />)
       drawPendingRectangle(container)

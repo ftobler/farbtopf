@@ -691,7 +691,7 @@ function App() {
         // While the context menu is open Escape only dismisses it; it must not
         // also clear the canvas selection or switch tools.
         if (contextMenu) return
-        // A pending shape handles Escape itself (discarding a shape, placing a freeform one).
+        // A pending shape or freeform shape handles Escape itself by discarding it.
         if (canvasRef.current?.hasPendingShape()) return
         canvasRef.current?.clearSelection()
         setTool('select')
