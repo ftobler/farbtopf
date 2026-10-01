@@ -178,4 +178,49 @@ describe('PaintCanvas floating selection beyond the image edge', () => {
     act(() => ref.current?.clearSelection())
     expect(container.querySelector('.selection-overflow')).toBeNull()
   })
+
+  it('starts a move drag when the part hanging past the image edge is grabbed', () => {
+    const { ref, canvas, container, drag, pixel, selectBlock } = setup()
+    selectBlock()
+    drag([7, 7], [[20, 10]], 2)
+    expect(ref.current?.getSelection()).toEqual({ x: 15, y: 5, width: 10, height: 10 })
+    const overflow = container.querySelector('.selection-overflow') as HTMLCanvasElement
+    fireEvent.pointerDown(overflow, { button: 0, pointerId: 3, clientX: 21, clientY: 11 })
+    expect(canvas.setPointerCapture).toHaveBeenLastCalledWith(3)
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 16, clientY: 13 })
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 16, clientY: 13 })
+    expect(ref.current?.getSelection()).toEqual({ x: 10, y: 7, width: 10, height: 10 })
+    act(() => ref.current?.clearSelection())
+    redBlock(pixel, 10, 7)
+  })
+
+  it('resizes from a handle lying past the image edge', () => {
+    const { ref, canvas, container, drag, selectBlock } = setup()
+    selectBlock()
+    drag([7, 7], [[20, 10]], 2)
+    const handle = container.querySelector('.selection-handle-e') as HTMLElement
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 3, clientX: 25, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 30, clientY: 10 })
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 30, clientY: 10 })
+    expect(ref.current?.getSelection()).toEqual({ x: 15, y: 5, width: 15, height: 10 })
+  })
+
+  it('lets a resize handle drag the edge past the right and bottom image border', () => {
+    const { ref, container, drag, pixel, selectBlock } = setup()
+    selectBlock()
+    drag([12, 12], [[30, 26]], 2)
+    expect(ref.current?.getSelection()).toEqual({ x: 2, y: 2, width: 28, height: 24 })
+    expect(container.querySelector('.selection-overflow')).not.toBeNull()
+    act(() => ref.current?.clearSelection())
+    expect(pixel(19, 19)).toEqual(red)
+    expect(pixel(2, 2)).toEqual(red)
+    expect(pixel(1, 1)).toEqual(white)
+  })
+
+  it('lets a resize handle drag the edge past the left and top image border', () => {
+    const { ref, drag, selectBlock } = setup()
+    selectBlock()
+    drag([2, 2], [[-6, -4]], 2)
+    expect(ref.current?.getSelection()).toEqual({ x: -6, y: -4, width: 18, height: 16 })
+  })
 })

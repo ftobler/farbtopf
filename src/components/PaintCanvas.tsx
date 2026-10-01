@@ -392,15 +392,20 @@ function handleCursor(handle: SelectionHandle): string {
   return 'nesw-resize'
 }
 
-function resizeRect(origin: Rect, handle: SelectionHandle, point: Point, width: number, height: number): Rect {
+/**
+ * The selection `origin` with the edges of `handle` moved to `point`. The edges
+ * follow the pointer past the image border; whatever lands outside is only cut
+ * away once the floating selection is placed.
+ */
+function resizeRect(origin: Rect, handle: SelectionHandle, point: Point): Rect {
   let left = origin.x
   let top = origin.y
   let right = origin.x + origin.width
   let bottom = origin.y + origin.height
-  if (handle.includes('w')) left = clamp(Math.round(point.x), 0, width - 1)
-  if (handle.includes('e')) right = clamp(Math.round(point.x), 1, width)
-  if (handle.includes('n')) top = clamp(Math.round(point.y), 0, height - 1)
-  if (handle.includes('s')) bottom = clamp(Math.round(point.y), 1, height)
+  if (handle.includes('w')) left = Math.round(point.x)
+  if (handle.includes('e')) right = Math.round(point.x)
+  if (handle.includes('n')) top = Math.round(point.y)
+  if (handle.includes('s')) bottom = Math.round(point.y)
   if (right <= left) {
     if (handle.includes('w')) left = right - 1
     else right = left + 1
@@ -570,7 +575,15 @@ function floatingOverflow(pixels: Bitmap, x: number, y: number, width: number, h
   return { bitmap, x, y }
 }
 
-function OverflowLayer({ overflow, zoom }: { overflow: FloatingOverflow; zoom: number }) {
+interface OverflowLayerProps {
+  overflow: FloatingOverflow
+  zoom: number
+  /** Presses on the overhang, so it can be grabbed like the in-image part; null leaves it inert. */
+  onPointerDown: ((event: ReactPointerEvent<HTMLElement>) => void) | null
+  onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void
+}
+
+function OverflowLayer({ overflow, zoom, onPointerDown, onPointerMove }: OverflowLayerProps) {
   const layerRef = useRef<HTMLCanvasElement | null>(null)
   const { bitmap, x, y } = overflow
 
@@ -586,7 +599,15 @@ function OverflowLayer({ overflow, zoom }: { overflow: FloatingOverflow; zoom: n
       aria-hidden="true"
       width={bitmap.width}
       height={bitmap.height}
-      style={{ left: x * zoom, top: y * zoom, width: bitmap.width * zoom, height: bitmap.height * zoom }}
+      style={{
+        left: x * zoom,
+        top: y * zoom,
+        width: bitmap.width * zoom,
+        height: bitmap.height * zoom,
+        ...(onPointerDown ? { pointerEvents: 'auto', cursor: 'move' } : null),
+      }}
+      onPointerDown={onPointerDown ?? undefined}
+      onPointerMove={onPointerDown ? onPointerMove : undefined}
     />
   )
 }
@@ -1607,7 +1628,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     ],
   )
 
-  const toPoint = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point => {
+  const toPoint = useCallback((event: ReactPointerEvent<HTMLElement>): Point => {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
@@ -1633,23 +1654,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   // Strokes and shapes follow the pointer past the image edge; the bitmap
   // primitives clip whatever lands outside, so nothing piles up along the border.
   const toFreePoint = useCallback(
-    (event: ReactPointerEvent<HTMLCanvasElement>): Point => floorPoint(clientToCanvas(event.clientX, event.clientY)),
+    (event: ReactPointerEvent<HTMLElement>): Point => floorPoint(clientToCanvas(event.clientX, event.clientY)),
     [clientToCanvas],
   )
-
-  // Resize handles sit on the far edges, so their pointer may reach x=width or
-  // y=height; clampPoint would cap it one pixel short and shrink the selection.
-  const toEdgePoint = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point => {
-    const canvas = canvasRef.current
-    if (!canvas) return { x: 0, y: 0 }
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = rect.width === 0 ? 1 : size.width / rect.width
-    const scaleY = rect.height === 0 ? 1 : size.height / rect.height
-    return {
-      x: clamp((event.clientX - rect.left) * scaleX, 0, size.width),
-      y: clamp((event.clientY - rect.top) * scaleY, 0, size.height),
-    }
-  }, [size.width, size.height])
 
   const commitText = useCallback(() => {
     const current = editorRef.current
@@ -1670,7 +1677,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [colorFor, doc, recordHistory, paint, syncHistory, text])
 
   const handlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button !== 0 && event.button !== 2) return
       // A right-click opens the workspace context menu and no tool acts on it:
       // no secondary-colour paint, no colour pick. The one exception is the zoom
@@ -1694,15 +1701,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
       if (tool === 'select') {
         event.preventDefault()
-        event.currentTarget.setPointerCapture(event.pointerId)
+        // The press may come from a handle or the overhang of a floating selection
+        // past the image edge; the canvas captures the drag either way.
+        canvasRef.current?.setPointerCapture(event.pointerId)
         const rect = currentRect()
-        const handle = rect ? hitHandle(rect, point, HANDLE_HIT / zoom) : null
+        // Hit-test the real pointer, so handles and overhang outside the image are grabbed too.
+        const free = toFreePoint(event)
+        const handle = rect ? hitHandle(rect, free, HANDLE_HIT / zoom) : null
         if (rect && handle) {
-          selectRef.current = { pointerId: event.pointerId, mode: 'resize', start: point, handle, origin: rect }
+          selectRef.current = { pointerId: event.pointerId, mode: 'resize', start: free, handle, origin: rect }
           return
         }
-        if (rect && pointInRect(point, rect)) {
-          selectRef.current = { pointerId: event.pointerId, mode: 'move', start: point, origin: rect }
+        if (rect && pointInRect(free, rect)) {
+          selectRef.current = { pointerId: event.pointerId, mode: 'move', start: free, origin: rect }
           return
         }
         commitFloating()
@@ -1866,19 +1877,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    (event: ReactPointerEvent<HTMLElement>) => {
       const point = toPoint(event)
       onCursorMove(point)
       if (tool === 'eraser') setEraserHover((last) => (last && pointsEqual(last, point) ? last : point))
       if (tool === 'select' && !selectRef.current) {
         const rect = currentRect()
-        const handle = rect ? hitHandle(rect, point, HANDLE_HIT / zoom) : null
+        const free = toFreePoint(event)
+        const handle = rect ? hitHandle(rect, free, HANDLE_HIT / zoom) : null
         setHoverCursor(
-          handle ? handleCursor(handle) : rect && pointInRect(point, rect) ? 'move' : null,
+          handle ? handleCursor(handle) : rect && pointInRect(free, rect) ? 'move' : null,
         )
       }
       const place = textPlaceRef.current
@@ -1913,7 +1925,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           return
         }
         if (drag.mode === 'resize' && drag.handle) {
-          const next = resizeRect(origin, drag.handle, toEdgePoint(event), size.width, size.height)
+          const next = resizeRect(origin, drag.handle, clientToCanvas(event.clientX, event.clientY))
           floating.bitmap = scale(floating.source, next.width, next.height)
           floating.x = next.x
           floating.y = next.y
@@ -1969,7 +1981,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = free
     },
-    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toEdgePoint, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -2327,7 +2339,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           color={secondary}
         />
       ) : null}
-      {overflow ? <OverflowLayer overflow={overflow} zoom={zoom} /> : null}
+      {overflow ? (
+        <OverflowLayer
+          overflow={overflow}
+          zoom={zoom}
+          onPointerDown={tool === 'select' ? handlePointerDown : null}
+          onPointerMove={handlePointerMove}
+        />
+      ) : null}
       {selection ? (
         <div
           className="selection-overlay"
@@ -2341,7 +2360,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         >
           {mask ? <MaskOutline mask={mask} /> : null}
           {SELECTION_HANDLES.map((handle) => (
-            <span key={handle} className={`selection-handle selection-handle-${handle}`} />
+            // Handles poke past the image edge, so they take presses themselves
+            // and hand them to the canvas, which runs the resize drag.
+            <span
+              key={handle}
+              className={`selection-handle selection-handle-${handle}`}
+              style={tool === 'select' ? { pointerEvents: 'auto', cursor: handleCursor(handle) } : undefined}
+              onPointerDown={tool === 'select' ? handlePointerDown : undefined}
+            />
           ))}
           <span className="selection-rotate-line" />
           <span
