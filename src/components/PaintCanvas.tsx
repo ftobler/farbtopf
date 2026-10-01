@@ -547,6 +547,50 @@ function MaskOutline({ mask }: { mask: SelectionMask }) {
   return <canvas ref={outlineRef} className="selection-mask" width={mask.width} height={mask.height} />
 }
 
+/** Where a floating selection hangs past the image edge, and the pixels shown there. */
+interface FloatingOverflow {
+  bitmap: Bitmap
+  x: number
+  y: number
+}
+
+/**
+ * The pixels of `pixels`, placed at (`x`,`y`), that fall outside a `width`×`height`
+ * image, or null when it lies wholly inside. In-image pixels are cleared so only the
+ * overhang shows; they are kept on the floating selection until it is placed.
+ */
+function floatingOverflow(pixels: Bitmap, x: number, y: number, width: number, height: number): FloatingOverflow | null {
+  if (x >= 0 && y >= 0 && x + pixels.width <= width && y + pixels.height <= height) return null
+  const bitmap = pixels.clone()
+  for (let row = Math.max(0, -y); row < Math.min(pixels.height, height - y); row += 1) {
+    for (let column = Math.max(0, -x); column < Math.min(pixels.width, width - x); column += 1) {
+      bitmap.set(column, row, TRANSPARENT)
+    }
+  }
+  return { bitmap, x, y }
+}
+
+function OverflowLayer({ overflow, zoom }: { overflow: FloatingOverflow; zoom: number }) {
+  const layerRef = useRef<HTMLCanvasElement | null>(null)
+  const { bitmap, x, y } = overflow
+
+  useEffect(() => {
+    const context = layerRef.current?.getContext('2d')
+    if (context) context.putImageData(bitmap.toImageData(), 0, 0)
+  }, [bitmap])
+
+  return (
+    <canvas
+      ref={layerRef}
+      className="selection-overflow"
+      aria-hidden="true"
+      width={bitmap.width}
+      height={bitmap.height}
+      style={{ left: x * zoom, top: y * zoom, width: bitmap.width * zoom, height: bitmap.height * zoom }}
+    />
+  )
+}
+
 function bitmapToDataUrl(bitmap: Bitmap): string {
   const canvas = document.createElement('canvas')
   canvas.width = bitmap.width
@@ -632,6 +676,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const [editor, setEditor] = useState<TextEditorState | null>(null)
   const [selection, setSelection] = useState<Rect | null>(null)
   const [mask, setMask] = useState<SelectionMask | null>(null)
+  /** The part of a floating selection dragged past the image edge, drawn over the workspace. */
+  const [overflow, setOverflow] = useState<FloatingOverflow | null>(null)
   const [lasso, setLasso] = useState<Point[] | null>(null)
   /** The dashed outline of a text box being dragged out. */
   const [textDraft, setTextDraft] = useState<Rect | null>(null)
@@ -763,6 +809,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       maskRef.current = rect ? nextMask : null
       setSelection(rect)
       setMask(rect ? nextMask : null)
+      if (!floatingRef.current) setOverflow(null)
       onSelectionChange(rect !== null)
     },
     [onSelectionChange],
@@ -786,13 +833,23 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     return selectionRef.current
   }, [])
 
-  /** Stamps a floating selection onto `target`, keying out the background colour in transparent mode. */
-  const blitFloating = useCallback((target: Bitmap, floating: FloatingSelection) => {
+  /** A floating selection's pixels, with the background colour keyed out in transparent mode. */
+  const floatingPixels = useCallback((floating: FloatingSelection): Bitmap => {
     const key = selectionKeyRef.current
     const { width, height } = floating.bitmap
-    const pixels = key ? extractRegion(floating.bitmap, { x: 0, y: 0, width, height }, key) : floating.bitmap
-    blitAlpha(target, pixels, floating.x, floating.y)
+    return key ? extractRegion(floating.bitmap, { x: 0, y: 0, width, height }, key) : floating.bitmap
   }, [])
+
+  /**
+   * Stamps a floating selection onto `target`. A selection moved partly past the
+   * image edge is clipped here: only its in-image pixels are written.
+   */
+  const blitFloating = useCallback(
+    (target: Bitmap, floating: FloatingSelection) => {
+      blitAlpha(target, floatingPixels(floating), floating.x, floating.y)
+    },
+    [floatingPixels],
+  )
 
   const renderPreview = useCallback(() => {
     const floating = floatingRef.current
@@ -800,7 +857,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const preview = floating.base.clone()
     blitFloating(preview, floating)
     paint(preview)
-  }, [blitFloating, paint])
+    setOverflow(floatingOverflow(floatingPixels(floating), floating.x, floating.y, preview.width, preview.height))
+  }, [blitFloating, floatingPixels, paint])
 
   // Toggling transparent selection (or changing the background colour) restyles a lifted selection at once.
   useEffect(() => {
@@ -862,6 +920,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (!floating) return
     const result = floating.base.clone()
     blitFloating(result, floating)
+    setOverflow(null)
     bitmapRef.current = result
     floatingRef.current = null
     paint(result)
@@ -1561,6 +1620,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     )
   }, [size.width, size.height])
 
+  const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: rect.width === 0 ? 0 : ((clientX - rect.left) * size.width) / rect.width,
+      y: rect.height === 0 ? 0 : ((clientY - rect.top) * size.height) / rect.height,
+    }
+  }, [size.width, size.height])
+
   // Resize handles sit on the far edges, so their pointer may reach x=width or
   // y=height; clampPoint would cap it one pixel short and shrink the selection.
   const toEdgePoint = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point => {
@@ -1818,18 +1887,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (!origin) return
         const floating = ensureFloating(origin)
         if (drag.mode === 'move') {
-          const spareX = size.width - floating.bitmap.width
-          const spareY = size.height - floating.bitmap.height
-          const x = clamp(
-            origin.x + (point.x - drag.start.x),
-            Math.min(0, spareX, origin.x),
-            Math.max(0, spareX, origin.x),
-          )
-          const y = clamp(
-            origin.y + (point.y - drag.start.y),
-            Math.min(0, spareY, origin.y),
-            Math.max(0, spareY, origin.y),
-          )
+          // A moved selection follows the pointer past the image edge; whatever
+          // hangs outside is only cut away once it is placed.
+          const free = clientToCanvas(event.clientX, event.clientY)
+          const x = origin.x + Math.floor(free.x) - drag.start.x
+          const y = origin.y + Math.floor(free.y) - drag.start.y
           floating.x = x
           floating.y = y
           renderPreview()
@@ -1892,7 +1954,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = point
     },
-    [brush, brushSize, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toEdgePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toEdgePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -1963,23 +2025,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toPoint, updateSelection, zoom],
   )
 
-  const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
-    const canvas = canvasRef.current
-    if (!canvas) return { x: 0, y: 0 }
-    const rect = canvas.getBoundingClientRect()
-    return {
-      x: rect.width === 0 ? 0 : ((clientX - rect.left) * size.width) / rect.width,
-      y: rect.height === 0 ? 0 : ((clientY - rect.top) * size.height) / rect.height,
-    }
-  }, [size.width, size.height])
-
   // Clicking the workspace background settles pending edits and deselects, but
   // never while a canvas drag is running or on a handle poking past the image.
   const handleClickOutside = useCallback(
     (clientX: number, clientY: number) => {
       if (selectRef.current) return
       const rect = currentRect()
-      if (rect && hitHandle(rect, clientToCanvas(clientX, clientY), HANDLE_HIT / zoom)) return
+      const point = clientToCanvas(clientX, clientY)
+      if (rect && hitHandle(rect, point, HANDLE_HIT / zoom)) return
+      // Nor on the part of a floating selection hanging past the image edge.
+      if (rect && floatingRef.current && pointInRect(point, rect)) return
       commitShape()
       commitText()
       commitFloating()
@@ -2257,6 +2312,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           color={secondary}
         />
       ) : null}
+      {overflow ? <OverflowLayer overflow={overflow} zoom={zoom} /> : null}
       {selection ? (
         <div
           className="selection-overlay"

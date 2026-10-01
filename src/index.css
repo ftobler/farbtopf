@@ -1062,6 +1062,12 @@ textarea {
   image-rendering: pixelated;
 }
 
+.selection-overflow {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
 .lasso-overlay {
   position: absolute;
   left: 0;
