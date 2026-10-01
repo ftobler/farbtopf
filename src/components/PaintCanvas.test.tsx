@@ -36,7 +36,13 @@ function setup(
   const onZoomClick = vi.fn()
   const onTextChange = vi.fn()
 
-  const element = (props: { tool: SetupTool; shapeKind: ShapeKind; brush: BrushId; brushSize: number }) => (
+  const element = (props: {
+    tool: SetupTool
+    shapeKind: ShapeKind
+    brush: BrushId
+    brushSize: number
+    transparentSelection: boolean
+  }) => (
     <PaintCanvas
       ref={ref}
       initialWidth={width}
@@ -55,20 +61,27 @@ function setup(
       onSizeChange={onSizeChange}
       onSelectionChange={onSelectionChange}
       onZoomClick={onZoomClick}
-      transparentSelection={transparentSelection}
+      transparentSelection={props.transparentSelection}
       selectionShape={selectionShape}
       brush={props.brush}
       onTextChange={onTextChange}
     />
   )
-  const { container, rerender } = render(element({ tool, shapeKind, brush, brushSize }))
-  const setProps = (props: { tool?: SetupTool; shapeKind?: ShapeKind; brush?: BrushId; brushSize?: number }) =>
+  const { container, rerender } = render(element({ tool, shapeKind, brush, brushSize, transparentSelection }))
+  const setProps = (props: {
+    tool?: SetupTool
+    shapeKind?: ShapeKind
+    brush?: BrushId
+    brushSize?: number
+    transparentSelection?: boolean
+  }) =>
     rerender(
       element({
         tool: props.tool ?? tool,
         shapeKind: props.shapeKind ?? shapeKind,
         brush: props.brush ?? brush,
         brushSize: props.brushSize ?? brushSize,
+        transparentSelection: props.transparentSelection ?? transparentSelection,
       }),
     )
 
@@ -286,6 +299,35 @@ describe('PaintCanvas', () => {
     const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 30 + x) * 4, (y * 30 + x) * 4 + 4))
     expect(ref.current?.getSelection()).toEqual({ x: 7, y: 7, width: 18, height: 18 })
     expect(pixel(10, 10)).toEqual([0, 0, 0, 255])
+    expect(pixel(21, 21)).toEqual([255, 0, 0, 255])
+  })
+
+  it('applies a transparent selection toggle to the selection already lifted', () => {
+    const { ref, canvas, setProps } = setup('select', 30, 30)
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    const doc = new Bitmap(30, 30, WHITE)
+    doc.set(5, 5, BLACK)
+    doc.set(21, 21, { r: 255, g: 0, b: 0, a: 255 })
+    act(() => ref.current?.loadBitmap(doc))
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
+    const pixel = (x: number, y: number) => {
+      const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+      return Array.from(image.data.slice((y * 30 + x) * 4, (y * 30 + x) * 4 + 4))
+    }
+    expect(pixel(21, 21)).toEqual([255, 255, 255, 255])
+    setProps({ transparentSelection: true })
+    expect(pixel(21, 21)).toEqual([255, 0, 0, 255])
+    expect(pixel(10, 10)).toEqual([0, 0, 0, 255])
+    setProps({ transparentSelection: false })
+    expect(pixel(21, 21)).toEqual([255, 255, 255, 255])
+    setProps({ transparentSelection: true })
+    act(() => ref.current?.selectAll())
     expect(pixel(21, 21)).toEqual([255, 0, 0, 255])
   })
 

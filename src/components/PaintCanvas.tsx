@@ -620,6 +620,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const selectRef = useRef<SelectDrag | null>(null)
   const canvasResizeRef = useRef<CanvasResizeDrag | null>(null)
   const floatingRef = useRef<FloatingSelection | null>(null)
+  /** The colour a floating selection drops when transparent selection is on, else null. */
+  const selectionKeyRef = useRef<Rgba | null>(null)
   const polylineRef = useRef<PolylineState | null>(null)
   const shapeRef = useRef<ShapeState | null>(null)
   // The handle is built before the pointer helpers it needs, so it calls through this.
@@ -784,13 +786,27 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     return selectionRef.current
   }, [])
 
+  /** Stamps a floating selection onto `target`, keying out the background colour in transparent mode. */
+  const blitFloating = useCallback((target: Bitmap, floating: FloatingSelection) => {
+    const key = selectionKeyRef.current
+    const { width, height } = floating.bitmap
+    const pixels = key ? extractRegion(floating.bitmap, { x: 0, y: 0, width, height }, key) : floating.bitmap
+    blitAlpha(target, pixels, floating.x, floating.y)
+  }, [])
+
   const renderPreview = useCallback(() => {
     const floating = floatingRef.current
     if (!floating) return
     const preview = floating.base.clone()
-    blitAlpha(preview, floating.bitmap, floating.x, floating.y)
+    blitFloating(preview, floating)
     paint(preview)
-  }, [paint])
+  }, [blitFloating, paint])
+
+  // Toggling transparent selection (or changing the background colour) restyles a lifted selection at once.
+  useEffect(() => {
+    selectionKeyRef.current = transparentSelection ? secondary : null
+    renderPreview()
+  }, [renderPreview, transparentSelection, secondary])
 
   const ensureFloating = useCallback(
     (rect: Rect): FloatingSelection => {
@@ -798,7 +814,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const original = doc()
       const base = original.clone()
       const selectionMask = maskRef.current
-      const region = extractRegion(original, rect, transparentSelection ? secondary : null)
+      const region = crop(original, rect)
       const bitmap = selectionMask ? applyMask(region, selectionMask) : region
       recordHistory(original.clone())
       fillSelection(base, rect, selectionMask, eraseColor())
@@ -808,7 +824,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       syncHistory()
       return floating
     },
-    [doc, eraseColor, recordHistory, secondary, syncHistory, transparentSelection],
+    [doc, eraseColor, recordHistory, syncHistory],
   )
 
   const beginRotation = useCallback((): RotationStart | null => {
@@ -845,12 +861,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const floating = floatingRef.current
     if (!floating) return
     const result = floating.base.clone()
-    blitAlpha(result, floating.bitmap, floating.x, floating.y)
+    blitFloating(result, floating)
     bitmapRef.current = result
     floatingRef.current = null
     paint(result)
     syncHistory()
-  }, [paint, syncHistory])
+  }, [blitFloating, paint, syncHistory])
 
   useEffect(() => {
     if (tool === 'select') return
@@ -1204,9 +1220,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         recordHistory(current.clone())
       }
       const base = doc()
-      const bitmap = transparentSelection
-        ? extractRegion(pasted, { x: 0, y: 0, width: pasted.width, height: pasted.height }, secondary)
-        : pasted.clone()
+      const bitmap = pasted.clone()
       const x = clamp(origin.x, 0, width - bitmap.width)
       const y = clamp(origin.y, 0, height - bitmap.height)
       floatingRef.current = { source: bitmap, bitmap, x, y, base }
@@ -1222,9 +1236,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       recordHistory,
       renderPreview,
       resizeTo,
-      secondary,
       syncHistory,
-      transparentSelection,
       updateSelection,
       visibleOrigin,
     ],
@@ -1419,7 +1431,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const floating = floatingRef.current
         if (floating) {
           const composite = floating.base.clone()
-          blitAlpha(composite, floating.bitmap, floating.x, floating.y)
+          blitFloating(composite, floating)
           const region = crop(composite, {
             x: floating.x,
             y: floating.y,
@@ -1439,7 +1451,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         let active = doc()
         if (floating) {
           active = floating.base.clone()
-          blitAlpha(active, floating.bitmap, floating.x, floating.y)
+          blitFloating(active, floating)
         }
         const stack = currentLayers().map((layer, index) => (index === activeRef.current ? active : layer.bitmap))
         const flat = compositeLayers(stack) ?? active
@@ -1505,6 +1517,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       recordHistory,
       applyRotation,
       beginRotation,
+      blitFloating,
       commitFloating,
       currentRect,
       doc,
