@@ -36,19 +36,27 @@ export class Bitmap {
     return copy
   }
 
+  private index(x: number, y: number): number {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return -1
+    const px = Math.floor(x)
+    const py = Math.floor(y)
+    if (px < 0 || py < 0 || px >= this.width || py >= this.height) return -1
+    return (py * this.width + px) * 4
+  }
+
   contains(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x < this.width && y < this.height
+    return this.index(x, y) >= 0
   }
 
   get(x: number, y: number): Rgba {
-    if (!this.contains(x, y)) return { r: 0, g: 0, b: 0, a: 0 }
-    const i = (y * this.width + x) * 4
+    const i = this.index(x, y)
+    if (i < 0) return { r: 0, g: 0, b: 0, a: 0 }
     return { r: this.data[i], g: this.data[i + 1], b: this.data[i + 2], a: this.data[i + 3] }
   }
 
   set(x: number, y: number, color: Rgba): void {
-    if (!this.contains(x, y)) return
-    const i = (y * this.width + x) * 4
+    const i = this.index(x, y)
+    if (i < 0) return
     this.data[i] = clampByte(color.r)
     this.data[i + 1] = clampByte(color.g)
     this.data[i + 2] = clampByte(color.b)

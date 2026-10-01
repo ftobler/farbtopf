@@ -202,6 +202,18 @@ describe('boxFamily ellipse', () => {
     expect(moved![1].y).toBe(points[1].y)
   })
 
+  it('still draws the centre when both radii are clamped to the minimum', () => {
+    const inserted = boxFamily.insert('ellipse', { x: 5, y: 5 }, { x: 13, y: 13 })
+    expect(inserted[0].x).toBe(9)
+    const collapsedX = boxFamily.move('ellipse', inserted, 'e', inserted[0])!
+    const collapsed = boxFamily.move('ellipse', collapsedX, 's', collapsedX[0])!
+    expect(collapsed[1]).toEqual({ x: 0.5, y: 0.5 })
+
+    const bitmap = new Bitmap(40, 40)
+    render(bitmap, 'ellipse', collapsed, FILL_ONLY)
+    expect(painted(bitmap, 9, 9)).toBe(true)
+  })
+
   it('renders exactly like renderShape', () => {
     const points = boxFamily.insert('ellipse', START, END)
     const actual = new Bitmap(40, 40)
