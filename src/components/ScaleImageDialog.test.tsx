@@ -37,6 +37,16 @@ describe('ScaleImageDialog', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('stacks the horizontal field above the vertical one', () => {
+    const { horizontal, vertical } = setup()
+    const form = horizontal.form!
+    expect(form.classList.contains('stacked')).toBe(true)
+    const rows = Array.from(form.children)
+    expect(rows).toHaveLength(2)
+    expect(rows[0].contains(horizontal)).toBe(true)
+    expect(rows[1].contains(vertical)).toBe(true)
+  })
+
   it('starts in percentage mode at 100% with the ratio locked', () => {
     const { horizontal, vertical, lock, percent, pixels } = setup()
     expect(percent.getAttribute('aria-pressed')).toBe('true')

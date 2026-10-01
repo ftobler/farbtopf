@@ -1628,6 +1628,19 @@ textarea {
   color: var(--text);
 }
 
+/* One field per row, label beside its box, like Paint's "Resize and Skew". */
+.size-form.stacked {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.size-form.stacked label {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
 .unit-input {
   display: flex;
   align-items: center;

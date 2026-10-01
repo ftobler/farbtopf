@@ -155,7 +155,7 @@ export function ScaleImageDialog({
         </div>
 
         <form
-          className="size-form"
+          className="size-form stacked"
           onSubmit={(event) => {
             event.preventDefault()
             submit()
