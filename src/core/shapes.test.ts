@@ -357,6 +357,9 @@ describe('500 px outlines', () => {
       }
       expect(painted, shape.id).toBeGreaterThan(1000)
     }
-    expect(performance.now() - started).toBeLessThan(8000)
-  })
+    // Takes about a second normally and ~10 s under coverage instrumentation.
+    // The budget is loose on purpose: it only has to catch a blowup like an
+    // O(width^2) stroke, which at 500 px would be orders of magnitude slower.
+    expect(performance.now() - started).toBeLessThan(60_000)
+  }, 120_000)
 })
