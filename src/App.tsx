@@ -124,6 +124,8 @@ function App() {
   const [selectionSize, setSelectionSize] = useState<{ width: number; height: number } | null>(null)
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
+  /** True while files from the OS are dragged over the window. */
+  const [dropTarget, setDropTarget] = useState(false)
   const [showScaleDialog, setShowScaleDialog] = useState(false)
   /** Size of the selection the Scale dialog acts on, or null to scale the whole image. */
   const [scaleSelection, setScaleSelection] = useState<{ width: number; height: number } | null>(null)
@@ -610,10 +612,43 @@ function App() {
     return () => window.removeEventListener('paste', handlePaste)
   }, [pasteFile])
 
+  useEffect(() => {
+    const carriesFiles = (event: DragEvent) => Boolean(event.dataTransfer?.types.includes('Files'))
+    // Dropping a file anywhere would otherwise make the browser navigate to it.
+    const handleDragOver = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      setDropTarget(true)
+    }
+    const handleDragLeave = (event: DragEvent) => {
+      // relatedTarget is null once the pointer leaves the window itself.
+      if (!event.relatedTarget) setDropTarget(false)
+    }
+    const handleDrop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      setDropTarget(false)
+      const files = Array.from(event.dataTransfer?.files ?? [])
+      if (files.length === 0) return
+      const image = files.find((file) => file.type.startsWith('image/'))
+      if (image) void openFile(image)
+      else notify('Could not open that image')
+    }
+    window.addEventListener('dragover', handleDragOver)
+    window.addEventListener('dragleave', handleDragLeave)
+    window.addEventListener('drop', handleDrop)
+    return () => {
+      window.removeEventListener('dragover', handleDragOver)
+      window.removeEventListener('dragleave', handleDragLeave)
+      window.removeEventListener('drop', handleDrop)
+    }
+  }, [notify, openFile])
+
   const toolLabel = useMemo(() => toolById(tool).label, [tool])
 
   return (
-    <div className="app">
+    <div className={dropTarget ? 'app app--drop-target' : 'app'}>
       <MenuBar
         canUndo={canUndo}
         canRedo={canRedo}

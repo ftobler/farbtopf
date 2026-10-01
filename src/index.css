@@ -70,6 +70,11 @@ textarea {
   overflow: hidden;
 }
 
+.app--drop-target .workspace {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 .menubar {
   display: flex;
   align-items: center;
