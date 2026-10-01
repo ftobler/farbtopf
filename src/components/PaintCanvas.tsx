@@ -798,6 +798,35 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const strength = Math.min(100, Math.max(1, Number.isFinite(opacity) ? opacity : 100)) / 100
   const [viewport, setViewport] = useState<Rect | null>(null)
 
+  const onHistoryChangeRef = useRef(onHistoryChange)
+  const onCursorMoveRef = useRef(onCursorMove)
+  const onPickColorRef = useRef(onPickColor)
+  const onSizeChangeRef = useRef(onSizeChange)
+  const onSelectionChangeRef = useRef(onSelectionChange)
+  const onSelectionSizeChangeRef = useRef(onSelectionSizeChange)
+  const onZoomClickRef = useRef(onZoomClick)
+  const onTextChangeRef = useRef(onTextChange)
+  const onPanChangeRef = useRef(onPanChange)
+  const onLayersChangeRef = useRef(onLayersChange)
+  const onDocumentChangeRef = useRef(onDocumentChange)
+  const onPendingChangeRef = useRef(onPendingChange)
+  // Callback props are mirrored into refs so that internal callbacks and effects can
+  // keep a stable identity while still reading the latest closure.
+  useEffect(() => {
+    onHistoryChangeRef.current = onHistoryChange
+    onCursorMoveRef.current = onCursorMove
+    onPickColorRef.current = onPickColor
+    onSizeChangeRef.current = onSizeChange
+    onSelectionChangeRef.current = onSelectionChange
+    onSelectionSizeChangeRef.current = onSelectionSizeChange
+    onZoomClickRef.current = onZoomClick
+    onTextChangeRef.current = onTextChange
+    onPanChangeRef.current = onPanChange
+    onLayersChangeRef.current = onLayersChange
+    onDocumentChangeRef.current = onDocumentChange
+    onPendingChangeRef.current = onPendingChange
+  })
+
   const doc = useCallback((): Bitmap => {
     if (!bitmapRef.current) {
       bitmapRef.current = new Bitmap(initialWidth, initialHeight, WHITE)
@@ -930,9 +959,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (before: Bitmap) => {
       const stack = layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: before } : layer))
       historyRef.current.record({ layers: stack, active: activeRef.current })
-      onDocumentChange?.()
+      onDocumentChangeRef.current?.()
     },
-    [layers, onDocumentChange],
+    [layers],
   )
 
   /**
@@ -946,10 +975,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   )
 
   const publishLayers = useCallback(() => {
+    const onLayersChange = onLayersChangeRef.current
     if (!onLayersChange) return
     const stack = currentLayers().map(({ id, name, bitmap }) => ({ id, name, thumbnail: thumbnail(bitmap) }))
     onLayersChange(stack, activeRef.current)
-  }, [currentLayers, onLayersChange])
+  }, [currentLayers])
 
   /** Replaces the layer stack; the active layer's bitmap becomes the live paint surface. */
   const setLayers = useCallback(
@@ -971,9 +1001,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const syncHistory = useCallback(() => {
     const history = historyRef.current
-    onHistoryChange(history.canUndo, history.canRedo)
+    onHistoryChangeRef.current(history.canUndo, history.canRedo)
     publishLayers()
-  }, [onHistoryChange, publishLayers])
+  }, [publishLayers])
 
   const updateSelection = useCallback(
     (rect: Rect | null, nextMask: SelectionMask | null = null) => {
@@ -982,20 +1012,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setSelection(rect)
       setMask(rect ? nextMask : null)
       if (!floatingRef.current) setOverflow(null)
-      onSelectionChange(rect !== null)
+      onSelectionChangeRef.current(rect !== null)
     },
-    [onSelectionChange],
+    [],
   )
 
   const selectionWidth = textDraft?.width ?? editor?.width ?? (lasso ? lassoExtent(lasso, 'x') : selection?.width)
   const selectionHeight = textDraft?.height ?? editor?.height ?? (lasso ? lassoExtent(lasso, 'y') : selection?.height)
   useEffect(() => {
-    onSelectionSizeChange?.(
+    onSelectionSizeChangeRef.current?.(
       selectionWidth !== undefined && selectionHeight !== undefined
         ? { width: selectionWidth, height: selectionHeight }
         : null,
     )
-  }, [onSelectionSizeChange, selectionWidth, selectionHeight])
+  }, [selectionWidth, selectionHeight])
 
   const currentRect = useCallback((): Rect | null => {
     const floating = floatingRef.current
@@ -1153,6 +1183,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const centerOn = useCallback(
     (clientX: number, clientY: number) => {
+      const onPanChange = onPanChangeRef.current
       if (!onPanChange) return
       const point = miniatureImagePoint(clientX, clientY)
       if (!point) return
@@ -1161,7 +1192,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         y: (size.height / 2 - point.y) * zoom,
       })
     },
-    [miniatureImagePoint, onPanChange, size.width, size.height, zoom],
+    [miniatureImagePoint, size.width, size.height, zoom],
   )
 
   const handleMiniatureDown = useCallback(
@@ -1388,13 +1419,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       floatingRef.current = null
       setEditor(null)
       setSize({ width: bitmap.width, height: bitmap.height })
-      onSizeChange(bitmap.width, bitmap.height)
+      onSizeChangeRef.current(bitmap.width, bitmap.height)
       layerCountRef.current = 1
       setLayers([{ id: 1, name: 'Background', bitmap }], 0)
       updateSelection(null)
       syncHistory()
     },
-    [onSizeChange, setLayers, syncHistory, updateSelection],
+    [setLayers, syncHistory, updateSelection],
   )
 
   const restore = useCallback(
@@ -1409,11 +1440,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         setLasso(null)
       }
       setSize({ width, height })
-      onSizeChange(width, height)
+      onSizeChangeRef.current(width, height)
       setLayers([...snapshot.layers], snapshot.active)
       syncHistory()
     },
-    [doc, onSizeChange, setLayers, syncHistory, updateSelection],
+    [doc, setLayers, syncHistory, updateSelection],
   )
 
   /** Applies a whole-image operation to every layer as one undo step. */
@@ -1423,11 +1454,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const next = currentLayers().map((layer, index) => ({ ...layer, bitmap: transform(layer.bitmap, index === 0) }))
       const { width, height } = next[0].bitmap
       setSize({ width, height })
-      onSizeChange(width, height)
+      onSizeChangeRef.current(width, height)
       setLayers(next, activeRef.current)
       syncHistory()
     },
-    [currentLayers, doc, onSizeChange, recordHistory, setLayers, syncHistory],
+    [currentLayers, doc, recordHistory, setLayers, syncHistory],
   )
 
   /**
@@ -1585,7 +1616,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const previous = historyRef.current.undo({ layers: currentLayers(), active: activeRef.current })
         if (previous) {
           restore(previous)
-          onDocumentChange?.()
+          onDocumentChangeRef.current?.()
         }
       },
       redo() {
@@ -1602,7 +1633,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const next = historyRef.current.redo({ layers: currentLayers(), active: activeRef.current })
         if (next) {
           restore(next)
-          onDocumentChange?.()
+          onDocumentChangeRef.current?.()
         }
       },
       toDataUrl(type = 'image/png') {
@@ -1877,7 +1908,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       acceptPending,
       cancelPolyline,
       finishPolyline,
-      onDocumentChange,
       paint,
       pasteImage,
       renderPreview,
@@ -1984,12 +2014,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return
       }
       if (tool === 'zoom') {
-        onZoomClick(slot === 'secondary' ? -1 : 1)
+        onZoomClickRef.current(slot === 'secondary' ? -1 : 1)
         return
       }
       if (tool === 'picker') {
         const flat = compositeLayers(currentLayers().map((layer) => layer.bitmap)) ?? doc()
-        onPickColor(flat.get(point.x, point.y), slot)
+        onPickColorRef.current(flat.get(point.x, point.y), slot)
         return
       }
       if (tool === 'fill') {
@@ -2141,13 +2171,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       const point = toPoint(event)
-      onCursorMove(point)
+      onCursorMoveRef.current(point)
       if (tool === 'eraser') setEraserHover((last) => (last && pointsEqual(last, point) ? last : point))
       if (tool === 'select' && !selectRef.current) {
         const rect = currentRect()
@@ -2245,7 +2275,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = free
     },
-    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -2439,7 +2469,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
       if (!drag.recorded) {
         historyRef.current.record(drag.source)
-        onDocumentChange?.()
+        onDocumentChangeRef.current?.()
         drag.recorded = true
         syncHistory()
       }
@@ -2450,10 +2480,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         bitmap: resizeTo(layer.bitmap, rect, index === 0 ? WHITE : undefined),
       }))
       setSize({ width: next[0].bitmap.width, height: next[0].bitmap.height })
-      onSizeChange(next[0].bitmap.width, next[0].bitmap.height)
+      onSizeChangeRef.current(next[0].bitmap.width, next[0].bitmap.height)
       setLayers(next, drag.source.active)
 
       // Keep the edge opposite the dragged handle pinned on screen.
+      const onPanChange = onPanChangeRef.current
       if (onPanChange) {
         let px = drag.startPan.x
         let py = drag.startPan.y
@@ -2464,7 +2495,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         onPanChange({ x: px, y: py })
       }
     },
-    [onDocumentChange, onPanChange, onSizeChange, resizeTo, setLayers, syncHistory, zoom],
+    [resizeTo, setLayers, syncHistory, zoom],
   )
 
   const handleCanvasResizeUp = useCallback(
@@ -2479,14 +2510,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   )
 
   const handlePointerLeave = useCallback(() => {
-    onCursorMove(null)
+    onCursorMoveRef.current(null)
     setEraserHover(null)
     const polyline = polylineRef.current
     if (polyline && polyline.pointerId === null) {
       polyline.pending = null
       previewPolyline()
     }
-  }, [onCursorMove, previewPolyline])
+  }, [previewPolyline])
 
   const keepTextFocus = useCallback(
     (event: ReactPointerEvent<HTMLElement> | ReactMouseEvent<HTMLElement>) => {
@@ -2534,8 +2565,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const pending = shape !== null || polylineActive || (editor !== null && editor.value.trim().length > 0)
   useEffect(() => {
-    onPendingChange?.(pending)
-  }, [onPendingChange, pending])
+    onPendingChangeRef.current?.(pending)
+  }, [pending])
 
   useEffect(() => {
     if (!editorOpen) return
@@ -2731,7 +2762,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
                     key={font.label}
                     checked={text.fontFamily === font.value}
                     onClick={() => {
-                      onTextChange({ fontFamily: font.value })
+                      onTextChangeRef.current({ fontFamily: font.value })
                       close()
                     }}
                   >
@@ -2750,7 +2781,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             aria-label="Text size"
             onChange={(event) => {
               const value = Number(event.target.value)
-              if (Number.isFinite(value) && value > 0) onTextChange({ fontSize: Math.min(200, Math.round(value)) })
+              if (Number.isFinite(value) && value > 0) onTextChangeRef.current({ fontSize: Math.min(200, Math.round(value)) })
             }}
           />
           <button
@@ -2758,7 +2789,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             className="icon-button text-format-button"
             aria-label="Bold"
             aria-pressed={text.bold}
-            onClick={() => onTextChange({ bold: !text.bold })}
+            onClick={() => onTextChangeRef.current({ bold: !text.bold })}
           >
             <span className="text-format-glyph glyph-bold">B</span>
           </button>
@@ -2767,7 +2798,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             className="icon-button text-format-button"
             aria-label="Italic"
             aria-pressed={text.italic}
-            onClick={() => onTextChange({ italic: !text.italic })}
+            onClick={() => onTextChangeRef.current({ italic: !text.italic })}
           >
             <span className="text-format-glyph glyph-italic">I</span>
           </button>
@@ -2776,7 +2807,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             className="icon-button text-format-button"
             aria-label="Underline"
             aria-pressed={text.underline}
-            onClick={() => onTextChange({ underline: !text.underline })}
+            onClick={() => onTextChangeRef.current({ underline: !text.underline })}
           >
             <span className="text-format-glyph glyph-underline">U</span>
           </button>

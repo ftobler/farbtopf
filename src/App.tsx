@@ -580,6 +580,15 @@ function App() {
     setCanvasSize({ width, height })
   }, [])
 
+  const handleHistoryChange = useCallback((undo: boolean, redo: boolean) => {
+    setCanUndo(undo)
+    setCanRedo(redo)
+  }, [])
+
+  const handleZoomClick = useCallback((direction: 1 | -1) => {
+    setZoom((value) => nextZoom(value, direction))
+  }, [])
+
   const zoomIn = useCallback(() => {
     setZoom((value) => nextZoom(value, 1))
   }, [])
@@ -951,16 +960,13 @@ function App() {
           zoom={shownZoom}
           pan={pan}
           showGrid={showGrid}
-          onHistoryChange={(undo, redo) => {
-            setCanUndo(undo)
-            setCanRedo(redo)
-          }}
+          onHistoryChange={handleHistoryChange}
           onCursorMove={setCursor}
           onPickColor={handlePickColor}
           onSizeChange={onSizeChange}
           onSelectionChange={setHasSelection}
           onSelectionSizeChange={setSelectionSize}
-          onZoomClick={(direction) => setZoom((value) => nextZoom(value, direction))}
+          onZoomClick={handleZoomClick}
           transparentSelection={transparentSelection}
           selectionShape={selectionShape}
           brush={brush}
