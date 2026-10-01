@@ -213,6 +213,17 @@ describe('App clipboard copy', () => {
     await press('c')
     await message('Could not copy to the clipboard')
   })
+
+  it('copies without fetching the data URL first', async () => {
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('fetch must not be called during copy')))
+    vi.stubGlobal('fetch', fetchSpy)
+    writableClipboard()
+    setup()
+    await press('c')
+    await message('Copied to the clipboard')
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(await written[0]['image/png'].text()).toBe('800x600')
+  })
 })
 
 describe('App clipboard cut', () => {
@@ -268,5 +279,18 @@ describe('App clipboard cut', () => {
     await press('x')
     await message('Clipboard copy is not supported here')
     expect(pixel(0, 0)).toEqual(BLACK)
+  })
+
+  it('cuts without fetching the data URL first', async () => {
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('fetch must not be called during cut')))
+    vi.stubGlobal('fetch', fetchSpy)
+    writableClipboard()
+    const { pixel, paintBlack } = setup()
+    paintBlack()
+    await press('x')
+    await message('Cut to the clipboard')
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(await written[0]['image/png'].text()).toBe('800x600')
+    expect(pixel(0, 0)).toEqual(WHITE)
   })
 })

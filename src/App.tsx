@@ -340,7 +340,7 @@ function App() {
         return
       }
       try {
-        const blob = await (await fetch(dataUrl)).blob()
+        const blob = dataUrlToBlob(dataUrl)
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
         notify('Copied to the clipboard')
       } catch {
@@ -367,7 +367,7 @@ function App() {
       return
     }
     try {
-      const blob = await (await fetch(dataUrl)).blob()
+      const blob = dataUrlToBlob(dataUrl)
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
       if (hasSelection) handle?.cutSelection()
       else handle?.clear()
