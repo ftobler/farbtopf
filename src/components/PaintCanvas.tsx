@@ -583,6 +583,11 @@ function pointerAngle(center: Point, point: Point): number {
   return Math.atan2(point.y - center.y, point.x - center.x)
 }
 
+/** What erasing leaves behind on a layer: the slot's colour on the bottom, transparency above. */
+function eraseColorOn(active: number, slot: 'primary' | 'secondary', primary: Rgba, secondary: Rgba): Rgba {
+  return active === 0 ? strokeColorFor('eraser', slot, primary, secondary) : TRANSPARENT
+}
+
 /**
  * The eraser's footprint in the colour it erases to, like MS Paint's eraser cursor.
  * It is only an overlay: nothing here touches the image or the history.
@@ -793,6 +798,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const [hoverCursor, setHoverCursor] = useState<string | null>(null)
   /** The image pixel under the pointer while the eraser is active, for its footprint preview. */
   const [eraserHover, setEraserHover] = useState<Point | null>(null)
+  /** The colour slot of the eraser stroke in progress, so the preview matches what it erases. */
+  const [eraserSlot, setEraserSlot] = useState<'primary' | 'secondary'>('primary')
+  /** The index of the active layer, mirrored from the ref so the preview can be derived in render. */
+  const [activeIndex, setActiveIndex] = useState(0)
   const pixelRatio = useDevicePixelRatio()
   /** The current tool's opacity as a 0.01..1 blend factor. */
   const strength = Math.min(100, Math.max(1, Number.isFinite(opacity) ? opacity : 100)) / 100
@@ -941,6 +950,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     setLasso(null)
     setHoverCursor(null)
     setEraserHover(null)
+    setEraserSlot('primary')
   }, [cancelStrokeFrame, stopSpraying])
 
   const layers = useCallback((): Layer[] => {
@@ -969,8 +979,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
    * primary one for a right-button stroke), transparency above it.
    */
   const eraseColor = useCallback(
-    (slot: 'primary' | 'secondary' = 'primary') =>
-      activeRef.current === 0 ? strokeColorFor('eraser', slot, primary, secondary) : TRANSPARENT,
+    (slot: 'primary' | 'secondary' = 'primary') => eraseColorOn(activeRef.current, slot, primary, secondary),
     [primary, secondary],
   )
 
@@ -990,6 +999,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (next: Layer[], active: number, publish = true) => {
       layersRef.current = next
       activeRef.current = active
+      setActiveIndex(active)
       bitmapRef.current = next[active].bitmap
       const flatten = (stack: Layer[]) => compositeLayers(stack.map((layer) => layer.bitmap))
       stackRef.current = { below: flatten(next.slice(0, active)), above: flatten(next.slice(active + 1)) }
@@ -2126,6 +2136,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         strength,
       }
       strokeRef.current = stroke
+      if (tool === 'eraser') setEraserSlot(slot)
       cancelStrokeFrame()
 
       {
@@ -2363,6 +2374,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         publishLayers()
       }
       strokeRef.current = null
+      if (stroke.tool === 'eraser') setEraserSlot('primary')
     },
     [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
   )
@@ -2664,7 +2676,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       {tool === 'eraser' && eraserHover ? (
         <EraserPreview
           rect={eraserPreviewRect(eraserHover, strokeWidthFor('eraser', brushSize), zoom, pixelRatio, size.width, size.height)}
-          color={secondary}
+          color={eraseColorOn(activeIndex, eraserSlot, primary, secondary)}
         />
       ) : null}
       {overflow ? (

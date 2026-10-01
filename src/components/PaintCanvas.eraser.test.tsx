@@ -81,6 +81,26 @@ describe('PaintCanvas eraser preview', () => {
     expect(box?.style.backgroundColor).toBe('rgb(255, 0, 0)')
   })
 
+  it('previews the secondary colour on the background layer while hovering', () => {
+    const { preview, hover } = setup({ secondary: RED })
+    hover(20, 20)
+    expect(preview()?.style.backgroundColor).toBe('rgb(255, 0, 0)')
+  })
+
+  it('previews transparency on an upper layer', () => {
+    const { ref, preview, hover } = setup({ secondary: RED })
+    act(() => ref.current?.addLayer())
+    hover(20, 20)
+    expect(preview()?.style.backgroundColor).toBe('rgba(0, 0, 0, 0)')
+  })
+
+  it('previews the primary colour for a right-button stroke on the background layer', () => {
+    const { preview, canvas } = setup({ secondary: RED })
+    fireEvent.pointerDown(canvas, { button: 2, buttons: 2, pointerId: 1, clientX: 20, clientY: 20 })
+    expect(preview()?.style.backgroundColor).toBe('rgb(0, 0, 0)')
+    fireEvent.pointerUp(canvas, { button: 2, buttons: 0, pointerId: 1, clientX: 20, clientY: 20 })
+  })
+
   it('sizes and places the box on the image pixel grid', () => {
     const { preview, hover } = setup({ brushSize: 4, zoom: 2 })
     // Screen (21, 21) at zoom 2 is image pixel (10, 10); a size-4 stamp covers 9..12.
