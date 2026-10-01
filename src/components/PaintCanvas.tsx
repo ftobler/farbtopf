@@ -1164,9 +1164,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
   const finishPolyline = useCallback(() => {
-    // A pending shape is dropped whenever a polyline is settled, so any edit action
-    // that flushes one also clears the other.
-    cancelShapeRef.current()
     const polyline = polylineRef.current
     if (!polyline) return
     polylineRef.current = null
@@ -1294,13 +1291,23 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [currentLayers, doc, onSizeChange, recordHistory, setLayers, syncHistory],
   )
 
-  /** Settles pending edits before the layer stack changes. */
-  const settle = useCallback(() => {
+  /**
+   * Accepts whatever is still being edited (a pending shape or curve, an open text
+   * box) onto the active layer, each as its own undo step, as in Paint. Every document
+   * action runs this first, so it acts on the image the user sees.
+   */
+  const acceptPending = useCallback(() => {
     commitShapeRef.current()
     finishPolyline()
+    commitTextRef.current()
+  }, [finishPolyline])
+
+  /** Settles pending edits before the layer stack changes. */
+  const settle = useCallback(() => {
+    acceptPending()
     commitFloating()
     updateSelection(null)
-  }, [commitFloating, finishPolyline, updateSelection])
+  }, [acceptPending, commitFloating, updateSelection])
 
   /** Changes the layer stack as one undo step. */
   const changeLayers = useCallback(
@@ -1328,7 +1335,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const applyCanvasResize = useCallback(
     (rect: Rect) => {
-      finishPolyline()
+      acceptPending()
       commitFloating()
       // The old selection/mask no longer matches the resized document.
       updateSelection(null)
@@ -1336,7 +1343,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       // New area is white on the bottom layer and transparent above it.
       applyToLayers((bitmap, bottom) => resizeTo(bitmap, rect, bottom ? WHITE : undefined))
     },
-    [applyToLayers, commitFloating, finishPolyline, resizeTo, updateSelection],
+    [applyToLayers, acceptPending, commitFloating, resizeTo, updateSelection],
   )
 
   /** The image pixel at the top-left corner of the workspace, clamped into the image. */
@@ -1355,7 +1362,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const pasteImage = useCallback(
     (pasted: Bitmap) => {
-      finishPolyline()
+      acceptPending()
       commitFloating()
       setLasso(null)
       const origin = visibleOrigin()
@@ -1382,7 +1389,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       applyToLayers,
       commitFloating,
       doc,
-      finishPolyline,
+      acceptPending,
       recordHistory,
       renderPreview,
       resizeTo,
@@ -1411,7 +1418,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         pasteImage(await bitmapFromDataUrl(src))
       },
       clear() {
-        finishPolyline()
+        acceptPending()
         commitFloating()
         recordHistory(doc().clone())
         doc().fill(activeRef.current === 0 ? WHITE : TRANSPARENT)
@@ -1421,6 +1428,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       undo() {
+        // Undo takes back the pending shape or curve itself, as in Paint: it is placed
+        // and then undone, so the step before it survives and redo brings it back.
+        commitShapeRef.current()
         finishPolyline()
         if (floatingRef.current) {
           commitFloating()
@@ -1433,6 +1443,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
       },
       redo() {
+        // Placing the pending shape would clear the redo stack, so redo drops it instead.
+        cancelShapeRef.current()
         finishPolyline()
         if (floatingRef.current) {
           commitFloating()
@@ -1445,7 +1457,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
       },
       toDataUrl(type = 'image/png') {
-        finishPolyline()
+        acceptPending()
         const offscreen = offscreenRef.current
         if (offscreen) return offscreen.toDataURL(type)
         return canvasRef.current?.toDataURL(type) ?? ''
@@ -1459,7 +1471,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return shapeRef.current !== null || polylineRef.current !== null
       },
       flip(axis) {
-        finishPolyline()
+        acceptPending()
         const mirror = axis === 'horizontal' ? flipHorizontal : flipVertical
         const rect = currentRect()
         if (rect) {
@@ -1477,7 +1489,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyToLayers((bitmap) => mirror(bitmap))
       },
       rotate(degrees) {
-        finishPolyline()
+        acceptPending()
         const start = beginRotation()
         if (start) {
           applyRotation(start, degrees)
@@ -1488,14 +1500,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyToLayers((bitmap, bottom) => rotateBy(bitmap, degrees, bottom ? secondary : null))
       },
       resize(width, height) {
-        finishPolyline()
+        acceptPending()
         commitFloating()
         // Scaling moves every pixel, so the old selection coordinates are stale.
         updateSelection(null)
         applyToLayers((bitmap) => scale(bitmap, width, height))
       },
       scale(width, height) {
-        finishPolyline()
+        acceptPending()
         const rect = currentRect()
         if (!rect) {
           this.resize(width, height)
@@ -1510,7 +1522,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyCanvasResize(rect)
       },
       invertColors() {
-        finishPolyline()
+        acceptPending()
         const floating = floatingRef.current
         if (floating) {
           floating.bitmap = invertBitmap(floating.bitmap)
@@ -1529,7 +1541,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyToLayers((bitmap) => invertBitmap(bitmap))
       },
       blur(radius) {
-        finishPolyline()
+        acceptPending()
         const floating = floatingRef.current
         if (floating) {
           const { width, height } = floating.bitmap
@@ -1551,7 +1563,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         applyToLayers((bitmap) => gaussianBlur(bitmap, radius))
       },
       cropToSelection() {
-        finishPolyline()
+        acceptPending()
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
@@ -1580,18 +1592,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         clickOutsideRef.current(clientX, clientY)
       },
       selectAll() {
-        finishPolyline()
+        acceptPending()
         commitFloating()
         updateSelection({ x: 0, y: 0, width: doc().width, height: doc().height })
       },
       invertSelection() {
-        finishPolyline()
+        acceptPending()
         commitFloating()
         const inverted = invertSelection(selectionRef.current, maskRef.current, doc().width, doc().height)
         updateSelection(inverted?.rect ?? null, inverted?.mask ?? null)
       },
       deleteSelection() {
-        finishPolyline()
+        acceptPending()
         const floating = floatingRef.current
         if (floating) {
           floatingRef.current = null
@@ -1610,7 +1622,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         updateSelection(null)
       },
       getSelectionDataUrl() {
-        finishPolyline()
+        acceptPending()
         const floating = floatingRef.current
         if (floating) {
           const composite = floating.base.clone()
@@ -1629,7 +1641,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
       },
       getVisibleDataUrl() {
-        finishPolyline()
+        acceptPending()
         const floating = floatingRef.current
         let active = doc()
         if (floating) {
@@ -1644,7 +1656,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         return bitmapToDataUrl(maskRef.current ? applyMask(region, maskRef.current) : region)
       },
       cutSelection() {
-        finishPolyline()
+        acceptPending()
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
@@ -1706,6 +1718,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       doc,
       ensureFloating,
       eraseColor,
+      acceptPending,
       finishPolyline,
       onDocumentChange,
       paint,
@@ -2205,7 +2218,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const frame = event.currentTarget.closest('.canvas-frame')
       if (!(frame instanceof HTMLElement)) return
       const rect = frame.getBoundingClientRect()
-      finishPolyline()
+      acceptPending()
       commitFloating()
       const { width, height } = doc()
       const source = { layers: currentLayers(), active: activeRef.current }
@@ -2223,7 +2236,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         recorded: false,
       }
     },
-    [commitFloating, currentLayers, doc, finishPolyline, pan],
+    [acceptPending, commitFloating, currentLayers, doc, pan],
   )
 
   const handleCanvasResizeMove = useCallback(

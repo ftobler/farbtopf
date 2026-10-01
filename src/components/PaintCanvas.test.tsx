@@ -1359,6 +1359,19 @@ describe('PaintCanvas', () => {
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     })
 
+    it('places the open text box before a document action', () => {
+      const { ref, canvas, container, onHistoryChange } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'hi' } })
+      act(() => ref.current?.flip('horizontal'))
+      expect(container.querySelector('.text-editor')).toBeNull()
+      act(() => ref.current?.undo())
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, true)
+      act(() => ref.current?.undo())
+      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+    })
+
     it('ignores the compatibility mousedown that follows the opening pointerdown', () => {
       const { canvas, container } = setup('text', 50, 50)
       openEditor(canvas, 5, 5)

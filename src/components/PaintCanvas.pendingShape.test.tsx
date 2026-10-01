@@ -2,6 +2,7 @@ import { createRef } from 'react'
 import { act, fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Rgba } from '../core/color'
+import { Bitmap } from '../core/bitmap'
 import { BLACK, WHITE } from '../core/color'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
@@ -93,7 +94,7 @@ function setup(initial: Partial<Props> = {}) {
     fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: y })
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
   }
-  return { ref, shown, image, drag, click, setProps, commit, onHistoryChange, onDocumentChange }
+  return { ref, container, shown, image, drag, click, setProps, commit, onHistoryChange, onDocumentChange }
 }
 
 describe('PaintCanvas pending shape follows the toolbar', () => {
@@ -275,5 +276,125 @@ describe('PaintCanvas pending shape keeps its own style when committed by a tool
   ])('commits a pending curve as previewed when switching to %s', (_name, next) => {
     const curve = (s: ReturnType<typeof setup>) => s.drag([5, 15], [25, 20])
     expect(viaSwitch({ shapeKind: 'polyline' }, curve, next)).toEqual(viaEnter({ shapeKind: 'polyline' }, curve))
+  })
+})
+
+describe('PaintCanvas document actions accept the pending shape first', () => {
+  type Setup = ReturnType<typeof setup>
+  const place = (s: Setup) => s.drag([2, 5], [20, 25])
+  const blank = Array.from({ length: SIZE * SIZE }, () => rgbaOf(WHITE)).flat()
+
+  function resizeByHandle(s: Setup) {
+    const frame = s.container.querySelector('.canvas-frame') as HTMLElement
+    frame.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, left: 0, top: 0, right: SIZE, bottom: SIZE, width: SIZE, height: SIZE, toJSON: () => ({}) }) as DOMRect
+    const handle = s.container.querySelector('.canvas-resize-handle-e') as HTMLElement
+    handle.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 2, clientX: SIZE, clientY: 10 })
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: SIZE + 6, clientY: 10 })
+    fireEvent.pointerUp(handle, { pointerId: 2, clientX: SIZE + 6, clientY: 10 })
+  }
+
+  const pasted = () => new Bitmap(4, 4, RED)
+
+  // Each action runs on the image with the shape placed: the result matches placing the
+  // shape with Enter first, and undo takes back the action, then the shape.
+  it.each<[string, (s: Setup) => void]>([
+    ['flip horizontally', (s) => s.ref.current?.flip('horizontal')],
+    ['flip vertically', (s) => s.ref.current?.flip('vertical')],
+    ['rotate', (s) => s.ref.current?.rotate(90)],
+    ['clear', (s) => s.ref.current?.clear()],
+    ['scale the image', (s) => s.ref.current?.scale(40, 20)],
+    ['resize the canvas', (s) => s.ref.current?.resizeCanvas({ x: 0, y: 0, width: 36, height: 30 })],
+    ['drag a canvas resize handle', resizeByHandle],
+    ['invert colours', (s) => s.ref.current?.invertColors()],
+    ['blur', (s) => s.ref.current?.blur(2)],
+    ['paste', (s) => s.ref.current?.pasteBitmap(pasted())],
+    ['cut without a selection', (s) => {
+      s.ref.current?.toDataUrl()
+      s.ref.current?.clear()
+    }],
+  ])('%s', (_name, action) => {
+    const reference = setup()
+    place(reference)
+    reference.commit()
+    const placed = reference.image()
+    act(() => action(reference))
+    const expected = reference.image()
+
+    const s = setup()
+    place(s)
+    act(() => action(s))
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(expected)
+    act(() => s.ref.current?.undo())
+    expect(s.image()).toEqual(placed)
+    act(() => s.ref.current?.undo())
+    expect(s.image()).toEqual(blank)
+    expect(s.onHistoryChange).toHaveBeenLastCalledWith(false, true)
+  })
+
+  // Actions that leave the image alone still place the shape as one undo step.
+  it.each<[string, (s: Setup) => void]>([
+    ['save (toDataUrl)', (s) => s.ref.current?.toDataUrl()],
+    ['copy', (s) => s.ref.current?.getSelectionDataUrl()],
+    ['copy visible', (s) => s.ref.current?.getVisibleDataUrl()],
+    ['crop without a selection', (s) => s.ref.current?.cropToSelection()],
+    ['cut a missing selection', (s) => s.ref.current?.cutSelection()],
+    ['select all', (s) => s.ref.current?.selectAll()],
+  ])('%s', (_name, action) => {
+    const reference = setup()
+    place(reference)
+    reference.commit()
+    const placed = reference.image()
+
+    const s = setup()
+    place(s)
+    act(() => action(s))
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(placed)
+    act(() => s.ref.current?.undo())
+    expect(s.image()).toEqual(blank)
+    expect(s.onHistoryChange).toHaveBeenLastCalledWith(false, true)
+  })
+
+  it('places a pending curve before flipping', () => {
+    const reference = setup({ shapeKind: 'polyline' })
+    reference.drag([2, 5], [20, 25])
+    reference.commit()
+    act(() => reference.ref.current?.flip('horizontal'))
+    const expected = reference.image()
+
+    const s = setup({ shapeKind: 'polyline' })
+    s.drag([2, 5], [20, 25])
+    act(() => s.ref.current?.flip('horizontal'))
+    expect(s.image()).toEqual(expected)
+  })
+
+  it('takes back only the pending shape on undo, and redo brings it back', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    s.commit()
+    const first = s.image()
+    place(s)
+    const placed = s.image()
+    act(() => s.ref.current?.undo())
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(first)
+    expect(s.onHistoryChange).toHaveBeenLastCalledWith(true, true)
+    act(() => s.ref.current?.redo())
+    expect(s.image()).toEqual(placed)
+  })
+
+  it('drops the pending shape on redo', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    s.commit()
+    const first = s.image()
+    act(() => s.ref.current?.undo())
+    place(s)
+    act(() => s.ref.current?.redo())
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(first)
   })
 })
