@@ -356,6 +356,19 @@ export function MenuBar({
         <GitHubIcon size={18} />
       </a>
 
+      {/* The self-hosted build itself does not ship the zip. */}
+      {!import.meta.env.VITE_SELF_HOSTED && (
+        <a
+          className="icon-button static-download"
+          href={`${import.meta.env.BASE_URL}farbtopf-static.zip`}
+          download="farbtopf-static.zip"
+          title="Download for self-hosting"
+          aria-label="Download for self-hosting"
+        >
+          <DownloadIcon size={18} />
+        </a>
+      )}
+
       <button
         type="button"
         className="icon-button theme-toggle"

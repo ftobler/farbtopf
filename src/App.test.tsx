@@ -366,6 +366,15 @@ describe('App', () => {
     expect(menubar?.contains(link)).toBe(true)
   })
 
+  it('offers the static deployment zip right next to the GitHub link', () => {
+    render(<App />)
+    const github = screen.getByRole('link', { name: 'GitHub repository' })
+    const download = screen.getByRole('link', { name: 'Download for self-hosting' })
+    expect(download.getAttribute('href')).toBe(`${import.meta.env.BASE_URL}farbtopf-static.zip`)
+    expect(download.getAttribute('download')).toBe('farbtopf-static.zip')
+    expect(github.nextElementSibling).toBe(download)
+  })
+
   it('switches the active tool on click', () => {
     render(<App />)
     const pencil = screen.getByRole('button', { name: 'Pencil' })

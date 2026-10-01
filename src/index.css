@@ -248,7 +248,8 @@ textarea {
   cursor: pointer;
 }
 
-.github-link {
+.github-link,
+.static-download {
   text-decoration: none;
 }
 
