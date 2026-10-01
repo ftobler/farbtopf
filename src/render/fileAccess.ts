@@ -38,6 +38,12 @@ export function imageMimeFor(name: string): ImageMime {
   return 'image/png'
 }
 
+/** True when the canvas can encode `name`'s format, so saving over it is safe. Case-insensitive. */
+export function isEncodableName(name: string): boolean {
+  const extension = name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1]
+  return extension === 'png' || extension === 'jpg' || extension === 'jpeg' || extension === 'webp'
+}
+
 /** `name` with a .png extension, for downloads. */
 export function pngName(name: string | null): string {
   if (!name) return 'farbtopf.png'

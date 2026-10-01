@@ -57,6 +57,7 @@ import {
   canSaveFiles,
   dataUrlToBlob,
   imageMimeFor,
+  isEncodableName,
   pickImageFile,
   pickSaveFile,
   pngName,
@@ -410,7 +411,8 @@ function App() {
     }
     let handle: FileSystemFileHandle | null
     try {
-      handle = await pickSaveFile(fileName ?? 'farbtopf.png')
+      const suggested = fileName && isEncodableName(fileName) ? fileName : pngName(fileName)
+      handle = await pickSaveFile(suggested)
     } catch {
       notify('Could not save the image')
       return
@@ -420,7 +422,7 @@ function App() {
 
   const handleSave = useCallback(async () => {
     const handle = fileHandleRef.current
-    if (handle) await saveToHandle(handle)
+    if (handle && isEncodableName(handle.name)) await saveToHandle(handle)
     else await handleSaveAs()
   }, [handleSaveAs, saveToHandle])
 

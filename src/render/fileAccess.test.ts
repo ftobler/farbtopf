@@ -5,6 +5,7 @@ import {
   dataUrlToBlob,
   imageMimeFor,
   isAbortError,
+  isEncodableName,
   pickImageFile,
   pickSaveFile,
   pngName,
@@ -43,6 +44,23 @@ describe('imageMimeFor', () => {
     expect(imageMimeFor('a.gif')).toBe('image/png')
     expect(imageMimeFor('a.bmp')).toBe('image/png')
     expect(imageMimeFor('noextension')).toBe('image/png')
+  })
+})
+
+describe('isEncodableName', () => {
+  it('accepts the formats the canvas can encode, case-insensitively', () => {
+    expect(isEncodableName('a.png')).toBe(true)
+    expect(isEncodableName('a.PNG')).toBe(true)
+    expect(isEncodableName('a.jpg')).toBe(true)
+    expect(isEncodableName('a.JpEg')).toBe(true)
+    expect(isEncodableName('a.webp')).toBe(true)
+    expect(isEncodableName('a.WEBP')).toBe(true)
+  })
+
+  it('rejects formats the canvas cannot write and unknown names', () => {
+    for (const name of ['a.gif', 'a.bmp', 'a.svg', 'a.avif', 'a.ico', 'photo', 'photo.']) {
+      expect(isEncodableName(name)).toBe(false)
+    }
   })
 })
 

@@ -115,6 +115,46 @@ describe('App save', () => {
     expect(handle.writes[0].type).toBe('image/jpeg')
   })
 
+  it('does not overwrite an opened bmp with png data and saves as png instead', async () => {
+    render(<App />)
+    const handle = fakeHandle('logo.bmp', 'image/bmp')
+    await openWithPicker(handle)
+    const png = fakeHandle('logo.png')
+    window.showSaveFilePicker = vi.fn(async () => asHandle(png))
+    await act(async () => {
+      pressSave()
+    })
+    await waitFor(() => expect(screen.getByText('Saved logo.png')).toBeTruthy())
+    expect(handle.writes).toHaveLength(0)
+    expect(vi.mocked(window.showSaveFilePicker).mock.calls[0][0]?.suggestedName).toBe('logo.png')
+    expect(png.writes).toHaveLength(1)
+    expect(png.writes[0].type).toBe('image/png')
+  })
+
+  it('downloads a png when saving an opened bmp without the save picker', async () => {
+    render(<App />)
+    const handle = fakeHandle('logo.bmp', 'image/bmp')
+    await openWithPicker(handle)
+    await act(async () => {
+      pressSave()
+    })
+    expect(downloads).toEqual(['logo.png'])
+    expect(handle.writes).toHaveLength(0)
+    expect(screen.getByText('Saved logo.png')).toBeTruthy()
+  })
+
+  it('saves an opened jpg back to the same handle without asking', async () => {
+    render(<App />)
+    const handle = fakeHandle('photo.jpg', 'image/jpeg')
+    await openWithPicker(handle)
+    window.showSaveFilePicker = vi.fn()
+    await act(async () => {
+      pressSave()
+    })
+    await waitFor(() => expect(handle.writes).toHaveLength(1))
+    expect(window.showSaveFilePicker).not.toHaveBeenCalled()
+  })
+
   it('does nothing when the open picker is cancelled', async () => {
     render(<App />)
     window.showOpenFilePicker = vi.fn(async () => {
