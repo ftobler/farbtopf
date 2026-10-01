@@ -667,14 +667,14 @@ function OverflowLayer({ overflow, zoom, onPointerDown, onPointerMove }: Overflo
   )
 }
 
-function bitmapToDataUrl(bitmap: Bitmap): string {
+function bitmapToDataUrl(bitmap: Bitmap, type = 'image/png'): string {
   const canvas = document.createElement('canvas')
   canvas.width = bitmap.width
   canvas.height = bitmap.height
   const context = canvas.getContext('2d')
   if (!context) return ''
   context.putImageData(bitmap.toImageData(), 0, 0)
-  return canvas.toDataURL('image/png')
+  return canvas.toDataURL(type)
 }
 
 export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(function PaintCanvas(
@@ -1506,9 +1506,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       toDataUrl(type = 'image/png') {
         acceptPending()
-        const offscreen = offscreenRef.current
-        if (offscreen) return offscreen.toDataURL(type)
-        return canvasRef.current?.toDataURL(type) ?? ''
+        const floating = floatingRef.current
+        let active = doc()
+        if (floating) {
+          active = floating.base.clone()
+          blitFloating(active, floating)
+        }
+        const stack = currentLayers().map((layer, index) => (index === activeRef.current ? active : layer.bitmap))
+        const flat = compositeLayers(stack) ?? active
+        return bitmapToDataUrl(flat, type)
       },
       getSize() {
         // From the bitmap, not state: callers ask right after loading, before a re-render.
