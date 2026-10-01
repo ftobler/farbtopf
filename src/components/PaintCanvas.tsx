@@ -2136,11 +2136,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const handlePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      // A cancelled pointer (a system gesture, palm rejection) has no usable position,
+      // some browsers report 0,0, so whatever it was dragging out is dropped. Drags that
+      // only use the positions of earlier moves (strokes, moving or resizing a selection
+      // or a shape handle) keep what they did.
+      const cancelled = event.type === 'pointercancel'
       const place = textPlaceRef.current
       if (place && place.pointerId === event.pointerId) {
         textPlaceRef.current = null
         setTextDraft(null)
-        if (event.type === 'pointercancel') return
+        if (cancelled) return
         const lineHeight = Math.round(text.fontSize * TEXT_LINE_HEIGHT) + 4
         const rect = placeTextBox(place.start, toPoint(event), TEXT_DRAG_SLOP / zoom, lineHeight, size.width, size.height)
         const next: TextEditorState = { ...rect, value: '', slot: 'primary' }
@@ -2152,11 +2157,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (drag && drag.pointerId === event.pointerId) {
         if (drag.mode === 'marquee') {
           const rect = clampRect(normalizeRect(drag.start, toPoint(event)), size.width, size.height)
-          if (rect.width < 2 && rect.height < 2) updateSelection(null)
+          if (cancelled || (rect.width < 2 && rect.height < 2)) updateSelection(null)
           else updateSelection(rect)
         }
         if (drag.mode === 'lasso') {
-          const traced = polygonSelection(drag.points ?? [], size.width, size.height)
+          const traced = cancelled ? null : polygonSelection(drag.points ?? [], size.width, size.height)
           updateSelection(traced?.rect ?? null, traced?.mask ?? null)
           setLasso(null)
         }
@@ -2166,6 +2171,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const polyline = polylineRef.current
       if (polyline) {
         if (polyline.pointerId !== event.pointerId) return
+        if (cancelled) {
+          if (polyline.points.length < 2) {
+            cancelPolyline()
+            return
+          }
+          polyline.pointerId = null
+          polyline.pending = null
+          previewPolyline()
+          return
+        }
         const end = toFreePoint(event)
         if (!pointsEqual(end, polyline.points[polyline.points.length - 1])) polyline.points.push(end)
         polyline.pointerId = null
@@ -2178,7 +2193,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (shape.pointerId !== event.pointerId) return
         if (shape.mode === 'insert') {
           const end = toFreePoint(event)
-          if (distance(shape.insertStart, end) * zoom < SHAPE_CLICK_SLOP) {
+          if (cancelled || distance(shape.insertStart, end) * zoom < SHAPE_CLICK_SLOP) {
             cancelShape()
             return
           }
@@ -2199,7 +2214,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       strokeRef.current = null
     },
-    [cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
+    [cancelPolyline, cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
   )
 
   // Clicking the workspace background settles pending edits and deselects, but

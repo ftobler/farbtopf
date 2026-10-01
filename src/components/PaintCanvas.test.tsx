@@ -1669,3 +1669,112 @@ describe('PaintCanvas', () => {
     })
   })
 })
+
+// A cancelled pointer (a system gesture, palm rejection) reports no usable position;
+// some browsers send 0,0. Whatever was being dragged out is dropped, as for a text box.
+describe('PaintCanvas pointercancel', () => {
+  const black = [0, 0, 0, 255]
+  const white = [255, 255, 255, 255]
+
+  function spyPixels(canvas: HTMLCanvasElement, width: number) {
+    const context = { putImageData: vi.fn() }
+    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+    return (x: number, y: number) => {
+      const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+      return Array.from(image.data.slice((y * width + x) * 4, (y * width + x) * 4 + 4))
+    }
+  }
+
+  const press = (canvas: HTMLCanvasElement, x: number, y: number) =>
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: y })
+  const moveTo = (canvas: HTMLCanvasElement, x: number, y: number) =>
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: x, clientY: y })
+  const cancel = (canvas: HTMLCanvasElement) => fireEvent.pointerCancel(canvas, { pointerId: 1, clientX: 0, clientY: 0 })
+
+  it('drops a shape being dragged out', () => {
+    const { ref, canvas, onHistoryChange } = setup('shape', 20, 20)
+    const pixel = spyPixels(canvas, 20)
+    onHistoryChange.mockClear()
+    press(canvas, 5, 5)
+    moveTo(canvas, 15, 15)
+    cancel(canvas)
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    expect(pixel(5, 10)).toEqual(white)
+    expect(pixel(0, 0)).toEqual(white)
+    expect(onHistoryChange).not.toHaveBeenCalled()
+  })
+
+  it('keeps a pending shape whose handle drag is cancelled where the handle last was', () => {
+    const { ref, canvas } = setup('shape', 20, 20)
+    const pixel = spyPixels(canvas, 20)
+    press(canvas, 5, 5)
+    moveTo(canvas, 15, 15)
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 15, clientY: 15 })
+    press(canvas, 15, 15)
+    moveTo(canvas, 17, 17)
+    cancel(canvas)
+    expect(ref.current?.hasPendingShape()).toBe(true)
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(pixel(5, 10)).toEqual(black)
+    expect(pixel(17, 10)).toEqual(black)
+    expect(pixel(0, 0)).toEqual(white)
+  })
+
+  it('adds no freeform vertex at the cancel position', () => {
+    const { ref, canvas } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
+    const pixel = spyPixels(canvas, 20)
+    press(canvas, 2, 10)
+    moveTo(canvas, 12, 10)
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 12, clientY: 10 })
+    press(canvas, 12, 10)
+    moveTo(canvas, 12, 18)
+    cancel(canvas)
+    expect(ref.current?.hasPendingShape()).toBe(true)
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(pixel(7, 10)).toEqual(black)
+    expect(pixel(12, 15)).toEqual(white)
+    expect(pixel(6, 5)).toEqual(white)
+  })
+
+  it('drops a freeform shape whose first segment is cancelled', () => {
+    const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
+    const pixel = spyPixels(canvas, 20)
+    onHistoryChange.mockClear()
+    press(canvas, 10, 10)
+    moveTo(canvas, 15, 10)
+    cancel(canvas)
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    expect(pixel(5, 5)).toEqual(white)
+    expect(onHistoryChange).not.toHaveBeenCalled()
+  })
+
+  it('drops a rectangular selection being dragged out', () => {
+    const { ref, canvas, onSelectionChange } = setup('select', 20, 20)
+    press(canvas, 5, 5)
+    moveTo(canvas, 15, 15)
+    cancel(canvas)
+    expect(ref.current?.getSelection()).toBeNull()
+    expect(onSelectionChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('drops a free-form selection being traced', () => {
+    const { ref, canvas } = setup('select', 20, 20, false, 'freeform')
+    press(canvas, 5, 5)
+    moveTo(canvas, 15, 5)
+    moveTo(canvas, 15, 15)
+    cancel(canvas)
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('keeps a brush stroke painted up to the last move, adding nothing at the cancel position', () => {
+    const { canvas, onHistoryChange } = setup('brush', 20, 20)
+    const pixel = spyPixels(canvas, 20)
+    press(canvas, 5, 10)
+    moveTo(canvas, 15, 10)
+    cancel(canvas)
+    expect(pixel(10, 10)).toEqual(black)
+    expect(pixel(0, 0)).toEqual(white)
+    expect(pixel(3, 5)).toEqual(white)
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+})
