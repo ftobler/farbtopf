@@ -15,6 +15,8 @@ function renderMenuBar() {
     onNew: noop,
     onOpen: noop,
     onSave: noop,
+    onSaveAs: noop,
+    onDownload: noop,
     onUndo: noop,
     onRedo: noop,
     onClear: noop,

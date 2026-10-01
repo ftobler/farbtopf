@@ -48,6 +48,16 @@ import { useCustomColors } from './hooks/useCustomColors'
 import { useDevicePixelRatio } from './hooks/useDevicePixelRatio'
 import { useTheme } from './hooks/useTheme'
 import { downloadDataUrl, readFileAsDataUrl } from './render/image'
+import {
+  canPickFiles,
+  canSaveFiles,
+  dataUrlToBlob,
+  imageMimeFor,
+  pickImageFile,
+  pickSaveFile,
+  pngName,
+  writeFile,
+} from './render/fileAccess'
 import { DEFAULT_TEXT_OPTIONS } from './render/text'
 import type { TextOptions } from './render/text'
 
@@ -74,6 +84,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 function App() {
   const canvasRef = useRef<PaintCanvasHandle | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  /** Where Save writes to: the file the document was opened from or last saved as, when the browser gave us one. */
+  const fileHandleRef = useRef<FileSystemFileHandle | null>(null)
   const messageTimer = useRef<number | null>(null)
   const workspaceRef = useRef<HTMLDivElement | null>(null)
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null)
@@ -142,6 +154,8 @@ function App() {
   const [showLayers, setShowLayers] = useState(false)
   const [layers, setLayers] = useState<{ list: LayerInfo[]; active: number }>({ list: [], active: 0 })
   const [message, setMessage] = useState<string | null>(null)
+  /** Name of the file the document came from or was saved to; null for a new image. */
+  const [fileName, setFileName] = useState<string | null>(null)
 
   const notify = useCallback((text: string) => {
     setMessage(text)
@@ -156,8 +170,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    document.title = 'Farbtopf'
-  }, [])
+    document.title = fileName ? `${fileName} - Farbtopf` : 'Farbtopf'
+  }, [fileName])
 
   useEffect(() => {
     const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -171,13 +185,15 @@ function App() {
       setZoom(fitZoom(width, height))
       setPan({ x: 0, y: 0 })
       setNewDialogOpen(false)
+      fileHandleRef.current = null
+      setFileName(null)
       notify(`New ${width} × ${height} canvas`)
     },
     [notify],
   )
 
   const openFile = useCallback(
-    async (file: File) => {
+    async (file: File, handle: FileSystemFileHandle | null = null) => {
       try {
         const dataUrl = await readFileAsDataUrl(file)
         await canvasRef.current?.loadDataUrl(dataUrl)
@@ -188,6 +204,8 @@ function App() {
           setPan({ x: 0, y: 0 })
         }
         setCursor(null)
+        fileHandleRef.current = handle
+        setFileName(file.name)
         notify(`Opened ${file.name}`)
       } catch {
         notify('Could not open that image')
@@ -276,14 +294,76 @@ function App() {
     }
   }, [notify])
 
-  const handleSave = useCallback(() => {
+  /** Hands the image to the browser as a PNG download. Returns the file name, or null when there was nothing to save. */
+  const downloadPng = useCallback(() => {
     const dataUrl = canvasRef.current?.toDataUrl()
-    if (!dataUrl) return
-    downloadDataUrl(dataUrl, 'farbtopf.png')
-    notify('Saved farbtopf.png')
-  }, [notify])
+    if (!dataUrl) return null
+    const name = pngName(fileName)
+    downloadDataUrl(dataUrl, name)
+    return name
+  }, [fileName])
 
-  const handleOpenClick = useCallback(() => fileInputRef.current?.click(), [])
+  const handleDownload = useCallback(() => {
+    const name = downloadPng()
+    if (name) notify(`Downloaded ${name}`)
+  }, [downloadPng, notify])
+
+  /** Writes the image to `handle` in that file's format. */
+  const saveToHandle = useCallback(
+    async (handle: FileSystemFileHandle) => {
+      try {
+        const dataUrl = canvasRef.current?.toDataUrl(imageMimeFor(handle.name))
+        if (!dataUrl) return
+        await writeFile(handle, dataUrlToBlob(dataUrl))
+        fileHandleRef.current = handle
+        setFileName(handle.name)
+        notify(`Saved ${handle.name}`)
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'NotAllowedError') {
+          notify(`Permission to save ${handle.name} was denied`)
+        } else {
+          notify(`Could not save ${handle.name}`)
+        }
+      }
+    },
+    [notify],
+  )
+
+  const handleSaveAs = useCallback(async () => {
+    if (!canSaveFiles()) {
+      // Without the File System Access API a download is the only way to save.
+      const name = downloadPng()
+      if (name) notify(`Saved ${name}`)
+      return
+    }
+    let handle: FileSystemFileHandle | null
+    try {
+      handle = await pickSaveFile(fileName ?? 'farbtopf.png')
+    } catch {
+      notify('Could not save the image')
+      return
+    }
+    if (handle) await saveToHandle(handle)
+  }, [downloadPng, fileName, notify, saveToHandle])
+
+  const handleSave = useCallback(async () => {
+    const handle = fileHandleRef.current
+    if (handle) await saveToHandle(handle)
+    else await handleSaveAs()
+  }, [handleSaveAs, saveToHandle])
+
+  const handleOpenClick = useCallback(async () => {
+    if (!canPickFiles()) {
+      fileInputRef.current?.click()
+      return
+    }
+    try {
+      const picked = await pickImageFile()
+      if (picked) await openFile(picked.file, picked.handle)
+    } catch {
+      notify('Could not open that image')
+    }
+  }, [notify, openFile])
 
   const handleUndo = useCallback(() => canvasRef.current?.undo(), [])
   const handleRedo = useCallback(() => canvasRef.current?.redo(), [])
@@ -489,12 +569,12 @@ function App() {
         }
         if (key === 's') {
           event.preventDefault()
-          handleSave()
+          void handleSave()
           return
         }
         if (key === 'o') {
           event.preventDefault()
-          handleOpenClick()
+          void handleOpenClick()
           return
         }
         if (key === 'n') {
@@ -631,9 +711,18 @@ function App() {
       setDropTarget(false)
       const files = Array.from(event.dataTransfer?.files ?? [])
       if (files.length === 0) return
-      const image = files.find((file) => file.type.startsWith('image/'))
-      if (image) void openFile(image)
-      else notify('Could not open that image')
+      const index = files.findIndex((file) => file.type.startsWith('image/'))
+      if (index < 0) {
+        notify('Could not open that image')
+        return
+      }
+      // The handle, where the browser offers one, must be requested while the drop event is running.
+      const items = Array.from(event.dataTransfer?.items ?? []).filter((item) => item.kind === 'file')
+      const pending = items[index]?.getAsFileSystemHandle?.() ?? null
+      void (async () => {
+        const handle = await Promise.resolve(pending).catch(() => null)
+        await openFile(files[index], handle?.kind === 'file' ? (handle as FileSystemFileHandle) : null)
+      })()
     }
     window.addEventListener('dragover', handleDragOver)
     window.addEventListener('dragleave', handleDragLeave)
@@ -660,6 +749,8 @@ function App() {
         onNew={() => setNewDialogOpen(true)}
         onOpen={handleOpenClick}
         onSave={handleSave}
+        onSaveAs={handleSaveAs}
+        onDownload={handleDownload}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onClear={handleClear}

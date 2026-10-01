@@ -3,6 +3,7 @@ import { Dropdown, MenuDivider, MenuItem, MenuSubmenu } from './Dropdown'
 import {
   CopyIcon,
   CutIcon,
+  DownloadIcon,
   FullscreenIcon,
   GitHubIcon,
   GridIcon,
@@ -13,6 +14,7 @@ import {
   OpenIcon,
   PasteIcon,
   RedoIcon,
+  SaveAsIcon,
   SaveIcon,
   ScaleIcon,
   SunIcon,
@@ -33,6 +35,8 @@ export interface MenuBarProps {
   onNew: () => void
   onOpen: () => void
   onSave: () => void
+  onSaveAs: () => void
+  onDownload: () => void
   onUndo: () => void
   onRedo: () => void
   onClear: () => void
@@ -59,6 +63,8 @@ export function MenuBar({
   onNew,
   onOpen,
   onSave,
+  onSaveAs,
+  onDownload,
   onUndo,
   onRedo,
   onClear,
@@ -111,7 +117,25 @@ export function MenuBar({
                   close()
                 }}
               >
-                Save as PNG
+                Save
+              </MenuItem>
+              <MenuItem
+                icon={<SaveAsIcon size={16} />}
+                onClick={() => {
+                  onSaveAs()
+                  close()
+                }}
+              >
+                Save as…
+              </MenuItem>
+              <MenuItem
+                icon={<DownloadIcon size={16} />}
+                onClick={() => {
+                  onDownload()
+                  close()
+                }}
+              >
+                Download PNG
               </MenuItem>
               <MenuDivider />
               <MenuItem
@@ -289,7 +313,7 @@ export function MenuBar({
           <button
             type="button"
             className="icon-button"
-            title="Save as PNG (Ctrl+S)"
+            title="Save (Ctrl+S)"
             aria-label="Save"
             onClick={onSave}
           >

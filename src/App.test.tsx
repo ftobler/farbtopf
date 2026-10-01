@@ -260,7 +260,9 @@ describe('App', () => {
     expect(fileItems.map((item) => item.querySelector('.menu-item-label')?.textContent)).toEqual([
       'New',
       'Open…',
-      'Save as PNG',
+      'Save',
+      'Save as…',
+      'Download PNG',
       'Clear canvas',
     ])
     expect(fileItems.every((item) => item.querySelector('svg'))).toBe(true)

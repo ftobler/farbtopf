@@ -82,7 +82,8 @@ export interface PaintCanvasHandle {
   clear: () => void
   undo: () => void
   redo: () => void
-  toDataUrl: () => string
+  /** The flattened image, encoded as `type` (PNG by default; browsers fall back to PNG for types they cannot encode). */
+  toDataUrl: (type?: string) => string
   getSize: () => { width: number; height: number }
   /** Mirrors the selection, or the whole image when nothing is selected. */
   flip: (axis: 'horizontal' | 'vertical') => void
@@ -1380,14 +1381,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const next = historyRef.current.redo({ layers: currentLayers(), active: activeRef.current })
         if (next) restore(next)
       },
-      toDataUrl() {
+      toDataUrl(type = 'image/png') {
         finishPolyline()
         const offscreen = offscreenRef.current
-        if (offscreen) return offscreen.toDataURL('image/png')
-        return canvasRef.current?.toDataURL('image/png') ?? ''
+        if (offscreen) return offscreen.toDataURL(type)
+        return canvasRef.current?.toDataURL(type) ?? ''
       },
       getSize() {
-        return { width: size.width, height: size.height }
+        // From the bitmap, not state: callers ask right after loading, before a re-render.
+        const { width, height } = doc()
+        return { width, height }
       },
       flip(axis) {
         finishPolyline()
@@ -1621,8 +1624,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       renderPreview,
       resetDocument,
       secondary,
-      size.width,
-      size.height,
       syncHistory,
       updateSelection,
     ],

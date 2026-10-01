@@ -416,6 +416,25 @@ export function SaveIcon(props: IconProps) {
   )
 }
 
+export function SaveAsIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 20H5V4h11l3 3v4" />
+      <path d="M8 4v5h7V4" />
+      <path d="M14 20l1-3 5-5 2 2-5 5z" />
+    </Svg>
+  )
+}
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v11M7 10l5 5 5-5" />
+      <path d="M5 19h14" />
+    </Svg>
+  )
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <Svg {...props}>
