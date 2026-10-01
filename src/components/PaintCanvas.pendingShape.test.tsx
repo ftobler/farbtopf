@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Rgba } from '../core/color'
 import { BLACK, WHITE } from '../core/color'
 import type { ShapeKind } from '../core/shapes'
-import type { ShapeFill } from '../core/tools'
+import type { ShapeFill, ToolId } from '../core/tools'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
 
@@ -15,6 +15,7 @@ const GREEN: Rgba = { r: 0, g: 255, b: 0, a: 255 }
 const rgbaOf = (color: Rgba) => [color.r, color.g, color.b, color.a]
 
 interface Props {
+  tool: ToolId
   primary: Rgba
   secondary: Rgba
   brushSize: number
@@ -25,7 +26,9 @@ interface Props {
 function setup(initial: Partial<Props> = {}) {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
+  const onDocumentChange = vi.fn()
   let props: Props = {
+    tool: 'shape',
     primary: BLACK,
     secondary: WHITE,
     brushSize: 1,
@@ -38,7 +41,7 @@ function setup(initial: Partial<Props> = {}) {
       ref={ref}
       initialWidth={SIZE}
       initialHeight={SIZE}
-      tool="shape"
+      tool={props.tool}
       primary={props.primary}
       secondary={props.secondary}
       brushSize={props.brushSize}
@@ -48,6 +51,7 @@ function setup(initial: Partial<Props> = {}) {
       zoom={1}
       showGrid={false}
       onHistoryChange={onHistoryChange}
+      onDocumentChange={onDocumentChange}
       onCursorMove={vi.fn()}
       onPickColor={vi.fn()}
       onSizeChange={vi.fn()}
@@ -78,7 +82,11 @@ function setup(initial: Partial<Props> = {}) {
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: to[0], clientY: to[1] })
   }
   const commit = () => act(() => fireEvent.keyDown(window, { key: 'Enter' }))
-  return { ref, shown, drag, setProps, commit, onHistoryChange }
+  const click = (x: number, y: number) => {
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: y })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
+  }
+  return { ref, shown, drag, click, setProps, commit, onHistoryChange, onDocumentChange }
 }
 
 describe('PaintCanvas pending shape follows the toolbar', () => {
@@ -151,5 +159,73 @@ describe('PaintCanvas pending shape follows the toolbar', () => {
     expect(shown(5, 5)).toEqual(rgbaOf(RED))
     commit()
     expect(shown(5, 5)).toEqual(rgbaOf(RED))
+  })
+})
+
+describe('PaintCanvas pending shape is committed when the tool changes', () => {
+  it('draws the pending shape as one undo step when another tool is picked', () => {
+    const { ref, shown, drag, setProps, onHistoryChange, onDocumentChange } = setup()
+    drag([5, 5], [25, 25])
+    expect(onDocumentChange).not.toHaveBeenCalled()
+    setProps({ tool: 'brush' })
+    expect(shown(5, 15)).toEqual(rgbaOf(BLACK))
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    expect(onDocumentChange).toHaveBeenCalledTimes(1)
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    act(() => ref.current?.undo())
+    expect(shown(5, 15)).toEqual(rgbaOf(WHITE))
+  })
+
+  it('commits the pending shape with its current style', () => {
+    const { shown, drag, setProps } = setup()
+    drag([5, 5], [25, 25])
+    setProps({ primary: RED })
+    setProps({ tool: 'pencil' })
+    expect(shown(5, 15)).toEqual(rgbaOf(RED))
+  })
+
+  it('commits the pending shape when another shape kind is picked', () => {
+    const { ref, shown, drag, setProps, onHistoryChange } = setup()
+    drag([5, 5], [25, 25])
+    setProps({ shapeKind: 'ellipse' })
+    expect(shown(5, 15)).toEqual(rgbaOf(BLACK))
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    expect(ref.current?.hasPendingShape()).toBe(false)
+  })
+
+  it('commits a pending curve when another tool is picked', () => {
+    const { shown, drag, setProps, onHistoryChange } = setup({ shapeKind: 'polyline' })
+    drag([5, 15], [25, 15])
+    setProps({ tool: 'fill' })
+    expect(shown(15, 15)).toEqual(rgbaOf(BLACK))
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('commits a freeform shape in progress when another tool is picked', () => {
+    const { shown, click, setProps, onHistoryChange } = setup({ shapeKind: 'freeform' })
+    click(5, 15)
+    click(25, 15)
+    setProps({ tool: 'brush' })
+    expect(shown(15, 15)).toEqual(rgbaOf(BLACK))
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('commits the pending shape when the active layer changes', () => {
+    const { ref, shown, drag } = setup()
+    drag([5, 5], [25, 25])
+    act(() => ref.current?.addLayer())
+    expect(shown(5, 15)).toEqual(rgbaOf(BLACK))
+    act(() => ref.current?.selectLayer(0))
+    expect(shown(5, 15)).toEqual(rgbaOf(BLACK))
+  })
+
+  it('still discards the pending shape on Escape', () => {
+    const { ref, shown, drag, onHistoryChange } = setup()
+    drag([5, 5], [25, 25])
+    onHistoryChange.mockClear()
+    act(() => fireEvent.keyDown(window, { key: 'Escape' }))
+    expect(shown(5, 15)).toEqual(rgbaOf(WHITE))
+    expect(onHistoryChange).not.toHaveBeenCalled()
+    expect(ref.current?.hasPendingShape()).toBe(false)
   })
 })

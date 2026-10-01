@@ -1151,14 +1151,15 @@ describe('PaintCanvas', () => {
       ])
     })
 
-    it('cancels a pending curve when the tool changes without recording history', () => {
+    it('commits a pending curve as one undo step when the tool changes', () => {
       const { canvas, setProps, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragLine(canvas)
       setProps({ tool: 'brush' })
-      expect(onHistoryChange).not.toHaveBeenCalled()
-      expect(pixel(7, 2)).toEqual(white)
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+      expect(pixel(7, 2)).not.toEqual(white)
     })
 
     it('records no history for a click without a drag', () => {
@@ -1343,6 +1344,18 @@ describe('PaintCanvas', () => {
 
       fireEvent.pointerDown(canvas, { button: 0, pointerId: 3, clientX: 30, clientY: 30 })
       expect(container.querySelector('.text-editor')).toBeNull()
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
+    it('commits the open text box when another tool is picked', () => {
+      const { canvas, container, setProps, onHistoryChange } = setup('text', 50, 50)
+      openEditor(canvas, 5, 5)
+      const textarea = container.querySelector('.text-editor') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'hi' } })
+      onHistoryChange.mockClear()
+      setProps({ tool: 'brush' })
+      expect(container.querySelector('.text-editor')).toBeNull()
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     })
 

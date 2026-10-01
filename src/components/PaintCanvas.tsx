@@ -1162,9 +1162,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     finishPolylineRef.current = finishPolyline
   }, [finishPolyline])
 
+  const commitTextRef = useRef<() => void>(() => {})
+
+  // Switching tool or shape kind accepts whatever is still being edited, as in
+  // Paint: the shape is committed first, since settling a polyline drops it.
   useEffect(() => {
+    commitShapeRef.current()
     finishPolylineRef.current()
-    cancelShapeRef.current()
+    commitTextRef.current()
   }, [tool, shapeKind])
 
   // A shape that is still pending follows the colour, size and fill settings, as in
@@ -1259,6 +1264,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   /** Settles pending edits before the layer stack changes. */
   const settle = useCallback(() => {
+    commitShapeRef.current()
     finishPolyline()
     commitFloating()
     updateSelection(null)
@@ -1727,6 +1733,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     paint(doc())
     syncHistory()
   }, [colorFor, doc, recordHistory, paint, syncHistory, text])
+  useEffect(() => {
+    commitTextRef.current = commitText
+  }, [commitText])
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
