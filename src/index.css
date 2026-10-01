@@ -86,9 +86,64 @@ textarea {
 }
 
 .menubar-logo {
+  position: relative;
   display: inline-flex;
   align-items: center;
   flex: none;
+  border-radius: 4px;
+  outline: none;
+}
+
+.menubar-logo:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.app-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  z-index: 60;
+  animation: app-tooltip-in 120ms ease-out;
+}
+
+.app-tooltip[hidden] {
+  display: none;
+}
+
+.app-tooltip-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.app-tooltip-text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@keyframes app-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip {
+    animation: none;
+  }
 }
 
 .menubar-logo img {

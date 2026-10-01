@@ -1,3 +1,4 @@
+import { useId, useState } from 'react'
 import { nextZoom } from '../core/zoom'
 import { Dropdown, MenuDivider, MenuItem, MenuSubmenu } from './Dropdown'
 import {
@@ -81,9 +82,7 @@ export function MenuBar({
 }: MenuBarProps) {
   return (
     <header className="menubar">
-      <span className="menubar-logo">
-        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={28} height={28} draggable={false} />
-      </span>
+      <AppLogo />
 
       <div className="menubar-menus">
         <Dropdown trigger="File" showChevron={false} triggerClassName="menubar-button">
@@ -379,5 +378,32 @@ export function MenuBar({
         {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
       </button>
     </header>
+  )
+}
+
+/** The app icon, which introduces Farbtopf in a small tooltip on hover or keyboard focus. */
+function AppLogo() {
+  const tooltipId = useId()
+  const [open, setOpen] = useState(false)
+  return (
+    <span
+      className="menubar-logo"
+      tabIndex={0}
+      aria-label="Farbtopf"
+      aria-describedby={tooltipId}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setOpen(false)
+      }}
+    >
+      <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={28} height={28} draggable={false} />
+      <span id={tooltipId} role="tooltip" className="app-tooltip" hidden={!open}>
+        <span className="app-tooltip-title">Farbtopf</span>
+        <span className="app-tooltip-text">A tiny paint pot for your browser.</span>
+      </span>
+    </span>
   )
 }

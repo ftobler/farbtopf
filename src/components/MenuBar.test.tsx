@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { MenuBar, type MenuBarProps } from './MenuBar'
 
@@ -43,5 +43,38 @@ describe('MenuBar', () => {
     expect(logo?.getAttribute('alt')).toBe('')
     expect(logo?.getAttribute('width')).toBe('28')
     expect(logo?.getAttribute('height')).toBe('28')
+  })
+
+  it('describes the app logo with an accessible tooltip', () => {
+    const { container } = renderMenuBar()
+    const logo = container.querySelector<HTMLElement>('.menubar-logo')!
+    expect(logo.getAttribute('aria-label')).toBe('Farbtopf')
+    expect(logo.tabIndex).toBe(0)
+    const tooltip = screen.getByRole('tooltip', { hidden: true })
+    expect(logo.getAttribute('aria-describedby')).toBe(tooltip.id)
+    expect(tooltip.querySelector('.app-tooltip-title')?.textContent).toBe('Farbtopf')
+    expect(tooltip.textContent).toContain('A tiny paint pot for your browser.')
+  })
+
+  it('shows the logo tooltip on hover and hides it on leave', () => {
+    const { container } = renderMenuBar()
+    const logo = container.querySelector<HTMLElement>('.menubar-logo')!
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.mouseEnter(logo)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.mouseLeave(logo)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('shows the logo tooltip on keyboard focus and dismisses it with Escape', () => {
+    const { container } = renderMenuBar()
+    const logo = container.querySelector<HTMLElement>('.menubar-logo')!
+    fireEvent.focus(logo)
+    expect(screen.getByRole('tooltip')).toBeTruthy()
+    fireEvent.keyDown(logo, { key: 'Escape' })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.focus(logo)
+    fireEvent.blur(logo)
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 })
