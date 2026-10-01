@@ -112,6 +112,14 @@ const press = (key: string) =>
     fireEvent.keyDown(window, { key, ctrlKey: true })
   })
 
+/** The native paste event a browser fires for Ctrl+V, with no image on it. */
+const paste = () =>
+  act(async () => {
+    const event = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'clipboardData', { value: { items: [] } })
+    window.dispatchEvent(event)
+  })
+
 async function clickEditItem(label: string) {
   fireEvent.click(screen.getByText('Edit'))
   const item = screen
@@ -128,7 +136,7 @@ const message = (text: string) => waitFor(() => expect(screen.getByText(text)).t
 describe('App clipboard paste', () => {
   it('says so when the browser cannot read the clipboard', async () => {
     setup()
-    await press('v')
+    await clickEditItem('Paste')
     await message('Clipboard paste is not supported here')
   })
 
@@ -144,7 +152,7 @@ describe('App clipboard paste', () => {
       ]),
     } as unknown as Partial<Clipboard>)
     setup()
-    await press('v')
+    await paste()
     await waitFor(() => expect(screen.getByLabelText('Selection size').textContent).toBe('40 × 30 px'))
     expect(first).toHaveBeenCalledWith('image/jpeg')
     expect(second).not.toHaveBeenCalled()
@@ -168,7 +176,7 @@ describe('App clipboard paste', () => {
       }),
     } as unknown as Partial<Clipboard>)
     setup()
-    await press('v')
+    await paste()
     await message('Could not paste from the clipboard')
   })
 })

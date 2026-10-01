@@ -701,11 +701,6 @@ function App() {
           void handleCopyFromCanvas()
           return
         }
-        if (key === 'v') {
-          event.preventDefault()
-          void handlePasteFromClipboard()
-          return
-        }
         return
       }
 
@@ -770,7 +765,6 @@ function App() {
     handleCutFromCanvas,
     handleDeleteSelection,
     handleOpenClick,
-    handlePasteFromClipboard,
     openNewDialog,
     handleRedo,
     handleSave,
@@ -784,21 +778,28 @@ function App() {
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
       const items = event.clipboardData?.items
-      if (!items) return
-      for (const item of items) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile()
-          if (file) {
-            event.preventDefault()
-            void pasteFile(file)
-            return
+      if (items) {
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              event.preventDefault()
+              void pasteFile(file)
+              return
+            }
           }
         }
       }
+      if (isTypingTarget(event.target)) return
+      if (!navigator.clipboard?.read) return
+      // A text paste has no image for us, and complaining about it would be noise.
+      const types = Array.from(items ?? []).map((item) => item.type)
+      if (types.includes('text/plain') || types.includes('text/html')) return
+      void handlePasteFromClipboard()
     }
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
-  }, [pasteFile])
+  }, [handlePasteFromClipboard, pasteFile])
 
   useEffect(() => {
     const carriesFiles = (event: DragEvent) => Boolean(event.dataTransfer?.types.includes('Files'))
