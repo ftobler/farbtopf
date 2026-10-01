@@ -897,6 +897,23 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   useEffect(() => cancelStrokeFrame, [cancelStrokeFrame])
 
+  /**
+   * Stops whatever pointer drag is in progress so an undo or redo cannot be
+   * silently overwritten by it: a stroke (and its spray timer), a selection drag
+   * or a canvas resize. Pending shapes and polylines are deliberately left alone;
+   * undo and redo finish or drop those themselves.
+   */
+  const abortPointerInteraction = useCallback(() => {
+    stopSpraying()
+    cancelStrokeFrame()
+    strokeRef.current = null
+    selectRef.current = null
+    canvasResizeRef.current = null
+    setLasso(null)
+    setHoverCursor(null)
+    setEraserHover(null)
+  }, [cancelStrokeFrame, stopSpraying])
+
   const layers = useCallback((): Layer[] => {
     if (layersRef.current.length === 0) layersRef.current = [{ id: 1, name: 'Background', bitmap: doc() }]
     return layersRef.current
@@ -1550,6 +1567,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       },
       undo() {
+        // Nothing that is still being dragged out may keep running past this point.
+        abortPointerInteraction()
         // Undo takes back the pending shape or curve itself, as in Paint: it is placed
         // and then undone, so the step before it survives and redo brings it back.
         // One too small to place (still being dragged out, a lone freeform vertex) is
@@ -1570,6 +1589,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
       },
       redo() {
+        // Nothing that is still being dragged out may keep running past this point.
+        abortPointerInteraction()
         // Placing a pending shape or freeform shape would clear the redo stack, so redo
         // drops it instead.
         cancelShapeRef.current()
@@ -1836,6 +1857,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
     }),
     [
+      abortPointerInteraction,
       applyCanvasResize,
       applyToLayers,
       changeLayers,
