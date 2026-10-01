@@ -2181,12 +2181,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (rect && hitHandle(rect, point, HANDLE_HIT / zoom)) return
       // Nor on the part of a floating selection hanging past the image edge.
       if (rect && floatingRef.current && pointInRect(point, rect)) return
-      commitShape()
-      commitText()
+      acceptPending()
       commitFloating()
       updateSelection(null)
     },
-    [clientToCanvas, commitShape, commitFloating, commitText, currentRect, updateSelection, zoom],
+    [acceptPending, clientToCanvas, commitFloating, currentRect, updateSelection, zoom],
   )
   useEffect(() => {
     clickOutsideRef.current = handleClickOutside

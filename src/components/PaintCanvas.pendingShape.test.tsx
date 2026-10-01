@@ -426,3 +426,15 @@ describe('PaintCanvas opening the miniature view', () => {
     expect(shown(1, 1)).toEqual(rgbaOf(RED))
   })
 })
+
+describe('PaintCanvas click on the workspace outside the image', () => {
+  it('places a freeform shape in progress as one undo step', () => {
+    const { ref, shown, click, onHistoryChange } = setup({ shapeKind: 'freeform' })
+    click(5, 15)
+    click(25, 15)
+    act(() => ref.current?.clickOutside(100, 100))
+    expect(ref.current?.hasPendingShape()).toBe(false)
+    expect(shown(15, 15)).toEqual(rgbaOf(BLACK))
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+})
