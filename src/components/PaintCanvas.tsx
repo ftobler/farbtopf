@@ -1983,6 +1983,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     commitTextRef.current = commitText
   }, [commitText])
 
+  /** The pointer that owns the interaction in progress, if any. */
+  const activePointerId = useCallback((): number | null => {
+    if (strokeRef.current) return strokeRef.current.pointerId
+    if (selectRef.current) return selectRef.current.pointerId
+    if (canvasResizeRef.current) return canvasResizeRef.current.pointerId
+    if (textPlaceRef.current) return textPlaceRef.current.pointerId
+    const shape = shapeRef.current
+    if (shape && shape.pointerId !== null) return shape.pointerId
+    const polyline = polylineRef.current
+    if (polyline && polyline.pointerId !== null) return polyline.pointerId
+    return null
+  }, [])
+
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button !== 0 && event.button !== 2) return
@@ -1990,6 +2003,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       // (see `rightClickActs`): then it uses the secondary colour or zooms out, and
       // the workspace skips its menu. The canvas `onContextMenu` swallows the native menu.
       if (event.button === 2 && !rightClickActs(tool)) return
+      // A second touch must not start its own interaction: it would overwrite the
+      // active drag and record an extra history step.
+      const activePointer = activePointerId()
+      if (activePointer !== null && activePointer !== event.pointerId) return
       if (tool === 'eraser') setEraserHover(toPoint(event))
       if (editorRef.current) {
         commitText()
@@ -2186,7 +2203,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [activePointerId, brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
