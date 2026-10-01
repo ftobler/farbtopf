@@ -514,6 +514,29 @@ describe('PaintCanvas', () => {
       expect(pixel(10, 13)).toEqual([255, 255, 255, 255])
     })
 
+    it('does not lift the selection or record history when the rotate handle is only clicked', () => {
+      const { ref, canvas, container, onHistoryChange } = setup('select', 40, 40)
+      selectBar(canvas)
+      onHistoryChange.mockClear()
+      const handle = container.querySelector('.selection-rotate-handle')
+      if (!handle) throw new Error('rotate handle not rendered')
+      handle.setPointerCapture = vi.fn()
+      fireEvent.pointerDown(handle, { button: 0, pointerId: 5, clientX: 15, clientY: 5 })
+      fireEvent.pointerUp(handle, { button: 0, pointerId: 5, clientX: 15, clientY: 5 })
+      expect(onHistoryChange).not.toHaveBeenCalled()
+      expect(ref.current?.getSelection()).toEqual({ x: 10, y: 13, width: 10, height: 4 })
+    })
+
+    it('records a single undo step when the rotate handle is dragged', () => {
+      const { ref, canvas, container, onHistoryChange } = setup('select', 40, 40)
+      selectBar(canvas)
+      onHistoryChange.mockClear()
+      dragRotate(container, { x: 15, y: 5 }, { x: 25, y: 15 })
+      expect(ref.current?.getSelection()).toEqual({ x: 13, y: 10, width: 4, height: 10 })
+      expect(onHistoryChange).toHaveBeenCalledTimes(1)
+      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    })
+
     it('follows the pointer angle without snapping', () => {
       const { ref, canvas, container } = setup('select', 40, 40)
       selectBar(canvas)

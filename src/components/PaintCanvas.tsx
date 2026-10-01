@@ -2392,34 +2392,39 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
-      const rotation = beginRotation()
-      if (!rotation) return
       event.currentTarget.setPointerCapture?.(event.pointerId)
       const start = clientToCanvas(event.clientX, event.clientY)
-      selectRef.current = { pointerId: event.pointerId, mode: 'rotate', start, rotation }
+      selectRef.current = { pointerId: event.pointerId, mode: 'rotate', start }
     },
-    [beginRotation, clientToCanvas],
+    [clientToCanvas],
   )
 
   const handleRotateMove = useCallback(
     (event: ReactPointerEvent<HTMLSpanElement>) => {
       const drag = selectRef.current
-      if (!drag || drag.mode !== 'rotate' || drag.pointerId !== event.pointerId || !drag.rotation) return
+      if (!drag || drag.mode !== 'rotate' || drag.pointerId !== event.pointerId) return
       event.stopPropagation()
+      if (!drag.rotation) {
+        const rotation = beginRotation()
+        if (!rotation) return
+        drag.rotation = rotation
+      }
       const { center } = drag.rotation
       const point = clientToCanvas(event.clientX, event.clientY)
       const radians = pointerAngle(center, point) - pointerAngle(center, drag.start)
       applyRotation(drag.rotation, (radians * 180) / Math.PI)
     },
-    [applyRotation, clientToCanvas],
+    [applyRotation, beginRotation, clientToCanvas],
   )
 
   const handleRotateUp = useCallback((event: ReactPointerEvent<HTMLSpanElement>) => {
     const drag = selectRef.current
     if (!drag || drag.mode !== 'rotate' || drag.pointerId !== event.pointerId) return
     event.stopPropagation()
-    const floating = floatingRef.current
-    if (floating) floating.source = floating.bitmap
+    if (drag.rotation) {
+      const floating = floatingRef.current
+      if (floating) floating.source = floating.bitmap
+    }
     selectRef.current = null
   }, [])
 
