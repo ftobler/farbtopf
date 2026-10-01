@@ -51,6 +51,16 @@ describe('blendToward', () => {
     expect(Math.abs(p.a - 128)).toBeLessThanOrEqual(1)
   })
 
+  it('leaves a pixel fully transparent black when the blend has no alpha', () => {
+    const base = new Bitmap(2, 1)
+    base.set(0, 0, rgba(10, 20, 30, 0))
+    const work = new Bitmap(2, 1, RED)
+    const target = new Bitmap(2, 1, WHITE)
+    blendToward(target, base, work, 0)
+    expect(target.get(0, 0)).toEqual(TRANSPARENT)
+    expect(target.get(1, 0)).toEqual(TRANSPARENT)
+  })
+
   it('restores untouched pixels from the base', () => {
     const base = new Bitmap(3, 3, WHITE)
     const work = base.clone()
