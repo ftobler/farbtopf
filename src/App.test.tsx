@@ -407,6 +407,51 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
   })
 
+  describe('Escape with a pending shape', () => {
+    function drawPendingRectangle(container: HTMLElement) {
+      fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }))
+      const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+      canvas.setPointerCapture = vi.fn()
+      canvas.releasePointerCapture = vi.fn()
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 5, clientY: 5 })
+      fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 40, clientY: 40 })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+    }
+    /** Enter places a shape that is still pending, which makes it undoable. */
+    const stillPending = () => {
+      fireEvent.keyDown(document, { key: 'Enter' })
+      return !screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')
+    }
+
+    it('closes an open menu and leaves the shape pending', () => {
+      const { container } = render(<App />)
+      drawPendingRectangle(container)
+      fireEvent.click(screen.getByRole('button', { name: 'Fill' }))
+      expect(screen.queryAllByRole('menuitem').length).toBeGreaterThan(0)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryAllByRole('menuitem')).toHaveLength(0)
+      expect(stillPending()).toBe(true)
+    })
+
+    it('closes an open dialog and leaves the shape pending', () => {
+      const { container } = render(<App />)
+      drawPendingRectangle(container)
+      fireEvent.keyDown(document, { key: 'n', ctrlKey: true })
+      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(stillPending()).toBe(true)
+    })
+
+    it('otherwise discards the shape and stays on the shape tool', () => {
+      const { container } = render(<App />)
+      drawPendingRectangle(container)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(stillPending()).toBe(false)
+      expect(screen.getByRole('button', { name: 'Select' }).getAttribute('aria-pressed')).toBe('false')
+    })
+  })
+
   it('stacks the primary colour above the secondary colour', () => {
     const { container } = render(<App />)
     const swatches = [...container.querySelectorAll('.current-colors .color-swatch')]

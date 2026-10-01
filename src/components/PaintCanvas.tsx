@@ -1221,6 +1221,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return
       // Escape keeps what has been drawn, like Enter: MS Paint has no way to take back a vertex either.
       event.preventDefault()
+      // The app leaves Escape to a pending shape; stopping here keeps that independent of listener order.
+      if (event.key === 'Escape') event.stopImmediatePropagation()
       finishPolylineRef.current()
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1242,8 +1244,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitShapeRef.current()
       }
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    // Listening as the key bubbles lets an open menu or dialog take Escape first, so
+    // closing one leaves the shape alone.
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [shape])
 
   const resetDocument = useCallback(
