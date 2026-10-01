@@ -1067,6 +1067,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     cancelShapeRef.current()
   }, [tool, shapeKind])
 
+  // A shape that is still pending follows the colour, size and fill settings, as in
+  // Paint, so the toolbar restyles it instead of only the next one.
+  useEffect(() => {
+    const shape = shapeRef.current
+    if (shape) {
+      const preview = shape.base.clone()
+      renderShape(preview, shape.kind, shape.points, shape.slot)
+      paint(preview)
+    }
+    if (polylineRef.current) previewPolyline()
+  }, [paint, previewPolyline, renderShape])
+
   useEffect(() => {
     if (!polylineActive) return
     const onKeyDown = (event: KeyboardEvent) => {
