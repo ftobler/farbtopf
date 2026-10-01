@@ -1052,7 +1052,6 @@ textarea {
   border: 1px dashed rgba(0, 0, 0, 0.85);
   outline: 1px solid rgba(255, 255, 255, 0.85);
   outline-offset: -2px;
-  animation: selection-ants 0.6s linear infinite;
 }
 
 .selection-mask {
@@ -1096,12 +1095,6 @@ textarea {
   fill: var(--surface);
   stroke: var(--accent);
   stroke-width: 1.5;
-}
-
-@keyframes selection-ants {
-  to {
-    border-color: rgba(255, 255, 255, 0.85);
-  }
 }
 
 .selection-handle {
