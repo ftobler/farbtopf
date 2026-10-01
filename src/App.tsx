@@ -322,10 +322,15 @@ function App() {
     canvasRef.current?.invertColors()
   }, [])
 
-  const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    setContextMenu({ x: event.clientX, y: event.clientY })
-  }, [])
+  const handleContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      // With the zoom tool a right-click zooms out, so no menu pops up over it.
+      if (tool === 'zoom') return
+      setContextMenu({ x: event.clientX, y: event.clientY })
+    },
+    [tool],
+  )
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 

@@ -99,18 +99,19 @@ describe('PaintCanvas', () => {
     vi.restoreAllMocks()
   })
 
-  it('zooms in on left click and ignores a right click with the zoom tool', () => {
+  it('zooms in on left click and out on right click with the zoom tool', () => {
     const { canvas, onZoomClick, onHistoryChange } = setup('zoom')
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
     expect(onZoomClick).toHaveBeenLastCalledWith(1)
     fireEvent.pointerDown(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
     fireEvent.pointerUp(canvas, { button: 2, pointerId: 2, clientX: 5, clientY: 5 })
-    expect(onZoomClick).toHaveBeenCalledTimes(1)
+    expect(onZoomClick).toHaveBeenLastCalledWith(-1)
+    expect(onZoomClick).toHaveBeenCalledTimes(2)
     expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
   })
 
-  it('never acts on a right click: no paint, no pick, no zoom', () => {
+  it('never acts on a right click with a painting or picking tool', () => {
     const { canvas, onZoomClick } = setup('brush', 20, 20)
     const context = { putImageData: vi.fn() }
     canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext

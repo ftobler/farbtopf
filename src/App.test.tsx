@@ -324,6 +324,24 @@ describe('App', () => {
     expect(zoom.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('zooms out on a right click with the zoom tool instead of opening the context menu', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom' }))
+    const slider = screen.getByRole('slider', { name: 'Zoom' })
+    fireEvent.change(slider, { target: { value: String(ZOOM_LEVELS.indexOf(2)) } })
+    const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+    fireEvent.pointerDown(canvas, { button: 2, pointerId: 1, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 1, clientX: 5, clientY: 5 })
+    const menuEvent = fireEvent.contextMenu(canvas, { clientX: 5, clientY: 5 })
+    expect(menuEvent).toBe(false)
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    expect(fireEvent.contextMenu(workspace, { clientX: 40, clientY: 40 })).toBe(false)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('stacks the primary colour above the secondary colour', () => {
     const { container } = render(<App />)
     const swatches = [...container.querySelectorAll('.current-colors .color-swatch')]

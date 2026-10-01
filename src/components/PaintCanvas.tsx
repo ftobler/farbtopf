@@ -1672,10 +1672,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       if (event.button !== 0 && event.button !== 2) return
-      // A right-click always opens the workspace context menu and no tool acts on
-      // it: no secondary-colour paint, no zoom-out, no colour pick. The canvas
-      // `onContextMenu` swallows the native menu.
-      if (event.button === 2) return
+      // A right-click opens the workspace context menu and no tool acts on it:
+      // no secondary-colour paint, no colour pick. The one exception is the zoom
+      // tool, which zooms out instead (and the workspace skips its menu). The
+      // canvas `onContextMenu` swallows the native menu.
+      if (event.button === 2) {
+        if (tool === 'zoom') {
+          event.preventDefault()
+          onZoomClick(-1)
+        }
+        return
+      }
       if (tool === 'eraser') setEraserHover(toPoint(event))
       if (editorRef.current) {
         commitText()
