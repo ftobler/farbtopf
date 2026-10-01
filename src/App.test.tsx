@@ -344,6 +344,14 @@ describe('App', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('fills with the secondary colour on a right click instead of opening the context menu', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Fill with color' }))
+    const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+    expect(fireEvent.contextMenu(canvas, { clientX: 5, clientY: 5 })).toBe(false)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('stacks the primary colour above the secondary colour', () => {
     const { container } = render(<App />)
     const swatches = [...container.querySelectorAll('.current-colors .color-swatch')]

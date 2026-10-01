@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BLACK, WHITE } from './color'
-import { strokeColorFor, strokeWidthFor } from './tools'
+import { rightClickActs, strokeColorFor, strokeWidthFor } from './tools'
 
 describe('strokeWidthFor', () => {
   it('honours the size for the pencil too', () => {
@@ -30,5 +30,18 @@ describe('strokeColorFor', () => {
   it('uses the slot colour for other tools', () => {
     expect(strokeColorFor('brush', 'primary', BLACK, WHITE)).toBe(BLACK)
     expect(strokeColorFor('brush', 'secondary', BLACK, WHITE)).toBe(WHITE)
+  })
+})
+
+describe('rightClickActs', () => {
+  it('is true for the tools that act on a right click', () => {
+    expect(rightClickActs('zoom')).toBe(true)
+    expect(rightClickActs('fill')).toBe(true)
+  })
+
+  it('is false for the tools that leave a right click to the context menu', () => {
+    expect(rightClickActs('select')).toBe(false)
+    expect(rightClickActs('text')).toBe(false)
+    expect(rightClickActs('shape')).toBe(false)
   })
 })

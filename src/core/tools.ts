@@ -40,6 +40,13 @@ export function isShapeTool(id: ToolId): boolean {
   return id === 'shape'
 }
 
+/** Tools that act on a right click (with the secondary colour, or zooming out) rather than open the context menu. */
+const RIGHT_CLICK_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['zoom', 'fill'])
+
+export function rightClickActs(id: ToolId): boolean {
+  return RIGHT_CLICK_TOOLS.has(id)
+}
+
 /** The stroke width a tool paints with: its size as whole pixels from 1 to 500. */
 export function strokeWidthFor(_id: ToolId, brushSize: number): number {
   return Math.min(500, Math.max(1, Math.round(Number.isFinite(brushSize) ? brushSize : 1)))

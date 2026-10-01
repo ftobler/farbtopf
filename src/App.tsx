@@ -42,7 +42,7 @@ import type { SelectionShape } from './core/selection'
 import type { ShapeKind } from './core/shapes'
 import { DEFAULT_CANVAS, DEFAULT_PALETTE } from './core/palette'
 import { DEFAULT_PRIMARY, DEFAULT_SECONDARY } from './core/palette'
-import { TOOLS, toolById } from './core/tools'
+import { TOOLS, rightClickActs, toolById } from './core/tools'
 import { DEFAULT_TOOL_SETTINGS, clampOpacity, clampSize, isSizedTool, stepSize } from './core/toolSettings'
 import type { SizedTool, ToolSettingsMap } from './core/toolSettings'
 import type { ShapeFill, ToolId } from './core/tools'
@@ -446,8 +446,8 @@ function App() {
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       event.preventDefault()
-      // With the zoom tool a right-click zooms out, so no menu pops up over it.
-      if (tool === 'zoom') return
+      // Tools that act on a right-click (zoom out, secondary colour) get no menu over it.
+      if (rightClickActs(tool)) return
       setContextMenu({ x: event.clientX, y: event.clientY })
     },
     [tool],
