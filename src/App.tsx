@@ -173,6 +173,13 @@ function App() {
   /** Unplaced work on the canvas (a pending shape, an open text box with text) is unsaved too. */
   const [pending, setPending] = useState(false)
   const dirty = revision !== savedRevision || pending
+  const modalOpen =
+    newDialogOpen ||
+    showScaleDialog ||
+    showCanvasSizeDialog ||
+    showRotateDialog ||
+    blurTarget !== null ||
+    pendingAction !== null
 
   /** Runs `action` right away, or after the user confirms losing unsaved work. */
   const requestDestructive = useCallback(
@@ -648,6 +655,7 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return
+      if (modalOpen) return
       const modifier = event.ctrlKey || event.metaKey
 
       if (modifier) {
@@ -757,6 +765,7 @@ function App() {
     brushSize,
     setBrushSize,
     contextMenu,
+    modalOpen,
     handleCopyFromCanvas,
     handleCutFromCanvas,
     handleDeleteSelection,

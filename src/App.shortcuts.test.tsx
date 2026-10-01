@@ -204,4 +204,48 @@ describe('App keyboard shortcuts', () => {
       expect(gridOn()).toBe(false)
     })
   })
+
+  describe('while a modal dialog is open', () => {
+    it('keeps the current tool when a tool letter is pressed', () => {
+      setup()
+      fireEvent.click(screen.getByRole('button', { name: 'Eraser' }))
+      expect(pressed('Eraser')).toBe(true)
+      ctrl('n')
+      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+      press('b')
+      expect(pressed('Eraser')).toBe(true)
+      expect(pressed('Brush')).toBe(false)
+      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+    })
+
+    it('does not delete the selection with Delete', () => {
+      const { select } = setup()
+      select()
+      ctrl('n')
+      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+      press('Delete')
+      expect(selectionSize()).toBe('120 × 45 px')
+      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+    })
+
+    it('does not undo with Ctrl+Z', () => {
+      const { pixel, paintBlack } = setup()
+      paintBlack()
+      ctrl('n')
+      expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
+      ctrl('z')
+      expect(pixel(0, 0)).toEqual(BLACK)
+      expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
+    })
+
+    it('closes on Escape and lets shortcuts work again', () => {
+      setup()
+      ctrl('n')
+      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(screen.queryByRole('dialog', { name: 'New image' })).toBeNull()
+      press('e')
+      expect(pressed('Eraser')).toBe(true)
+    })
+  })
 })
