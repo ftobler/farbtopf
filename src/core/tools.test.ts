@@ -37,6 +37,7 @@ describe('rightClickActs', () => {
   it('is true for the tools that act on a right click', () => {
     expect(rightClickActs('zoom')).toBe(true)
     expect(rightClickActs('fill')).toBe(true)
+    expect(rightClickActs('picker')).toBe(true)
   })
 
   it('is false for the tools that leave a right click to the context menu', () => {

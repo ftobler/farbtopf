@@ -66,4 +66,11 @@ describe('PaintCanvas right click', () => {
     expect(shown(5, 5)).toEqual(WHITE_PIXEL)
     expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
   })
+
+  it('picks a colour into the secondary slot', () => {
+    const { onPickColor, rightClick } = setup('picker')
+    rightClick(5, 5)
+    expect(onPickColor).toHaveBeenCalledTimes(1)
+    expect(onPickColor).toHaveBeenLastCalledWith(WHITE_PIXEL, 'secondary')
+  })
 })
