@@ -981,16 +981,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onLayersChange(stack, activeRef.current)
   }, [currentLayers])
 
-  /** Replaces the layer stack; the active layer's bitmap becomes the live paint surface. */
+  /**
+   * Replaces the layer stack; the active layer's bitmap becomes the live paint surface.
+   * `publish` can be turned off while a live drag repeatedly resizes the stack, so the
+   * layer thumbnails are only rebuilt once the drag finishes.
+   */
   const setLayers = useCallback(
-    (next: Layer[], active: number) => {
+    (next: Layer[], active: number, publish = true) => {
       layersRef.current = next
       activeRef.current = active
       bitmapRef.current = next[active].bitmap
       const flatten = (stack: Layer[]) => compositeLayers(stack.map((layer) => layer.bitmap))
       stackRef.current = { below: flatten(next.slice(0, active)), above: flatten(next.slice(active + 1)) }
       paint(next[active].bitmap)
-      publishLayers()
+      if (publish) publishLayers()
     },
     [paint, publishLayers],
   )
@@ -2481,7 +2485,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }))
       setSize({ width: next[0].bitmap.width, height: next[0].bitmap.height })
       onSizeChangeRef.current(next[0].bitmap.width, next[0].bitmap.height)
-      setLayers(next, drag.source.active)
+      // During a drag only the live surface is needed; the thumbnails are rebuilt once on drop.
+      setLayers(next, drag.source.active, false)
 
       // Keep the edge opposite the dragged handle pinned on screen.
       const onPanChange = onPanChangeRef.current
@@ -2504,7 +2509,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (!drag || drag.pointerId !== event.pointerId) return
       event.stopPropagation()
       canvasResizeRef.current = null
-      syncHistory()
+      // Only a drag that actually changed the size has thumbnails to rebuild.
+      if (drag.recorded) syncHistory()
     },
     [syncHistory],
   )

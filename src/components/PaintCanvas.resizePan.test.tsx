@@ -1,7 +1,8 @@
 import { createRef } from 'react'
-import { fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Point } from '../core/geometry'
+import type { LayerInfo } from '../core/layers'
 import { BLACK, WHITE } from '../core/color'
 import { PaintCanvas } from './PaintCanvas'
 import type { PaintCanvasHandle } from './PaintCanvas'
@@ -18,6 +19,7 @@ const START_PAN = { x: 10, y: -6 }
 function setup() {
   const ref = createRef<PaintCanvasHandle>()
   const onPanChange = vi.fn<(pan: Point) => void>()
+  const onLayersChange = vi.fn<(layers: LayerInfo[], active: number) => void>()
   let pan = START_PAN
   const element = () => (
     <PaintCanvas
@@ -38,6 +40,7 @@ function setup() {
       onSizeChange={vi.fn()}
       transparentSelection={false}
       onPanChange={onPanChange}
+      onLayersChange={onLayersChange}
     />
   )
   const { container, rerender } = render(element())
@@ -91,7 +94,25 @@ function setup() {
     const last = points.at(-1) ?? first
     fireEvent.pointerUp(handle, { pointerId: 7, clientX: last[0], clientY: last[1] })
   }
-  return { ref, edges, drag, onPanChange }
+
+  /** Opens a resize drag whose moves can be inspected one at a time. */
+  const resize = (id: string) => {
+    const handle = container.querySelector<HTMLElement>(`.canvas-resize-handle-${id}`)
+    if (!handle) throw new Error(`no ${id} handle`)
+    handle.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 7, clientX: 0, clientY: 0 })
+    const move = ([x, y]: [number, number]) => {
+      fireEvent.pointerMove(handle, { pointerId: 7, clientX: x, clientY: y })
+      const reported = onPanChange.mock.calls.at(-1)?.[0]
+      if (reported) {
+        pan = reported
+        rerender(element())
+      }
+    }
+    const up = ([x, y]: [number, number]) => fireEvent.pointerUp(handle, { pointerId: 7, clientX: x, clientY: y })
+    return { move, up }
+  }
+  return { ref, edges, drag, resize, onPanChange, onLayersChange }
 }
 
 // Screen coordinates of the image's edges at the start: x 100..140, y 50..90.
@@ -147,5 +168,38 @@ describe('PaintCanvas canvas resize handles keep the opposite edge in place', ()
     drag('n', [120, 500])
     expect(ref.current?.getSize()).toEqual({ width: SIZE, height: 1 })
     expect(edges().bottom).toBe(before.bottom)
+  })
+})
+
+describe('PaintCanvas canvas resize publishes layer thumbnails', () => {
+  it('does not rebuild layer thumbnails on every resize move', () => {
+    const { ref, resize, onLayersChange } = setup()
+    act(() => ref.current?.addLayer())
+    const drag = resize('e')
+    drag.move([150, 70])
+    drag.move([160, 70])
+    const afterTwoMoves = onLayersChange.mock.calls.length
+    drag.move([170, 70])
+    drag.move([180, 70])
+    drag.move([190, 70])
+    expect(onLayersChange.mock.calls.length).toBe(afterTwoMoves)
+  })
+
+  it('rebuilds the layer thumbnails once the resize ends, at the final size', () => {
+    const { ref, resize, onLayersChange } = setup()
+    act(() => ref.current?.addLayer())
+    const drag = resize('e')
+    drag.move([150, 70])
+    drag.move([160, 70])
+    // No move publishes the resized stack: the last published thumbnails still
+    // show the pre-drag size.
+    const beforeUp = onLayersChange.mock.calls.at(-1)?.[0] ?? []
+    expect(beforeUp.map((layer) => layer.thumbnail.width)).toEqual([SIZE, SIZE])
+    const during = onLayersChange.mock.calls.length
+    drag.up([160, 70])
+    expect(onLayersChange.mock.calls.length).toBeGreaterThan(during)
+    expect(ref.current?.getSize()).toEqual({ width: 30, height: SIZE })
+    const published = onLayersChange.mock.calls.at(-1)?.[0] ?? []
+    expect(published.map((layer) => layer.thumbnail.width)).toEqual([30, 30])
   })
 })
