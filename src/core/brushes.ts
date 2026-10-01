@@ -1,6 +1,6 @@
 import type { Bitmap } from './bitmap'
 import type { Rgba } from './color'
-import type { Point } from './geometry'
+import type { Point, Rect } from './geometry'
 import type { Random } from './random'
 
 export type BrushId =
@@ -336,6 +336,43 @@ export function stampHighlighter(mask: CoverageMask, from: Point, to: Point, siz
 }
 
 /**
+ * Composites the highlighter colour over `base` into `dst`, only touching `rect`
+ * (clipped to the bitmaps; the whole image when omitted). `dst` is first given the
+ * `base` pixels of the rect, so a region can be recomposited from scratch while
+ * pixels outside it keep whatever earlier calls left there.
+ */
+export function compositeHighlighterInto(
+  dst: Bitmap,
+  base: Bitmap,
+  mask: CoverageMask,
+  color: Rgba,
+  alpha: number,
+  rect?: Rect,
+): void {
+  const width = Math.min(dst.width, base.width, mask.width)
+  const height = Math.min(dst.height, base.height, mask.height)
+  const x0 = Math.max(0, Math.floor(rect ? rect.x : 0))
+  const y0 = Math.max(0, Math.floor(rect ? rect.y : 0))
+  const x1 = Math.min(width, Math.ceil(rect ? rect.x + rect.width : width))
+  const y1 = Math.min(height, Math.ceil(rect ? rect.y + rect.height : height))
+  const strength = Math.max(0, Math.min(1, alpha))
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const index = (y * dst.width + x) * 4
+      const source = (y * base.width + x) * 4
+      dst.data[index] = base.data[source]
+      dst.data[index + 1] = base.data[source + 1]
+      dst.data[index + 2] = base.data[source + 2]
+      dst.data[index + 3] = base.data[source + 3]
+      if (strength <= 0) continue
+      const coverage = mask.data[y * mask.width + x] / 255
+      if (coverage <= 0) continue
+      blendPixel(dst, x, y, color, strength * coverage)
+    }
+  }
+}
+
+/**
  * Composites the highlighter colour over `base` using the stroke mask. Because it
  * always starts from `base`, overlapping parts of the stroke keep one flat alpha.
  */
@@ -346,17 +383,7 @@ export function compositeHighlighter(
   alpha: number,
 ): Bitmap {
   const result = base.clone()
-  const strength = Math.max(0, Math.min(1, alpha))
-  if (strength <= 0) return result
-  const width = Math.min(base.width, mask.width)
-  const height = Math.min(base.height, mask.height)
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const coverage = mask.data[y * mask.width + x] / 255
-      if (coverage <= 0) continue
-      blendPixel(result, x, y, color, strength * coverage)
-    }
-  }
+  compositeHighlighterInto(result, base, mask, color, alpha)
   return result
 }
 

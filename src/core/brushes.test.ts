@@ -5,6 +5,7 @@ import {
   HIGHLIGHTER_ALPHA,
   brushById,
   compositeHighlighter,
+  compositeHighlighterInto,
   createCoverageMask,
   isColorBrush,
   paintBrushStroke,
@@ -193,6 +194,36 @@ describe('brushes', () => {
     for (let y = 0; y < 40; y += 1) {
       for (let x = 0; x < 40; x += 1) {
         expect(overlapped.get(x, y), `pixel ${x},${y} darkened`).toEqual(single.get(x, y))
+      }
+    }
+  })
+
+  it('composites a region into an existing bitmap without touching pixels outside it', () => {
+    const width = 40
+    const height = 40
+    const base = new Bitmap(width, height, WHITE)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if ((x + y) % 3 === 0) base.set(x, y, { r: 120, g: 80, b: 200, a: 255 })
+      }
+    }
+    const mask = createCoverageMask(width, height)
+    stampHighlighter(mask, { x: 6, y: 12 }, { x: 30, y: 20 }, 10)
+    const full = compositeHighlighter(base, mask, BLACK, HIGHLIGHTER_ALPHA)
+
+    const whole = base.clone()
+    compositeHighlighterInto(whole, base, mask, BLACK, HIGHLIGHTER_ALPHA)
+    expect(pixelData(whole)).toEqual(pixelData(full))
+
+    const sentinel = { r: 1, g: 2, b: 3, a: 4 }
+    const dst = new Bitmap(width, height, sentinel)
+    const rect = { x: 8, y: 14, width: 12, height: 8 }
+    compositeHighlighterInto(dst, base, mask, BLACK, HIGHLIGHTER_ALPHA, rect)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const inside =
+          x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height
+        expect(dst.get(x, y), `pixel ${x},${y}`).toEqual(inside ? full.get(x, y) : sentinel)
       }
     }
   })

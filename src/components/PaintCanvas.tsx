@@ -15,7 +15,7 @@ import { Bitmap } from '../core/bitmap'
 import { blurSelection, gaussianBlur } from '../core/blur'
 import {
   HIGHLIGHTER_ALPHA,
-  compositeHighlighter,
+  compositeHighlighterInto,
   createCoverageMask,
   SPRAY_TICK_MS,
   paintBrushStroke,
@@ -395,6 +395,17 @@ function segmentBounds(from: Point, to: Point, width: number): Rect {
   }
 }
 
+/**
+ * An `ImageData` over the bitmap's live buffer, for surfaces that are consumed
+ * immediately (putImageData/drawImage) and so need no defensive copy.
+ */
+function imageDataFor(bitmap: Bitmap): ImageData {
+  if (typeof ImageData !== 'undefined') {
+    return new ImageData(bitmap.data as Uint8ClampedArray<ArrayBuffer>, bitmap.width, bitmap.height)
+  }
+  return { width: bitmap.width, height: bitmap.height, data: bitmap.data } as unknown as ImageData
+}
+
 function strokeShape(tool: ToolId): BrushShape {
   return tool === 'pencil' || tool === 'eraser' ? 'square' : 'round'
 }
@@ -730,6 +741,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const strokeRef = useRef<StrokeState | null>(null)
   /** Keeps the spray can spraying while the pointer is held down, even without moving. */
   const sprayTimerRef = useRef<number | null>(null)
+  /** The animation frame that lifts the stroke-paint throttle, or null when none is pending. */
+  const strokeFrameRef = useRef<number | null>(null)
+  /** True while this frame's stroke repaint has already run and further ones are coalesced. */
+  const strokePaintPendingRef = useRef(false)
   const stopSpraying = useCallback(() => {
     if (sprayTimerRef.current !== null) window.clearInterval(sprayTimerRef.current)
     sprayTimerRef.current = null
@@ -794,13 +809,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (canvas.height !== backingHeight) canvas.height = backingHeight
 
     const { below, above } = stackRef.current
-    let shown = bitmap
+    let image: ImageData
     if (below || above) {
-      shown = below ? below.clone() : new Bitmap(bitmap.width, bitmap.height)
+      // A real composite of the stack is its own buffer; only the plain bitmap can
+      // hand its live buffer over, because putImageData reads it before anything
+      // paints over it again.
+      const shown = below ? below.clone() : new Bitmap(bitmap.width, bitmap.height)
       drawOver(shown, bitmap)
       if (above) drawOver(shown, above)
+      image = shown.toImageData()
+    } else {
+      image = imageDataFor(bitmap)
     }
-    const image = shown.toImageData()
 
     const miniature = miniatureRef.current
     if (miniature) {
@@ -831,6 +851,39 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     context.clearRect(0, 0, backingWidth, backingHeight)
     context.drawImage(offscreen, 0, 0, backingWidth, backingHeight)
   }, [])
+
+  const cancelStrokeFrame = useCallback(() => {
+    if (strokeFrameRef.current === null) return
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(strokeFrameRef.current)
+    else window.clearTimeout(strokeFrameRef.current)
+    strokeFrameRef.current = null
+    strokePaintPendingRef.current = false
+  }, [])
+
+  /**
+   * Repaints the stroke surface at most once per animation frame. The first call
+   * paints synchronously so a stroke is visible without waiting for a frame, while
+   * the moves that land in the same frame are coalesced into that one repaint.
+   */
+  const paintStrokeSurface = useCallback(() => {
+    if (strokePaintPendingRef.current) return
+    strokePaintPendingRef.current = true
+    paint(doc())
+    const clear = () => {
+      strokeFrameRef.current = null
+      strokePaintPendingRef.current = false
+    }
+    strokeFrameRef.current =
+      typeof requestAnimationFrame === 'function' ? requestAnimationFrame(clear) : window.setTimeout(clear, 0)
+  }, [doc, paint])
+
+  /** Paints any throttled stroke repaint immediately, for the end of a stroke. */
+  const flushStrokeSurface = useCallback(() => {
+    cancelStrokeFrame()
+    paint(doc())
+  }, [cancelStrokeFrame, doc, paint])
+
+  useEffect(() => cancelStrokeFrame, [cancelStrokeFrame])
 
   const layers = useCallback((): Layer[] => {
     if (layersRef.current.length === 0) layersRef.current = [{ id: 1, name: 'Background', bitmap: doc() }]
@@ -1997,6 +2050,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         strength,
       }
       strokeRef.current = stroke
+      cancelStrokeFrame()
 
       {
         recordHistory(base)
@@ -2011,9 +2065,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           const mask = createCoverageMask(base.width, base.height)
           stampHighlighter(mask, point, point, width)
           stroke.highlighter = mask
-          const result = compositeHighlighter(base, mask, color, HIGHLIGHTER_ALPHA)
-          if (stroke.work) stroke.work = result
-          else bitmapRef.current = result
+          const dirty = segmentBounds(point, point, width)
+          if (stroke.work) {
+            compositeHighlighterInto(stroke.work, base, mask, color, HIGHLIGHTER_ALPHA, dirty)
+          } else {
+            const result = base.clone()
+            compositeHighlighterInto(result, base, mask, color, HIGHLIGHTER_ALPHA, dirty)
+            bitmapRef.current = result
+          }
         } else if (tool === 'brush') {
           paintBrushStroke(target, point, point, { size: width, color, brush, random, source: base })
           if (brush === 'spray') {
@@ -2029,7 +2088,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
               if (stroke.work) {
                 blendToward(doc(), stroke.base, stroke.work, stroke.strength, segmentBounds(stroke.last, stroke.last, width))
               }
-              paint(doc())
+              paintStrokeSurface()
             }, SPRAY_TICK_MS)
           }
         } else {
@@ -2040,7 +2099,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -2129,9 +2188,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           sprayDab(target, free, width, color, random)
         } else if (stroke.tool === 'brush' && brush === 'highlighter' && stroke.highlighter) {
           stampHighlighter(stroke.highlighter, stroke.last, free, width)
-          const result = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)
-          if (stroke.work) stroke.work = result
-          else bitmapRef.current = result
+          const dirty = segmentBounds(stroke.last, free, width)
+          const result = stroke.work ?? doc()
+          compositeHighlighterInto(result, stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA, dirty)
         } else if (stroke.tool === 'brush') {
           paintBrushStroke(target, stroke.last, free, { size: width, color, brush, random, source: stroke.base })
         } else {
@@ -2140,11 +2199,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (stroke.work) {
           blendToward(doc(), stroke.base, stroke.work, stroke.strength, segmentBounds(stroke.last, free, width))
         }
-        paint(doc())
+        paintStrokeSurface()
       }
       stroke.last = free
     },
-    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -2221,13 +2280,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       stopSpraying()
+      // The last move may have been coalesced into a pending frame; show its pixels now.
+      flushStrokeSurface()
       if (stroke.recorded) {
         // Freehand strokes paint in place; refresh the layer thumbnails once they are done.
         publishLayers()
       }
       strokeRef.current = null
     },
-    [cancelPolyline, cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
+    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
   )
 
   // Clicking the workspace background settles pending edits and deselects, but
