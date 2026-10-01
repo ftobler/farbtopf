@@ -389,6 +389,32 @@ describe('PaintCanvas document actions accept the pending shape first', () => {
     expect(s.image()).toEqual(placed)
   })
 
+  it('takes back only a lone freeform vertex on undo', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    s.commit()
+    const first = s.image()
+    s.setProps({ shapeKind: 'freeform' })
+    s.click(15, 15)
+    act(() => s.ref.current?.undo())
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(first)
+    expect(s.onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('takes back only a shape still being dragged out on undo', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    s.commit()
+    const first = s.image()
+    fireEvent.pointerDown(s.container.querySelector('canvas') as HTMLCanvasElement, { button: 0, buttons: 1, pointerId: 1, clientX: 12, clientY: 12 })
+    fireEvent.pointerMove(s.container.querySelector('canvas') as HTMLCanvasElement, { buttons: 1, pointerId: 1, clientX: 25, clientY: 25 })
+    act(() => s.ref.current?.undo())
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(first)
+    expect(s.onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
   it('drops the pending shape on redo', () => {
     const s = setup()
     s.drag([2, 2], [8, 8])

@@ -1448,8 +1448,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       undo() {
         // Undo takes back the pending shape or curve itself, as in Paint: it is placed
         // and then undone, so the step before it survives and redo brings it back.
+        // One too small to place (still being dragged out, a lone freeform vertex) is
+        // simply dropped, and that is all this undo does.
+        const unplaced =
+          shapeRef.current?.mode === 'insert' || (polylineRef.current !== null && polylineRef.current.points.length < 2)
         commitShapeRef.current()
         finishPolyline()
+        if (unplaced) return
         if (floatingRef.current) {
           commitFloating()
           updateSelection(null)
