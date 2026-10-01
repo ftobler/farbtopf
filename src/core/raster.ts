@@ -1,6 +1,6 @@
 import { Bitmap } from './bitmap'
 import type { Rgba } from './color'
-import { colorsEqual } from './color'
+import { clampByte, colorsEqual } from './color'
 import type { Point, Rect } from './geometry'
 
 export type BrushShape = 'square' | 'round'
@@ -409,23 +409,76 @@ export function floodFill(
   const sx = Math.floor(start.x)
   const sy = Math.floor(start.y)
   if (!bitmap.contains(sx, sy)) return 0
+  const { width, height, data } = bitmap
   const target = bitmap.get(sx, sy)
   if (colorsEqual(target, color, tolerance)) return 0
 
-  const { width, height } = bitmap
-  const stack: number[] = [sy * width + sx]
+  const startIndex = (sy * width + sx) * 4
+  const targetR = data[startIndex]
+  const targetG = data[startIndex + 1]
+  const targetB = data[startIndex + 2]
+  const targetA = data[startIndex + 3]
+  const fillR = clampByte(color.r)
+  const fillG = clampByte(color.g)
+  const fillB = clampByte(color.b)
+  const fillA = clampByte(color.a)
+
+  const matches = (index: number): boolean => {
+    const i = index * 4
+    return (
+      Math.abs(data[i] - targetR) <= tolerance &&
+      Math.abs(data[i + 1] - targetG) <= tolerance &&
+      Math.abs(data[i + 2] - targetB) <= tolerance &&
+      Math.abs(data[i + 3] - targetA) <= tolerance
+    )
+  }
+
+  let stack = new Int32Array(1024)
+  let top = 0
+  const push = (index: number): void => {
+    if (top === stack.length) {
+      const grown = new Int32Array(stack.length * 2)
+      grown.set(stack)
+      stack = grown
+    }
+    stack[top] = index
+    top += 1
+  }
+
+  const scanRow = (rowY: number, fromX: number, toX: number): void => {
+    if (rowY < 0 || rowY >= height) return
+    const row = rowY * width
+    let x = fromX
+    while (x <= toX) {
+      while (x <= toX && !matches(row + x)) x += 1
+      if (x > toX) return
+      push(row + x)
+      while (x <= toX && matches(row + x)) x += 1
+    }
+  }
+
+  push(sy * width + sx)
   let changed = 0
-  while (stack.length > 0) {
-    const index = stack.pop() as number
-    const px = index % width
-    const py = (index - px) / width
-    if (!colorsEqual(bitmap.get(px, py), target, tolerance)) continue
-    bitmap.set(px, py, color)
-    changed += 1
-    if (px > 0) stack.push(index - 1)
-    if (px < width - 1) stack.push(index + 1)
-    if (py > 0) stack.push(index - width)
-    if (py < height - 1) stack.push(index + width)
+  while (top > 0) {
+    top -= 1
+    const seed = stack[top]
+    const y = Math.floor(seed / width)
+    const seedX = seed - y * width
+    if (!matches(seed)) continue
+    let left = seedX
+    while (left > 0 && matches(y * width + left - 1)) left -= 1
+    let right = seedX
+    while (right < width - 1 && matches(y * width + right + 1)) right += 1
+    for (let x = left; x <= right; x += 1) {
+      const i = (y * width + x) * 4
+      data[i] = fillR
+      data[i + 1] = fillG
+      data[i + 2] = fillB
+      data[i + 3] = fillA
+      changed += 1
+    }
+    scanRow(y - 1, left, right)
+    scanRow(y + 1, left, right)
   }
   return changed
 }

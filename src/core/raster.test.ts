@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bitmap } from './bitmap'
-import { BLACK, WHITE, rgba } from './color'
+import { BLACK, WHITE, colorsEqual, rgba } from './color'
+import type { Rgba } from './color'
 import type { Point } from './geometry'
 import {
   bezierPoints,
@@ -372,6 +373,143 @@ describe('floodFill', () => {
     bitmap.fill(rgba(100, 100, 100))
     const changed = floodFill(bitmap, { x: 0, y: 0 }, BLACK, 20)
     expect(changed).toBe(9)
+  })
+
+  it('returns 0 when the start is outside the bitmap', () => {
+    const bitmap = new Bitmap(4, 4, WHITE)
+    expect(floodFill(bitmap, { x: -1, y: 0 }, BLACK)).toBe(0)
+    expect(floodFill(bitmap, { x: 0, y: 4 }, BLACK)).toBe(0)
+  })
+
+  it('returns 0 when the start already matches the fill color', () => {
+    const bitmap = new Bitmap(4, 4, BLACK)
+    expect(floodFill(bitmap, { x: 2, y: 2 }, BLACK)).toBe(0)
+  })
+})
+
+describe('floodFill equivalence with reference fill', () => {
+  function referenceFloodFill(
+    bitmap: Bitmap,
+    start: Point,
+    color: Rgba,
+    tolerance = 0,
+  ): number {
+    const sx = Math.floor(start.x)
+    const sy = Math.floor(start.y)
+    if (!bitmap.contains(sx, sy)) return 0
+    const target = bitmap.get(sx, sy)
+    if (colorsEqual(target, color, tolerance)) return 0
+    const stack: Point[] = [{ x: sx, y: sy }]
+    let changed = 0
+    while (stack.length > 0) {
+      const { x, y } = stack.pop() as Point
+      if (!bitmap.contains(x, y)) continue
+      if (!colorsEqual(bitmap.get(x, y), target, tolerance)) continue
+      bitmap.set(x, y, color)
+      changed += 1
+      stack.push(
+        { x: x + 1, y },
+        { x: x - 1, y },
+        { x, y: y + 1 },
+        { x, y: y - 1 },
+      )
+    }
+    return changed
+  }
+
+  function expectMatchesReference(
+    build: (bitmap: Bitmap) => void,
+    start: Point,
+    color: Rgba,
+    tolerance = 0,
+  ): void {
+    const expected = new Bitmap(20, 20, WHITE)
+    build(expected)
+    const actual = expected.clone()
+    const expectedChanged = referenceFloodFill(expected, start, color, tolerance)
+    const actualChanged = floodFill(actual, start, color, tolerance)
+    expect(actualChanged).toBe(expectedChanged)
+    expect(Array.from(actual.data)).toEqual(Array.from(expected.data))
+  }
+
+  const scenarios: Array<{ name: string; build: (bitmap: Bitmap) => void; start: Point }> = [
+    {
+      name: 'obstacle wall with a gap',
+      build: (bitmap) => {
+        for (let y = 0; y < 20; y += 1) {
+          if (y < 8 || y > 12) bitmap.set(10, y, BLACK)
+        }
+      },
+      start: { x: 2, y: 2 },
+    },
+    {
+      name: 'enclosed hole and disconnected region',
+      build: (bitmap) => {
+        drawRect(bitmap, { x: 3, y: 3, width: 8, height: 8 }, 1, BLACK, false)
+        drawRect(bitmap, { x: 14, y: 14, width: 4, height: 4 }, 1, BLACK, false)
+      },
+      start: { x: 5, y: 5 },
+    },
+    {
+      name: 'diagonal boundary',
+      build: (bitmap) => {
+        for (let i = 0; i < 20; i += 1) bitmap.set(i, i, BLACK)
+      },
+      start: { x: 2, y: 10 },
+    },
+    {
+      name: 'filled obstacles from a corner',
+      build: (bitmap) => {
+        for (let y = 4; y < 9; y += 1) {
+          for (let x = 4; x < 16; x += 1) bitmap.set(x, y, rgba(0, 0, 0, 255))
+        }
+        bitmap.set(0, 19, BLACK)
+      },
+      start: { x: 19, y: 0 },
+    },
+  ]
+
+  const fillColors = [RED_OPAQUE, BLACK, rgba(0, 128, 255)]
+
+  for (const scenario of scenarios) {
+    it(`matches the reference on ${scenario.name}`, () => {
+      for (const color of fillColors) {
+        expectMatchesReference(scenario.build, scenario.start, color)
+      }
+    })
+  }
+
+  it('matches the reference across tolerances on a gradient', () => {
+    const build = (bitmap: Bitmap): void => {
+      for (let y = 0; y < 20; y += 1) {
+        for (let x = 0; x < 20; x += 1) {
+          const value = 90 + ((x + y * 2) % 7) * 5
+          bitmap.set(x, y, rgba(value, value, value, 255))
+        }
+      }
+      for (let y = 0; y < 20; y += 1) bitmap.set(9, y, BLACK)
+    }
+    for (const tolerance of [0, 4, 12, 30]) {
+      expectMatchesReference(build, { x: 0, y: 0 }, rgba(10, 20, 30), tolerance)
+    }
+  })
+})
+
+describe('floodFill large areas', () => {
+  it('fills a large empty canvas completely within a generous budget', () => {
+    const size = 2048
+    const bitmap = new Bitmap(size, size, WHITE)
+    const start = performance.now()
+    const changed = floodFill(bitmap, { x: 0, y: 0 }, BLACK)
+    const elapsed = performance.now() - start
+
+    expect(changed).toBe(size * size)
+    expect(elapsed).toBeLessThan(4000)
+    for (let i = 0; i < bitmap.data.length; i += 4) {
+      if (bitmap.data[i] !== 0 || bitmap.data[i + 3] !== 255) {
+        throw new Error(`pixel at byte ${i} was not filled: ${bitmap.data[i]}`)
+      }
+    }
   })
 })
 
