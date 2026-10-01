@@ -1383,12 +1383,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const restore = useCallback(
     (snapshot: DocSnapshot) => {
       const { width, height } = snapshot.layers[0].bitmap
+      // Read the live size before setLayers swaps the bitmap under it.
+      const current = doc()
+      if (current.width !== width || current.height !== height) {
+        // The old selection/mask and lasso are in the previous size's
+        // coordinates and would point outside the restored image.
+        updateSelection(null)
+        setLasso(null)
+      }
       setSize({ width, height })
       onSizeChange(width, height)
       setLayers([...snapshot.layers], snapshot.active)
       syncHistory()
     },
-    [onSizeChange, setLayers, syncHistory],
+    [doc, onSizeChange, setLayers, syncHistory, updateSelection],
   )
 
   /** Applies a whole-image operation to every layer as one undo step. */

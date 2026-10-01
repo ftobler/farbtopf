@@ -1778,3 +1778,39 @@ describe('PaintCanvas pointercancel', () => {
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
   })
 })
+
+describe('PaintCanvas undo after a size change', () => {
+  it('clears a selection left outside the image after undoing a rotation', () => {
+    const { ref } = setup('select', 40, 20)
+    act(() => ref.current?.rotate(90))
+    act(() => ref.current?.selectAll())
+    expect(ref.current?.getSelection()).toEqual({ x: 0, y: 0, width: 20, height: 40 })
+    act(() => ref.current?.undo())
+    expect(ref.current?.getSize()).toEqual({ width: 40, height: 20 })
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('clears a selection left outside the image after redoing a rotation', () => {
+    const { ref } = setup('select', 40, 20)
+    act(() => ref.current?.rotate(90))
+    act(() => ref.current?.selectAll())
+    act(() => ref.current?.undo())
+    act(() => ref.current?.redo())
+    expect(ref.current?.getSize()).toEqual({ width: 20, height: 40 })
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('keeps a selection through a same-size undo', () => {
+    const { ref, canvas } = setup('select', 30, 30)
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 10, clientY: 9 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 10, clientY: 9 })
+    const selection = ref.current?.getSelection()
+    expect(selection).not.toBeNull()
+    act(() => ref.current?.invertColors())
+    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
+    act(() => ref.current?.undo())
+    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
+    expect(ref.current?.getSelection()).toEqual(selection)
+  })
+})
