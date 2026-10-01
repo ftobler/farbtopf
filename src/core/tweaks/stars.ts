@@ -1,6 +1,6 @@
 import type { Bitmap } from '../bitmap'
 import type { Point, Rect } from '../geometry'
-import { clamp, distance, normalizeRect } from '../geometry'
+import { clamp, normalizeRect } from '../geometry'
 import type { ShapeKind, ShapeStyle } from '../shapes'
 import { boxHandles, fillAndStrokePolygon, resizeBox } from './shared'
 import type { ShapeFamily, TweakHandle } from './types'
@@ -52,13 +52,33 @@ function mapBox(box: Rect): (u: number, v: number) => Point {
   return (u, v) => ({ x: box.x + u * box.width, y: box.y + v * box.height })
 }
 
-function centre(box: Rect): Point {
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+/** The unit-space position of the first inner vertex, the same point `handles` maps. */
+function innerUnit(kind: ShapeKind, ratio: number): Point {
+  return star(tipsOf(kind), ratio)[1]
 }
 
-/** The outer tip radius in image space, matching the box's inner circle. */
-function outerReach(box: Rect): number {
-  return Math.min(box.width, box.height) / 2
+/**
+ * The axis along which `innerUnit` is affine. The stretch box is pinned by the
+ * outer tips on one axis, while the inner vertices reshape it on the other, so
+ * only one of the two components inverts cleanly for this star.
+ */
+function ratioAxis(kind: ShapeKind): keyof Point {
+  const p0 = innerUnit(kind, 0)
+  const p1 = innerUnit(kind, 1)
+  const mid = innerUnit(kind, 0.5)
+  const xError = Math.abs(mid.x - (p0.x + p1.x) / 2)
+  const yError = Math.abs(mid.y - (p0.y + p1.y) / 2)
+  return xError <= yError ? 'x' : 'y'
+}
+
+/** Inverts the mapping `handles` uses to place the inner handle. */
+function ratioFromUnit(kind: ShapeKind, u: Point): number {
+  const p0 = innerUnit(kind, 0)
+  const p1 = innerUnit(kind, 1)
+  const axis = ratioAxis(kind)
+  const span = p1[axis] - p0[axis]
+  if (span === 0) return defaultRatio(kind)
+  return (u[axis] - p0[axis]) / span
 }
 
 export const starFamily: ShapeFamily = {
@@ -78,7 +98,9 @@ export const starFamily: ShapeFamily = {
     const ratio = ratioFromPoints(kind, points)
     if (id === INNER_ID) {
       const box = normalizeRect(points[0], points[1])
-      const next = clamp(distance(point, centre(box)) / outerReach(box), 0.05, 0.95)
+      if (box.width === 0 || box.height === 0) return null
+      const u = { x: (point.x - box.x) / box.width, y: (point.y - box.y) / box.height }
+      const next = clamp(ratioFromUnit(kind, u), 0.05, 0.95)
       return [points[0], points[1], { x: next, y: points[2]?.y ?? 0 }]
     }
     const resized = resizeBox([points[0], points[1]], id, point)

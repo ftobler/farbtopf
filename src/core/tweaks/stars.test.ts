@@ -74,20 +74,51 @@ describe('starFamily handles', () => {
 })
 
 describe('starFamily inner tweak', () => {
-  it('sets the ratio from the handle distance over the outer reach', () => {
-    const points = starFamily.insert('star-5', START, END)
-    const moved = starFamily.move('star-5', points, 'inner', { x: 32, y: 20 })
-    expect(moved).not.toBeNull()
-    expect(moved![2].x).toBeCloseTo(0.8, 6)
-    expect(moved![0]).toEqual(points[0])
-    expect(moved![1]).toEqual(points[1])
+  it('round-trips the inner ratio when the handle is grabbed without moving', () => {
+    const ratios = [0.2, 0.4, 0.5, 0.8]
+    for (const kind of KINDS) {
+      for (const end of [END, WIDE_END]) {
+        for (const ratio of ratios) {
+          const base = starFamily.insert(kind, START, end)
+          const points = [base[0], base[1], { x: ratio, y: 0 }]
+          const handle = starFamily.handles(kind, points).find((h) => h.id === 'inner')!
+          const moved = starFamily.move(kind, points, 'inner', handle.point)
+          expect(moved).not.toBeNull()
+          expect(moved![2].x).toBeCloseTo(ratio, 6)
+
+          const regrabbed = starFamily.handles(kind, moved!).find((h) => h.id === 'inner')!
+          const again = starFamily.move(kind, moved!, 'inner', regrabbed.point)
+          expect(again).not.toBeNull()
+          expect(again![2].x).toBeCloseTo(ratio, 6)
+        }
+      }
+    }
   })
 
-  it('uses the shorter box side as the outer reach for non-square boxes', () => {
+  it('round-trips the inner ratio on non-square boxes', () => {
     const points = starFamily.insert('star-5', START, WIDE_END)
-    const moved = starFamily.move('star-5', points, 'inner', { x: 25, y: 20 })
+    const handle = starFamily.handles('star-5', points).find((h) => h.id === 'inner')!
+    const moved = starFamily.move('star-5', points, 'inner', handle.point)
     expect(moved).not.toBeNull()
-    expect(moved![2].x).toBeCloseTo(0.5, 6)
+    expect(moved![2].x).toBeCloseTo(0.4, 6)
+  })
+
+  it('increases the ratio as the inner handle moves outward from the centre', () => {
+    for (const kind of KINDS) {
+      const points = starFamily.insert(kind, START, END)
+      const box = normalizeRect(START, END)
+      const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+      const handle = starFamily.handles(kind, points).find((h) => h.id === 'inner')!
+      const inward = starFamily.move(kind, points, 'inner', {
+        x: centre.x + (handle.point.x - centre.x) / 2,
+        y: centre.y + (handle.point.y - centre.y) / 2,
+      })!
+      const outward = starFamily.move(kind, points, 'inner', {
+        x: centre.x + (handle.point.x - centre.x) * 1.5,
+        y: centre.y + (handle.point.y - centre.y) * 1.5,
+      })!
+      expect(outward[2].x).toBeGreaterThan(inward[2].x)
+    }
   })
 
   it('clamps the ratio to [0.05, 0.95]', () => {
