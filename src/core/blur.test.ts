@@ -174,3 +174,78 @@ describe('gaussianBlur', () => {
     expect(result.get(5, 5).r).toBeGreaterThan(0)
   })
 })
+
+describe('blurSelection large radius', () => {
+  it('blurs a large radius within a generous time budget and softens an edge into a gradient', () => {
+    const size = 1024
+    const bitmap = new Bitmap(size, size, BLACK)
+    for (let y = 0; y < size; y += 1) {
+      for (let x = size / 2; x < size; x += 1) bitmap.set(x, y, WHITE)
+    }
+
+    const start = performance.now()
+    const blurred = gaussianBlur(bitmap, BLUR_RADIUS_MAX)
+    const elapsed = performance.now() - start
+    expect(elapsed).toBeLessThan(1500)
+
+    const row = Array.from({ length: size }, (_, x) => blurred.get(x, 0).r)
+    for (let x = 1; x < size; x += 1) expect(row[x]).toBeGreaterThanOrEqual(row[x - 1])
+    expect(row[0]).toBe(0)
+    expect(row[size - 1]).toBe(255)
+    expect(row[size / 2 - 1]).toBeGreaterThan(0)
+    expect(row[size / 2]).toBeLessThan(255)
+  }, 120000)
+
+  it('keeps box-blurred runs independent under a mask', () => {
+    const bitmap = new Bitmap(16, 1, BLACK)
+    for (let x = 0; x < 8; x += 1) bitmap.set(x, 0, WHITE)
+    blurSelection(bitmap, { x: 0, y: 0, width: 16, height: 1 }, maskFrom(['########....####']), 8)
+    for (let x = 0; x < 8; x += 1) expect(bitmap.get(x, 0)).toEqual(WHITE)
+    for (let x = 8; x < 12; x += 1) expect(bitmap.get(x, 0)).toEqual(BLACK)
+    for (let x = 12; x < 16; x += 1) expect(bitmap.get(x, 0)).toEqual(BLACK)
+  })
+
+  it('keeps constant colour and premultiplied transparency for a large radius', () => {
+    const uniform = new Bitmap(64, 64, rgba(40, 120, 200, 180))
+    blurSelection(uniform, { x: 0, y: 0, width: 64, height: 64 }, null, 30)
+    for (let y = 0; y < 64; y += 1) {
+      for (let x = 0; x < 64; x += 1) expect(uniform.get(x, y)).toEqual(rgba(40, 120, 200, 180))
+    }
+
+    const transparent = new Bitmap(129, 1, rgba(255, 0, 0, 0))
+    transparent.set(64, 0, rgba(0, 0, 255, 255))
+    blurSelection(transparent, { x: 0, y: 0, width: 129, height: 1 }, null, 20)
+    for (let x = 40; x <= 88; x += 1) {
+      const pixel = transparent.get(x, 0)
+      expect(pixel.a).toBeGreaterThan(0)
+      expect(pixel.a).toBeLessThan(255)
+      expect(pixel.r).toBe(0)
+      expect(pixel.b).toBe(255)
+    }
+  })
+})
+
+describe('blurSelection small radius', () => {
+  it('does nothing for a zero radius', () => {
+    const bitmap = new Bitmap(9, 1, BLACK)
+    bitmap.set(4, 0, WHITE)
+    blurSelection(bitmap, { x: 0, y: 0, width: 9, height: 1 }, null, 0)
+    expect(bitmap.get(4, 0)).toEqual(WHITE)
+    expect(bitmap.get(3, 0)).toEqual(BLACK)
+  })
+
+  it('blurs a small radius symmetrically and conserves brightness', () => {
+    const bitmap = new Bitmap(9, 1, BLACK)
+    bitmap.set(4, 0, WHITE)
+    blurSelection(bitmap, { x: 0, y: 0, width: 9, height: 1 }, null, 1)
+    const row = Array.from({ length: 9 }, (_, x) => bitmap.get(x, 0).r)
+    expect(row[4]).toBeGreaterThan(0)
+    expect(row[4]).toBeLessThan(255)
+    for (let offset = 1; offset <= 4; offset += 1) {
+      expect(row[4 - offset]).toBe(row[4 + offset])
+    }
+    const total = row.reduce((sum, value) => sum + value, 0)
+    expect(total).toBeGreaterThanOrEqual(250)
+    expect(total).toBeLessThanOrEqual(260)
+  })
+})

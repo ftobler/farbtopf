@@ -33,6 +33,25 @@ export function gaussianKernel(radius: number): Float64Array {
   return kernel
 }
 
+/** Number of box-blur passes used to approximate the Gaussian. */
+const BOX_PASSES = 3
+
+/**
+ * Kernels with at most this half-width (≤ 11 taps) are convolved exactly: they
+ * are already cheap, so the extra accuracy costs nothing and keeps the small
+ * radii pixel-identical to the true Gaussian.
+ */
+const EXACT_HALF_MAX = 5
+
+/**
+ * The integer box radius whose three successive applications have the same
+ * variance as a Gaussian of standard deviation `sigma`
+ * (`3 · ((2r+1)² − 1)/12 = sigma²`).
+ */
+function boxRadiusFor(sigma: number): number {
+  return Math.max(1, Math.round((Math.sqrt(4 * sigma * sigma + 1) - 1) / 2))
+}
+
 /**
  * Convolves the selected runs along one axis. `index(line, step)` maps a line
  * and a position along it to a pixel slot; samples past the end of a run of
@@ -82,15 +101,118 @@ function convolveRuns(
 }
 
 /**
- * Applies a true (separable) Gaussian blur of `radius` pixels to the selected
- * pixels of `bitmap`, in place. Only pixels inside `rect`, the optional `mask`
- * and the bitmap are read or written: sampling clamps to the edge of the
+ * Applies one separable box blur of integer `radius` along one axis. It mirrors
+ * `convolveRuns`: each selected run is blurred on its own and samples clamp to
+ * the run's first/last pixel. A running window sum makes every output pixel an
+ * O(1) step from its neighbour, independent of the radius.
+ */
+function boxBlurRuns(
+  input: Float64Array,
+  output: Float64Array,
+  selected: Uint8Array,
+  lines: number,
+  length: number,
+  span: number,
+  stride: number,
+  radius: number,
+): void {
+  const window = radius * 2 + 1
+  const scale = 1 / window
+  for (let line = 0; line < lines; line += 1) {
+    const base = line * span
+    let step = 0
+    while (step < length) {
+      if (!selected[base + step * stride]) {
+        step += 1
+        continue
+      }
+      const start = step
+      while (step < length && selected[base + step * stride]) step += 1
+      const end = step - 1
+      const first = (base + start * stride) * 4
+      const last = (base + end * stride) * 4
+      const firstR = input[first]
+      const firstG = input[first + 1]
+      const firstB = input[first + 2]
+      const firstA = input[first + 3]
+      const lastR = input[last]
+      const lastG = input[last + 1]
+      const lastB = input[last + 2]
+      const lastA = input[last + 3]
+
+      if (end - start + 1 <= radius + 1) {
+        let r = 0
+        let g = 0
+        let b = 0
+        let a = 0
+        for (let at = start; at <= end; at += 1) {
+          const from = (base + at * stride) * 4
+          r += input[from]
+          g += input[from + 1]
+          b += input[from + 2]
+          a += input[from + 3]
+        }
+        for (let at = start; at <= end; at += 1) {
+          const leftExtra = start - at + radius
+          const rightExtra = at + radius - end
+          const to = (base + at * stride) * 4
+          output[to] = (r + (leftExtra > 0 ? leftExtra * firstR : 0) + (rightExtra > 0 ? rightExtra * lastR : 0)) * scale
+          output[to + 1] =
+            (g + (leftExtra > 0 ? leftExtra * firstG : 0) + (rightExtra > 0 ? rightExtra * lastG : 0)) * scale
+          output[to + 2] =
+            (b + (leftExtra > 0 ? leftExtra * firstB : 0) + (rightExtra > 0 ? rightExtra * lastB : 0)) * scale
+          output[to + 3] =
+            (a + (leftExtra > 0 ? leftExtra * firstA : 0) + (rightExtra > 0 ? rightExtra * lastA : 0)) * scale
+        }
+        continue
+      }
+
+      const count = radius + 1
+      let r = count * firstR
+      let g = count * firstG
+      let b = count * firstB
+      let a = count * firstA
+      for (let at = start + 1; at <= start + radius; at += 1) {
+        const from = (base + at * stride) * 4
+        r += input[from]
+        g += input[from + 1]
+        b += input[from + 2]
+        a += input[from + 3]
+      }
+      for (let at = start; at <= end; at += 1) {
+        const to = (base + at * stride) * 4
+        output[to] = r * scale
+        output[to + 1] = g * scale
+        output[to + 2] = b * scale
+        output[to + 3] = a * scale
+
+        if (at < end) {
+          const added = at + radius + 1 <= end ? at + radius + 1 : end
+          const removed = at - radius < start ? start : at - radius
+          const add = (base + added * stride) * 4
+          const sub = (base + removed * stride) * 4
+          r += input[add] - input[sub]
+          g += input[add + 1] - input[sub + 1]
+          b += input[add + 2] - input[sub + 2]
+          a += input[add + 3] - input[sub + 3]
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Applies a Gaussian blur of `radius` pixels to the selected pixels of
+ * `bitmap`, in place. Large radii are approximated by three separable box-blur
+ * passes, which cost O(1) per pixel regardless of radius, while tiny kernels
+ * keep the exact Gaussian. Only pixels inside `rect`, the optional
+ * `mask` and the bitmap are read or written: sampling clamps to the edge of the
  * selection (per row/column run), so nothing outside bleeds in. Colours are
  * blended premultiplied by alpha so transparent pixels contribute no colour.
  */
 export function blurSelection(bitmap: Bitmap, rect: Rect, mask: SelectionMask | null, radius: number): void {
-  const kernel = gaussianKernel(radius)
-  if (kernel.length === 1) return
+  const sigma = blurSigma(radius)
+  if (!(sigma > 0)) return
   const left = Math.max(0, rect.x)
   const top = Math.max(0, rect.y)
   const width = Math.min(bitmap.width, rect.x + rect.width) - left
@@ -115,8 +237,17 @@ export function blurSelection(bitmap: Bitmap, rect: Rect, mask: SelectionMask | 
   }
 
   const across = new Float64Array(pixels.length)
-  convolveRuns(pixels, across, selected, height, width, (y, x) => y * width + x, kernel)
-  convolveRuns(across, pixels, selected, width, height, (x, y) => y * width + x, kernel)
+  if (Math.ceil(3 * sigma) <= EXACT_HALF_MAX) {
+    const kernel = gaussianKernel(radius)
+    convolveRuns(pixels, across, selected, height, width, (y, x) => y * width + x, kernel)
+    convolveRuns(across, pixels, selected, width, height, (x, y) => y * width + x, kernel)
+  } else {
+    const boxRadius = boxRadiusFor(sigma)
+    for (let pass = 0; pass < BOX_PASSES; pass += 1) {
+      boxBlurRuns(pixels, across, selected, height, width, width, 1, boxRadius)
+      boxBlurRuns(across, pixels, selected, width, height, 1, width, boxRadius)
+    }
+  }
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
