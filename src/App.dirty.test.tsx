@@ -126,11 +126,42 @@ describe('App unsaved changes', () => {
     expect(warnsOnLeave()).toBe(true)
   })
 
+  it('asks before opening over unsaved work and keeps it on Cancel', async () => {
+    render(<App />)
+    await edit()
+    window.showOpenFilePicker = vi.fn(async () => [asHandle(fakeHandle('photo.png'))])
+    await clickFileItem('Open…')
+    expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
+    expect(window.showOpenFilePicker).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).toBeNull()
+    expect(warnsOnLeave()).toBe(true)
+    expect(document.title).toBe('*Farbtopf')
+  })
+
+  it('asks before opening from the file input fallback while dirty', async () => {
+    const { container } = render(<App />)
+    await edit()
+    await clickFileItem('Open…')
+    expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    })
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [new File(['x'], 'fallback.png', { type: 'image/png' })] } })
+    })
+    await waitFor(() => expect(screen.getByText('Opened fallback.png')).toBeTruthy())
+  })
+
   it('is clean after opening an image', async () => {
     render(<App />)
     await edit()
     window.showOpenFilePicker = vi.fn(async () => [asHandle(fakeHandle('photo.png'))])
     await clickFileItem('Open…')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    })
     await waitFor(() => expect(screen.getByText('Opened photo.png')).toBeTruthy())
     expect(warnsOnLeave()).toBe(false)
     expect(document.title).toBe('photo.png - Farbtopf')
@@ -153,6 +184,7 @@ describe('App unsaved changes', () => {
     await waitFor(() => expect(document.title).toBe('photo.png - Farbtopf'))
     await edit()
     fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(document.title).toBe('Farbtopf')
     await edit()
@@ -163,8 +195,37 @@ describe('App unsaved changes', () => {
     render(<App />)
     await edit()
     fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(warnsOnLeave()).toBe(false)
+  })
+
+  it('asks before creating a new image while dirty and keeps the work on Cancel', async () => {
+    render(<App />)
+    await edit()
+    fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'New image' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).toBeNull()
+    expect(warnsOnLeave()).toBe(true)
+  })
+
+  it('shows the New image dialog after discarding', async () => {
+    render(<App />)
+    await edit()
+    fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(warnsOnLeave()).toBe(false)
+  })
+
+  it('does not ask to create a new image when clean', () => {
+    render(<App />)
+    fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).toBeNull()
   })
 })
 
@@ -262,6 +323,7 @@ describe('App unsaved changes with something pending', () => {
     const { container } = render(<App />)
     drawPendingRectangle(container)
     fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(warnsOnLeave()).toBe(false)
   })

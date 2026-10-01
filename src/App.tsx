@@ -22,6 +22,7 @@ import {
   TrashIcon,
 } from './components/icons'
 import { LayersPanel } from './components/LayersPanel'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
@@ -139,6 +140,8 @@ function App() {
   const [selectionSize, setSelectionSize] = useState<{ width: number; height: number } | null>(null)
   const [canvasSize, setCanvasSize] = useState(DEFAULT_CANVAS)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
+  /** A destructive action waiting on the user's answer to the unsaved-changes confirmation. */
+  const [pendingAction, setPendingAction] = useState<{ run: () => void } | null>(null)
   /** True while files from the OS are dragged over the window. */
   const [dropTarget, setDropTarget] = useState(false)
   const [showScaleDialog, setShowScaleDialog] = useState(false)
@@ -170,6 +173,23 @@ function App() {
   /** Unplaced work on the canvas (a pending shape, an open text box with text) is unsaved too. */
   const [pending, setPending] = useState(false)
   const dirty = revision !== savedRevision || pending
+
+  /** Runs `action` right away, or after the user confirms losing unsaved work. */
+  const requestDestructive = useCallback(
+    (action: () => void) => {
+      if (dirty) setPendingAction({ run: action })
+      else action()
+    },
+    [dirty],
+  )
+
+  const cancelPendingAction = useCallback(() => setPendingAction(null), [])
+
+  const confirmPendingAction = useCallback(() => {
+    const action = pendingAction?.run
+    setPendingAction(null)
+    action?.()
+  }, [pendingAction])
 
   const handleDocumentChange = useCallback(() => {
     revisionRef.current += 1
@@ -225,6 +245,10 @@ function App() {
     },
     [markSaved, notify],
   )
+
+  const openNewDialog = useCallback(() => {
+    requestDestructive(() => setNewDialogOpen(true))
+  }, [requestDestructive])
 
   const openFile = useCallback(
     async (file: File, handle: FileSystemFileHandle | null = null) => {
@@ -393,7 +417,7 @@ function App() {
     else await handleSaveAs()
   }, [handleSaveAs, saveToHandle])
 
-  const handleOpenClick = useCallback(async () => {
+  const openFileFromPicker = useCallback(async () => {
     if (!canPickFiles()) {
       fileInputRef.current?.click()
       return
@@ -405,6 +429,12 @@ function App() {
       notify('Could not open that image')
     }
   }, [notify, openFile])
+
+  const handleOpenClick = useCallback(() => {
+    requestDestructive(() => {
+      void openFileFromPicker()
+    })
+  }, [openFileFromPicker, requestDestructive])
 
   const handleUndo = useCallback(() => canvasRef.current?.undo(), [])
   const handleRedo = useCallback(() => canvasRef.current?.redo(), [])
@@ -645,7 +675,7 @@ function App() {
         }
         if (key === 'n') {
           event.preventDefault()
-          setNewDialogOpen(true)
+          openNewDialog()
           return
         }
         if (key === 'a') {
@@ -732,6 +762,7 @@ function App() {
     handleDeleteSelection,
     handleOpenClick,
     handlePasteFromClipboard,
+    openNewDialog,
     handleRedo,
     handleSave,
     handleSelectAll,
@@ -787,10 +818,13 @@ function App() {
       // The handle, where the browser offers one, must be requested while the drop event is running.
       const items = Array.from(event.dataTransfer?.items ?? []).filter((item) => item.kind === 'file')
       const pending = items[index]?.getAsFileSystemHandle?.() ?? null
-      void (async () => {
-        const handle = await Promise.resolve(pending).catch(() => null)
-        await openFile(files[index], handle?.kind === 'file' ? (handle as FileSystemFileHandle) : null)
-      })()
+      const file = files[index]
+      requestDestructive(() => {
+        void (async () => {
+          const handle = await Promise.resolve(pending).catch(() => null)
+          await openFile(file, handle?.kind === 'file' ? (handle as FileSystemFileHandle) : null)
+        })()
+      })
     }
     window.addEventListener('dragover', handleDragOver)
     window.addEventListener('dragleave', handleDragLeave)
@@ -800,7 +834,7 @@ function App() {
       window.removeEventListener('dragleave', handleDragLeave)
       window.removeEventListener('drop', handleDrop)
     }
-  }, [notify, openFile])
+  }, [notify, openFile, requestDestructive])
 
   const toolLabel = useMemo(() => toolById(tool).label, [tool])
 
@@ -814,7 +848,7 @@ function App() {
         showGrid={showGrid}
         isFullscreen={isFullscreen}
         showMiniature={showMiniature}
-        onNew={() => setNewDialogOpen(true)}
+        onNew={openNewDialog}
         onOpen={handleOpenClick}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
@@ -996,6 +1030,17 @@ function App() {
           initialHeight={canvasSize.height}
           onCancel={() => setNewDialogOpen(false)}
           onCreate={handleNewDocument}
+        />
+      ) : null}
+
+      {pendingAction ? (
+        <ConfirmDialog
+          open
+          title="Discard unsaved changes?"
+          message="The current image has unsaved changes. Discarding will lose them for good."
+          confirmLabel="Discard"
+          onCancel={cancelPendingAction}
+          onConfirm={confirmPendingAction}
         />
       ) : null}
 

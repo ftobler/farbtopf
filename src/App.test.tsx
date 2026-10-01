@@ -437,7 +437,7 @@ describe('App', () => {
       const { container } = render(<App />)
       drawPendingRectangle(container)
       fireEvent.keyDown(document, { key: 'n', ctrlKey: true })
-      expect(screen.getByRole('dialog', { name: 'New image' })).toBeTruthy()
+      expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
       fireEvent.keyDown(document, { key: 'Escape' })
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(stillPending()).toBe(true)
