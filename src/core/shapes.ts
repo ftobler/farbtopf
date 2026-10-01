@@ -536,6 +536,49 @@ const CURVE_CONTROL: readonly [Point, Point, Point, Point] = [
 
 const CURVE_ICON: readonly Point[] = bezierPoints(CURVE_CONTROL, 16)
 
+/**
+ * Exaggerated potato control points (polar: angle in turns, radius) for the gallery
+ * icon only. The drawn potatoid stays gentle; at icon size it needs a long, tilted
+ * body with deep dents and bulging lobes to read as a potato rather than an egg.
+ */
+const POTATOID_ICON_CONTROL: readonly (readonly [number, number])[] = [
+  [0, 1.15],
+  [0.08, 1.12],
+  [0.16, 0.98],
+  [0.24, 0.52],
+  [0.33, 1.18],
+  [0.44, 1.25],
+  [0.52, 1.1],
+  [0.6, 0.9],
+  [0.68, 1.12],
+  [0.77, 0.6],
+  [0.86, 1.15],
+  [0.93, 0.9],
+]
+const POTATOID_ICON_TILT = (-30 * Math.PI) / 180
+
+/** The potatoid icon outline, centred in the unit square with its aspect ratio kept. */
+const POTATOID_ICON: readonly Point[] = (() => {
+  const cos = Math.cos(POTATOID_ICON_TILT)
+  const sin = Math.sin(POTATOID_ICON_TILT)
+  const control = POTATOID_ICON_CONTROL.map(([turn, r]) => {
+    const x = 1.6 * r * Math.cos(turn * 2 * Math.PI)
+    const y = 1.1 * r * Math.sin(turn * 2 * Math.PI)
+    return { x: x * cos - y * sin, y: x * sin + y * cos }
+  })
+  const outline = closedBSpline(control, 6)
+  const xs = outline.map((p) => p.x)
+  const ys = outline.map((p) => p.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const spanX = Math.max(...xs) - minX
+  const spanY = Math.max(...ys) - minY
+  const span = Math.max(spanX, spanY)
+  const offX = (span - spanX) / 2
+  const offY = (span - spanY) / 2
+  return outline.map((p) => ({ x: (p.x - minX + offX) / span, y: (p.y - minY + offY) / span }))
+})()
+
 function formatNumber(n: number): string {
   return String(Math.round(n * 100) / 100)
 }
@@ -607,6 +650,7 @@ export function shapeIconPath(kind: ShapeKind, size = 24): string {
   if (kind === 'line') return pathData([map(0, 1), map(1, 0)], false)
   if (kind === 'polyline') return pathData(CURVE_ICON.map((p) => map(p.x, p.y)), false)
   if (kind === 'freeform') return pathData(POLYLINE_ICON.map((p) => map(p.x, p.y)), false)
+  if (kind === 'potatoid') return pathData(POTATOID_ICON.map((p) => map(p.x, p.y)), true)
   if (kind === 'arrow' || kind === 'arrow-double' || kind === 'arrow-axis') {
     const axis = kind === 'arrow-axis'
     const tail: Point = axis ? { x: 0, y: 0.5 } : { x: 0, y: 1 }

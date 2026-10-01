@@ -312,6 +312,27 @@ describe('shapeIconPath', () => {
     }
   })
 
+  it('draws a clearly lumpy potatoid icon with several dents', () => {
+    const numbers = (shapeIconPath('potatoid', 24).match(/-?\d+(\.\d+)?/g) ?? []).map(Number)
+    const points: { x: number; y: number }[] = []
+    for (let i = 0; i < numbers.length; i += 2) points.push({ x: numbers[i], y: numbers[i + 1] })
+    const n = points.length
+    const turns = points.map((p, i) => {
+      const a = points[(i + n - 1) % n]
+      const b = points[(i + 1) % n]
+      return (p.x - a.x) * (b.y - p.y) - (p.y - a.y) * (b.x - p.x)
+    })
+    const main = Math.sign(turns.reduce((sum, t) => sum + t, 0))
+    // Count the concave runs: stretches where the outline bends against its overall winding.
+    let dents = 0
+    for (let i = 0; i < n; i += 1) {
+      const concave = Math.sign(turns[i]) === -main
+      const prevConcave = Math.sign(turns[(i + n - 1) % n]) === -main
+      if (concave && !prevConcave) dents += 1
+    }
+    expect(dents).toBeGreaterThanOrEqual(3)
+  })
+
   it('draws distinct icons', () => {
     const paths = SHAPES.map((shape) => shapeIconPath(shape.id))
     expect(new Set(paths).size).toBe(SHAPES.length)
