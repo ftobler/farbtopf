@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { focusMenuItem, handleMenuKeyDown } from './menuKeyboard'
 
 export interface ContextMenuProps {
   x: number
@@ -15,7 +16,20 @@ export interface ContextMenuProps {
  */
 export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null)
   const [position, setPosition] = useState({ x, y })
+
+  useLayoutEffect(() => {
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    if (rootRef.current) focusMenuItem(rootRef.current)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      previouslyFocusedRef.current?.focus()
+    }
+  }, [])
 
   useLayoutEffect(() => {
     const menu = rootRef.current
@@ -51,7 +65,9 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
       ref={rootRef}
       className="dropdown-menu context-menu"
       role="menu"
+      tabIndex={-1}
       style={{ left: position.x, top: position.y }}
+      onKeyDown={(event) => handleMenuKeyDown(event, rootRef.current)}
     >
       {children(onClose)}
     </div>

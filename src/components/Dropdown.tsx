@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CheckIcon, ChevronIcon } from './icons'
+import { focusMenuItem, handleMenuKeyDown } from './menuKeyboard'
 
 export interface DropdownProps {
   trigger: ReactNode
@@ -34,6 +35,13 @@ export function Dropdown({
 }: DropdownProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    if (menuRef.current) focusMenuItem(menuRef.current)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -46,6 +54,7 @@ export function Dropdown({
         // handler that clears the canvas selection.
         event.stopPropagation()
         setOpen(false)
+        triggerRef.current?.focus()
       }
     }
     document.addEventListener('mousedown', handlePointer)
@@ -74,6 +83,7 @@ export function Dropdown({
             {trigger}
           </button>
           <button
+            ref={triggerRef}
             type="button"
             className="split-button-arrow"
             title={title ? `${title} options` : undefined}
@@ -87,6 +97,7 @@ export function Dropdown({
         </div>
       ) : (
         <button
+          ref={triggerRef}
           type="button"
           className={triggerClassName ?? 'dropdown-trigger'}
           title={title}
@@ -102,8 +113,11 @@ export function Dropdown({
       )}
       {open ? (
         <div
+          ref={menuRef}
           className={`dropdown-menu dropdown-${align}${placement === 'up' ? ' dropdown-up' : ''}`}
           role="menu"
+          tabIndex={-1}
+          onKeyDown={(event) => handleMenuKeyDown(event, menuRef.current)}
         >
           {children(() => setOpen(false))}
         </div>
@@ -151,6 +165,7 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
   const [open, setOpen] = useState(false)
   const [openLeft, setOpenLeft] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
 
   // Flip the flyout to the left when it would spill past the right viewport edge.
   useLayoutEffect(() => {
@@ -160,6 +175,11 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
     setOpenLeft(panel.getBoundingClientRect().right > window.innerWidth)
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    if (panelRef.current) focusMenuItem(panelRef.current)
+  }, [open])
+
   return (
     <div
       className="menu-submenu"
@@ -167,6 +187,7 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
       onMouseLeave={() => setOpen(false)}
     >
       <button
+        ref={triggerRef}
         type="button"
         role="menuitem"
         className="menu-item menu-submenu-trigger"
@@ -174,6 +195,13 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowRight') return
+          event.preventDefault()
+          event.stopPropagation()
+          setOpen(true)
+          if (panelRef.current) focusMenuItem(panelRef.current)
+        }}
       >
         <span className={`menu-item-check${icon ? ' menu-item-icon' : ''}`}>{icon}</span>
         <span className="menu-item-label">{label}</span>
@@ -186,6 +214,17 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
           ref={panelRef}
           className={`dropdown-menu menu-submenu-panel${openLeft ? ' menu-submenu-panel-left' : ''}`}
           role="menu"
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault()
+              event.stopPropagation()
+              setOpen(false)
+              triggerRef.current?.focus()
+              return
+            }
+            handleMenuKeyDown(event, panelRef.current)
+          }}
         >
           {children(() => setOpen(false))}
         </div>

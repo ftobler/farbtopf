@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { Dropdown, MenuItem } from './Dropdown'
+import { Dropdown, MenuItem, MenuSubmenu } from './Dropdown'
 
 function renderSplit(onAction = vi.fn()) {
   render(
@@ -76,5 +76,128 @@ describe('Dropdown', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Font' }))
     expect(screen.getByRole('menu').classList.contains('dropdown-up')).toBe(true)
+  })
+
+  it('moves focus to the first menu item when it opens', () => {
+    render(
+      <Dropdown title="Size" ariaLabel="Size" trigger={<span>S</span>}>
+        {() => (
+          <>
+            <MenuItem>Small</MenuItem>
+            <MenuItem>Medium</MenuItem>
+          </>
+        )}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Small' }))
+  })
+
+  it('navigates the open menu with the arrow, Home and End keys', () => {
+    render(
+      <Dropdown title="Size" ariaLabel="Size" trigger={<span>S</span>}>
+        {() => (
+          <>
+            <MenuItem>Small</MenuItem>
+            <MenuItem disabled>Medium</MenuItem>
+            <MenuItem>Large</MenuItem>
+          </>
+        )}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    const small = screen.getByRole('menuitem', { name: 'Small' })
+    const large = screen.getByRole('menuitem', { name: 'Large' })
+
+    expect(document.activeElement).toBe(small)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(large)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(small)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(large)
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' })
+    expect(document.activeElement).toBe(small)
+    fireEvent.keyDown(document.activeElement!, { key: 'End' })
+    expect(document.activeElement).toBe(large)
+  })
+
+  it('closes on Escape and returns focus to the trigger', () => {
+    render(
+      <Dropdown title="Size" ariaLabel="Size" trigger={<span>S</span>}>
+        {() => (
+          <>
+            <MenuItem>Small</MenuItem>
+            <MenuItem>Large</MenuItem>
+          </>
+        )}
+      </Dropdown>,
+    )
+    const trigger = screen.getByRole('button', { name: 'Size' })
+    fireEvent.click(trigger)
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Small' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+})
+
+describe('MenuSubmenu', () => {
+  it('opens with ArrowRight and closes with ArrowLeft, moving focus', () => {
+    render(
+      <Dropdown title="View" ariaLabel="View" trigger={<span>V</span>}>
+        {() => (
+          <MenuSubmenu label="Zoom">
+            {() => (
+              <>
+                <MenuItem>Zoom in</MenuItem>
+                <MenuItem>Zoom out</MenuItem>
+              </>
+            )}
+          </MenuSubmenu>
+        )}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+    const trigger = screen.getByRole('menuitem', { name: 'Zoom' })
+    expect(document.activeElement).toBe(trigger)
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
+    const zoomIn = screen.getByRole('menuitem', { name: 'Zoom in' })
+    expect(document.activeElement).toBe(zoomIn)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' })
+    expect(screen.queryByRole('menuitem', { name: 'Zoom in' })).toBeNull()
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('navigates within the submenu without moving the parent menu', () => {
+    render(
+      <Dropdown title="View" ariaLabel="View" trigger={<span>V</span>}>
+        {() => (
+          <>
+            <MenuSubmenu label="Zoom">
+              {() => (
+                <>
+                  <MenuItem>Zoom in</MenuItem>
+                  <MenuItem>Zoom out</MenuItem>
+                </>
+              )}
+            </MenuSubmenu>
+            <MenuItem>Fullscreen</MenuItem>
+          </>
+        )}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
+    const zoomIn = screen.getByRole('menuitem', { name: 'Zoom in' })
+    expect(document.activeElement).toBe(zoomIn)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Zoom out' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(zoomIn)
   })
 })
