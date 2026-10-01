@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clampPoint,
   distance,
+  floorPoint,
   normalizeRect,
   pointInRect,
   rectFromSize,
@@ -62,6 +63,13 @@ describe('clampPoint', () => {
 
   it('floors fractional coordinates', () => {
     expect(clampPoint({ x: 2.9, y: 3.1 }, 10, 10)).toEqual({ x: 2, y: 3 })
+  })
+})
+
+describe('floorPoint', () => {
+  it('snaps to the pixel grid without clamping to any bounds', () => {
+    expect(floorPoint({ x: -0.5, y: 99.7 })).toEqual({ x: -1, y: 99 })
+    expect(floorPoint({ x: 2.9, y: 3.1 })).toEqual({ x: 2, y: 3 })
   })
 })
 

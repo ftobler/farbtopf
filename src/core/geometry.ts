@@ -61,3 +61,8 @@ export function clampPoint(point: Point, width: number, height: number): Point {
     y: clamp(Math.floor(point.y), 0, Math.max(0, height - 1)),
   }
 }
+
+/** Snaps a point to the pixel it lies in, even one outside any surface. */
+export function floorPoint(point: Point): Point {
+  return { x: Math.floor(point.x), y: Math.floor(point.y) }
+}

@@ -25,7 +25,7 @@ import type { BrushId, CoverageMask } from '../core/brushes'
 import type { Rgba } from '../core/color'
 import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
-import { clamp, clampPoint, distance, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
+import { clamp, clampPoint, distance, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
 import { compositeLayers, drawOver, moveItem, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
@@ -1630,6 +1630,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }
   }, [size.width, size.height])
 
+  // Strokes and shapes follow the pointer past the image edge; the bitmap
+  // primitives clip whatever lands outside, so nothing piles up along the border.
+  const toFreePoint = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>): Point => floorPoint(clientToCanvas(event.clientX, event.clientY)),
+    [clientToCanvas],
+  )
+
   // Resize handles sit on the far edges, so their pointer may reach x=width or
   // y=height; clampPoint would cap it one pixel short and shrink the selection.
   const toEdgePoint = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point => {
@@ -1909,10 +1916,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         return
       }
+      const free = toFreePoint(event)
       const polyline = polylineRef.current
       if (polyline) {
         if (polyline.pointerId !== null && polyline.pointerId !== event.pointerId) return
-        polyline.pending = point
+        polyline.pending = free
         previewPolyline()
         return
       }
@@ -1920,9 +1928,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (shape) {
         if (shape.pointerId === null || shape.pointerId !== event.pointerId) return
         if (shape.mode === 'insert') {
-          shape.points = insertShape(shape.kind, shape.insertStart, point)
+          shape.points = insertShape(shape.kind, shape.insertStart, free)
         } else if (shape.activeHandle) {
-          shape.points = moveShapeHandle(shape.kind, shape.points, shape.activeHandle, point)
+          shape.points = moveShapeHandle(shape.kind, shape.points, shape.activeHandle, free)
         } else {
           return
         }
@@ -1936,25 +1944,25 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const width = strokeWidthFor(stroke.tool, brushSize)
         const target = stroke.work ?? doc()
         if (stroke.tool === 'airbrush') {
-          sprayDab(target, point, width, color, random)
+          sprayDab(target, free, width, color, random)
         } else if (stroke.tool === 'brush' && brush === 'highlighter' && stroke.highlighter) {
-          stampHighlighter(stroke.highlighter, stroke.last, point, width)
+          stampHighlighter(stroke.highlighter, stroke.last, free, width)
           const result = compositeHighlighter(stroke.base, stroke.highlighter, color, HIGHLIGHTER_ALPHA)
           if (stroke.work) stroke.work = result
           else bitmapRef.current = result
         } else if (stroke.tool === 'brush') {
-          paintBrushStroke(target, stroke.last, point, { size: width, color, brush, random, source: stroke.base })
+          paintBrushStroke(target, stroke.last, free, { size: width, color, brush, random, source: stroke.base })
         } else {
-          drawLine(target, stroke.last, point, width, color, strokeShape(stroke.tool))
+          drawLine(target, stroke.last, free, width, color, strokeShape(stroke.tool))
         }
         if (stroke.work) {
-          blendToward(doc(), stroke.base, stroke.work, stroke.strength, segmentBounds(stroke.last, point, width))
+          blendToward(doc(), stroke.base, stroke.work, stroke.strength, segmentBounds(stroke.last, free, width))
         }
         paint(doc())
       }
-      stroke.last = point
+      stroke.last = free
     },
-    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toEdgePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, onCursorMove, paint, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toEdgePoint, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -1989,7 +1997,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const polyline = polylineRef.current
       if (polyline) {
         if (polyline.pointerId !== event.pointerId) return
-        const end = toPoint(event)
+        const end = toFreePoint(event)
         if (!pointsEqual(end, polyline.points[polyline.points.length - 1])) polyline.points.push(end)
         polyline.pointerId = null
         polyline.pending = end
@@ -2000,7 +2008,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (shape) {
         if (shape.pointerId !== event.pointerId) return
         if (shape.mode === 'insert') {
-          const end = toPoint(event)
+          const end = toFreePoint(event)
           if (distance(shape.insertStart, end) * zoom < SHAPE_CLICK_SLOP) {
             cancelShape()
             return
@@ -2022,7 +2030,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       strokeRef.current = null
     },
-    [cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toPoint, updateSelection, zoom],
+    [cancelShape, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
   )
 
   // Clicking the workspace background settles pending edits and deselects, but
