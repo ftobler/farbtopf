@@ -1697,7 +1697,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (floating) floating.source = floating.bitmap
           return
         }
-        applyToLayers((bitmap, bottom) => rotateBy(bitmap, degrees, bottom ? secondary : null))
+        applyToLayers((bitmap, bottom) =>
+          fitWithin(rotateBy(bitmap, degrees, bottom ? secondary : null), MAX_CANVAS),
+        )
       },
       resize(width, height) {
         acceptPending()
