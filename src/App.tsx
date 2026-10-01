@@ -26,6 +26,7 @@ import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
 import { Ribbon } from './components/Ribbon'
 import { RotateDialog } from './components/RotateDialog'
+import { CanvasSizeDialog } from './components/CanvasSizeDialog'
 import { ScaleImageDialog } from './components/ScaleImageDialog'
 import { Scrollbars } from './components/Scrollbars'
 import { StatusBar } from './components/StatusBar'
@@ -141,6 +142,7 @@ function App() {
   const [showScaleDialog, setShowScaleDialog] = useState(false)
   /** Size of the selection the Scale dialog acts on, or null to scale the whole image. */
   const [scaleSelection, setScaleSelection] = useState<{ width: number; height: number } | null>(null)
+  const [showCanvasSizeDialog, setShowCanvasSizeDialog] = useState(false)
   const [showRotateDialog, setShowRotateDialog] = useState(false)
   const [customRotation, setCustomRotation] = useState(0)
   const [lastRotation, setLastRotation] = useState(90)
@@ -461,6 +463,16 @@ function App() {
       notify(`Scaled ${scaleSelection ? 'selection' : 'image'} to ${width} × ${height}`)
     },
     [notify, scaleSelection],
+  )
+
+  const handleCanvasSizeApply = useCallback(
+    (width: number, height: number) => {
+      // Same path as dragging the canvas edge handles: no scaling, content stays top-left.
+      canvasRef.current?.resizeCanvas({ x: 0, y: 0, width, height })
+      setShowCanvasSizeDialog(false)
+      notify(`Resized canvas to ${width} × ${height}`)
+    },
+    [notify],
   )
 
   const handleFlip = useCallback((axis: 'horizontal' | 'vertical') => {
@@ -937,6 +949,7 @@ function App() {
         showGrid={showGrid}
         onToggleGrid={() => setShowGrid((value) => !value)}
         onZoomChange={setZoom}
+        onCanvasSizeClick={() => setShowCanvasSizeDialog(true)}
       />
 
       <input
@@ -969,6 +982,16 @@ function App() {
           title={scaleSelection ? 'Scale selection' : 'Scale image'}
           onCancel={() => setShowScaleDialog(false)}
           onApply={handleScaleApply}
+        />
+      ) : null}
+
+      {showCanvasSizeDialog ? (
+        <CanvasSizeDialog
+          open={showCanvasSizeDialog}
+          initialWidth={canvasSize.width}
+          initialHeight={canvasSize.height}
+          onCancel={() => setShowCanvasSizeDialog(false)}
+          onApply={handleCanvasSizeApply}
         />
       ) : null}
 

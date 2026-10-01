@@ -1457,6 +1457,21 @@ describe('PaintCanvas', () => {
       expect(pixel(0, 0)).toEqual([255, 255, 255, 255])
       expect(pixel(2, 2)).toEqual([0, 0, 0, 255])
     })
+
+    it('resizeCanvas anchored top-left crops when shrinking and pads white when growing', () => {
+      const { ref, canvas } = setup('brush', 10, 10)
+      const context = { putImageData: vi.fn() }
+      canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
+      const doc = new Bitmap(10, 10, WHITE)
+      doc.set(1, 1, BLACK)
+      act(() => ref.current?.loadBitmap(doc))
+      act(() => ref.current?.resizeCanvas({ x: 0, y: 0, width: 3, height: 12 }))
+      expect(ref.current?.getSize()).toEqual({ width: 3, height: 12 })
+      const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+      const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 3 + x) * 4, (y * 3 + x) * 4 + 4))
+      expect(pixel(1, 1)).toEqual([0, 0, 0, 255])
+      expect(pixel(0, 11)).toEqual([255, 255, 255, 255])
+    })
   })
 
   describe('live shape handles', () => {

@@ -60,4 +60,14 @@ describe('StatusBar', () => {
     fireEvent.click(screen.getByLabelText('Zoom in'))
     expect(onZoomChange).toHaveBeenCalledWith(12)
   })
+
+  it('shows the canvas size as a button that opens the canvas size dialog', () => {
+    const onCanvasSizeClick = vi.fn()
+    renderBar({ onCanvasSizeClick })
+    const button = screen.getByRole('button', { name: /800 × 600 px/ })
+    expect(button.classList.contains('status-item')).toBe(true)
+    expect(button.getAttribute('type')).toBe('button')
+    fireEvent.click(button)
+    expect(onCanvasSizeClick).toHaveBeenCalledTimes(1)
+  })
 })

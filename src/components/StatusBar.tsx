@@ -13,6 +13,8 @@ export interface StatusBarProps {
   showGrid: boolean
   onToggleGrid: () => void
   onZoomChange: (zoom: number) => void
+  /** Opens the dialog to set the canvas size precisely. */
+  onCanvasSizeClick?: () => void
 }
 
 export function StatusBar({
@@ -25,6 +27,7 @@ export function StatusBar({
   showGrid,
   onToggleGrid,
   onZoomChange,
+  onCanvasSizeClick,
 }: StatusBarProps) {
   return (
     <footer className="statusbar">
@@ -39,9 +42,14 @@ export function StatusBar({
           </>
         ) : null}
       </span>
-      <span className="status-item">
+      <button
+        type="button"
+        className="status-item status-size"
+        title="Canvas size — click to resize"
+        onClick={onCanvasSizeClick}
+      >
         {width} × {height} px
-      </span>
+      </button>
       <button
         type="button"
         className="icon-button"

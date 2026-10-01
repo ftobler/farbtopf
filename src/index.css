@@ -1562,6 +1562,33 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.status-size {
+  height: 22px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.status-size:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.status-size:active {
+  background: var(--active);
+}
+
+.status-size:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .status-spacer {
   flex: 1;
 }
