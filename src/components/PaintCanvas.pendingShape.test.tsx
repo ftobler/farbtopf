@@ -426,6 +426,34 @@ describe('PaintCanvas document actions accept the pending shape first', () => {
     expect(s.ref.current?.hasPendingShape()).toBe(false)
     expect(s.image()).toEqual(first)
   })
+
+  it('drops a freeform shape in progress on redo, and redoes', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    s.commit()
+    const first = s.image()
+    act(() => s.ref.current?.undo())
+    s.setProps({ shapeKind: 'freeform' })
+    s.click(5, 15)
+    s.click(25, 15)
+    act(() => s.ref.current?.redo())
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(first)
+    expect(s.onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('drops a curve in progress on redo, and redoes', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    s.commit()
+    const first = s.image()
+    act(() => s.ref.current?.undo())
+    s.setProps({ shapeKind: 'polyline' })
+    s.drag([5, 15], [25, 15])
+    act(() => s.ref.current?.redo())
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    expect(s.image()).toEqual(first)
+  })
 })
 
 describe('PaintCanvas opening the miniature view', () => {

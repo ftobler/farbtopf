@@ -1182,6 +1182,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     syncHistory()
   }, [doc, paint, recordHistory, syncHistory])
 
+  /** Drops a freeform shape in progress, recording no history. */
+  const cancelPolyline = useCallback(() => {
+    if (!polylineRef.current) return
+    polylineRef.current = null
+    setPolylineActive(false)
+    paint(doc())
+  }, [doc, paint])
+
   const finishPolylineRef = useRef(finishPolyline)
   useEffect(() => {
     finishPolylineRef.current = finishPolyline
@@ -1472,9 +1480,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
       },
       redo() {
-        // Placing the pending shape would clear the redo stack, so redo drops it instead.
+        // Placing a pending shape or freeform shape would clear the redo stack, so redo
+        // drops it instead.
         cancelShapeRef.current()
-        finishPolyline()
+        cancelPolyline()
         if (floatingRef.current) {
           commitFloating()
           updateSelection(null)
@@ -1748,6 +1757,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       ensureFloating,
       eraseColor,
       acceptPending,
+      cancelPolyline,
       finishPolyline,
       onDocumentChange,
       paint,
