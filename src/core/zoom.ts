@@ -1,4 +1,4 @@
-export const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8] as const
+export const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 16] as const
 
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number]
 

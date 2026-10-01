@@ -7,13 +7,24 @@ describe('nextZoom', () => {
     expect(nextZoom(2, 1)).toBe(3)
   })
 
+  it('steps up past 800% to 1600%', () => {
+    expect(nextZoom(8, 1)).toBe(12)
+    expect(nextZoom(12, 1)).toBe(16)
+    expect(nextZoom(16, 1)).toBe(16)
+  })
+
+  it('steps down from 1600%', () => {
+    expect(nextZoom(16, -1)).toBe(12)
+    expect(nextZoom(12, -1)).toBe(8)
+  })
+
   it('steps down through the levels', () => {
     expect(nextZoom(1, -1)).toBe(0.75)
     expect(nextZoom(0.5, -1)).toBe(0.25)
   })
 
   it('clamps at the ends', () => {
-    expect(nextZoom(ZOOM_LEVELS[ZOOM_LEVELS.length - 1], 1)).toBe(8)
+    expect(nextZoom(ZOOM_LEVELS[ZOOM_LEVELS.length - 1], 1)).toBe(16)
     expect(nextZoom(0.25, -1)).toBe(0.25)
   })
 
@@ -27,6 +38,7 @@ describe('nearestZoomIndex', () => {
   it('returns the index of an exact level', () => {
     expect(nearestZoomIndex(1)).toBe(ZOOM_LEVELS.indexOf(1))
     expect(nearestZoomIndex(4)).toBe(ZOOM_LEVELS.indexOf(4))
+    expect(nearestZoomIndex(16)).toBe(ZOOM_LEVELS.indexOf(16))
   })
 
   it('snaps a custom zoom to the closest level', () => {
