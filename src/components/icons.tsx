@@ -712,3 +712,14 @@ export function InvertColorsIcon(props: IconProps) {
     </Svg>
   )
 }
+
+/** Gaussian blur: a dot fading out in soft rings. */
+export function GaussianBlurIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="5.75" opacity={0.55} />
+      <circle cx="12" cy="12" r="8.5" opacity={0.25} strokeDasharray="2 2.5" />
+    </Svg>
+  )
+}

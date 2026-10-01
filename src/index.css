@@ -1779,6 +1779,11 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.blur-range {
+  margin: -6px 0 18px;
+  font-size: 12px;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

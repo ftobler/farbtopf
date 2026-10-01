@@ -777,7 +777,49 @@ describe('App', () => {
       'Flip',
       'Resize',
       'Invert color',
+      'Blur image',
     ])
+  })
+
+  it('names the blur entry after the selection when there is one', () => {
+    const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+    expect(screen.getByRole('menuitem', { name: 'Blur selection' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Blur image' })).toBeNull()
+  })
+
+  it('blurs from the context menu through the blur dialog', () => {
+    const { container } = render(<App />)
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Blur image' }))
+    expect(screen.queryByRole('menu')).toBeNull()
+    const dialog = screen.getByRole('dialog', { name: 'Blur image' })
+    const input = within(dialog).getByLabelText(/Radius \(px\)/) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '3' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByText('Blurred image by 3 px')).toBeTruthy()
+  })
+
+  it('marks the document as unsaved after a blur', () => {
+    const { container } = render(<App />)
+    expect(document.title).toBe('Farbtopf')
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Blur image' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Blur image' })).getByRole('button', { name: 'Apply' }))
+    expect(document.title).toBe('*Farbtopf')
+  })
+
+  it('cancels the blur dialog with Escape', () => {
+    const { container } = render(<App />)
+    fireEvent.contextMenu(container.querySelector('.workspace') as HTMLElement, { clientX: 10, clientY: 10 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Blur image' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('shows an icon next to every canvas context menu entry', () => {

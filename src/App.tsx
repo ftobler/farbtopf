@@ -8,6 +8,7 @@ import {
   CropIcon,
   CutIcon,
   FlipIcon,
+  GaussianBlurIcon,
   FlipVerticalIcon,
   InvertColorsIcon,
   InvertSelectionIcon,
@@ -25,6 +26,7 @@ import { NewCanvasDialog } from './components/NewCanvasDialog'
 import { PaintCanvas } from './components/PaintCanvas'
 import type { PaintCanvasHandle } from './components/PaintCanvas'
 import { Ribbon } from './components/Ribbon'
+import { BlurDialog } from './components/BlurDialog'
 import { RotateDialog } from './components/RotateDialog'
 import { CanvasSizeDialog } from './components/CanvasSizeDialog'
 import { ScaleImageDialog } from './components/ScaleImageDialog'
@@ -144,6 +146,9 @@ function App() {
   const [scaleSelection, setScaleSelection] = useState<{ width: number; height: number } | null>(null)
   const [showCanvasSizeDialog, setShowCanvasSizeDialog] = useState(false)
   const [showRotateDialog, setShowRotateDialog] = useState(false)
+  /** What the blur dialog will blur, or null while it is closed. */
+  const [blurTarget, setBlurTarget] = useState<'selection' | 'image' | null>(null)
+  const [blurRadius, setBlurRadius] = useState(2)
   const [customRotation, setCustomRotation] = useState(0)
   const [lastRotation, setLastRotation] = useState(90)
   const [lastFlip, setLastFlip] = useState<'horizontal' | 'vertical'>('horizontal')
@@ -473,6 +478,20 @@ function App() {
       notify(`Resized canvas to ${width} × ${height}`)
     },
     [notify],
+  )
+
+  const openBlurDialog = useCallback(() => {
+    setBlurTarget(canvasRef.current?.getSelection() ? 'selection' : 'image')
+  }, [])
+
+  const handleBlurApply = useCallback(
+    (radius: number) => {
+      setBlurRadius(radius)
+      setBlurTarget(null)
+      canvasRef.current?.blur(radius)
+      notify(`Blurred ${blurTarget ?? 'image'} by ${radius} px`)
+    },
+    [blurTarget, notify],
   )
 
   const handleFlip = useCallback((axis: 'horizontal' | 'vertical') => {
@@ -1004,6 +1023,16 @@ function App() {
         />
       ) : null}
 
+      {blurTarget ? (
+        <BlurDialog
+          open
+          title={blurTarget === 'selection' ? 'Blur selection' : 'Blur image'}
+          initialRadius={blurRadius}
+          onCancel={() => setBlurTarget(null)}
+          onApply={handleBlurApply}
+        />
+      ) : null}
+
       {contextMenu ? (
         <ContextMenu
           x={contextMenu.x}
@@ -1164,6 +1193,15 @@ function App() {
                 }}
               >
                 Invert color
+              </MenuItem>
+              <MenuItem
+                icon={<GaussianBlurIcon size={16} />}
+                onClick={() => {
+                  openBlurDialog()
+                  close()
+                }}
+              >
+                {hasSelection ? 'Blur selection' : 'Blur image'}
               </MenuItem>
             </>
           )}

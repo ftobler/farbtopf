@@ -11,6 +11,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Bitmap } from '../core/bitmap'
+import { blurSelection, gaussianBlur } from '../core/blur'
 import {
   HIGHLIGHTER_ALPHA,
   compositeHighlighter,
@@ -102,6 +103,11 @@ export interface PaintCanvasHandle {
   resizeCanvas: (rect: Rect) => void
   /** Inverts the colours of the selection, or of the whole document without one. */
   invertColors: () => void
+  /**
+   * Gaussian-blurs the selection (respecting a free-form mask) by `radius` pixels,
+   * or the whole image without one. A placed selection blurs as one undo step.
+   */
+  blur: (radius: number) => void
   cropToSelection: () => void
   getSelection: () => Rect | null
   clearSelection: () => void
@@ -1471,6 +1477,28 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           return
         }
         applyToLayers((bitmap) => invertBitmap(bitmap))
+      },
+      blur(radius) {
+        finishPolyline()
+        const floating = floatingRef.current
+        if (floating) {
+          const { width, height } = floating.bitmap
+          const blurred = floating.bitmap.clone()
+          blurSelection(blurred, { x: 0, y: 0, width, height }, maskRef.current, radius)
+          floating.bitmap = blurred
+          floating.source = blurred
+          renderPreview()
+          return
+        }
+        const rect = selectionRef.current
+        if (rect) {
+          recordHistory(doc().clone())
+          blurSelection(doc(), rect, maskRef.current, radius)
+          paint(doc())
+          syncHistory()
+          return
+        }
+        applyToLayers((bitmap) => gaussianBlur(bitmap, radius))
       },
       cropToSelection() {
         finishPolyline()
