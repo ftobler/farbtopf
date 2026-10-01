@@ -136,6 +136,29 @@ describe('App unsaved changes', () => {
     expect(document.title).toBe('photo.png - Farbtopf')
   })
 
+  it('marks the file name in the title once an opened image changes', async () => {
+    render(<App />)
+    window.showOpenFilePicker = vi.fn(async () => [asHandle(fakeHandle('photo.png'))])
+    await clickFileItem('Open…')
+    await waitFor(() => expect(document.title).toBe('photo.png - Farbtopf'))
+    await edit()
+    expect(document.title).toBe('*photo.png - Farbtopf')
+    expect(warnsOnLeave()).toBe(true)
+  })
+
+  it('drops the file name from the title for a new image', async () => {
+    render(<App />)
+    window.showOpenFilePicker = vi.fn(async () => [asHandle(fakeHandle('photo.png'))])
+    await clickFileItem('Open…')
+    await waitFor(() => expect(document.title).toBe('photo.png - Farbtopf'))
+    await edit()
+    fireEvent.keyDown(window, { key: 'n', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(document.title).toBe('Farbtopf')
+    await edit()
+    expect(document.title).toBe('*Farbtopf')
+  })
+
   it('is clean after creating a new image', async () => {
     render(<App />)
     await edit()
