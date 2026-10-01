@@ -1,7 +1,7 @@
 import type { Bitmap } from './bitmap'
 import type { Rgba } from './color'
 import type { Point, Rect } from './geometry'
-import { clamp, normalizeRect } from './geometry'
+import { normalizeRect } from './geometry'
 import { bezierPoints, drawBezier, drawEllipse, drawLine, drawPolyline, drawRect, fillPolygon } from './raster'
 
 export type ShapeKind =
@@ -224,130 +224,138 @@ function ellipseSegments(box: Rect): number {
 
 const CALLOUT_BODY = 0.78
 const TAIL_TIP = 0.15
-/** Half the tail's base width, as a fraction of the edge it sits on. */
-const TAIL_HALF = 0.09
-/** Keep the attach point this far from an edge's ends so the tail base stays on the edge. */
-const TAIL_BAND = 0.12
-/** Half the angular width of an oval callout tail. */
-const TAIL_ANGLE = 0.35
-
-type CalloutSide = 'top' | 'right' | 'bottom' | 'left'
+/** Half the tail's width where it starts at the body centre, as a fraction of the body's smaller side. */
+const TAIL_HALF = 0.2
+/** The oval callout's wider tail start, since its curved sides pinch in towards the tip. */
+const TAIL_HALF_OVAL = 0.28
+/** Where an oval tail side's curve control sits, as a fraction of the tail's starting half-width. */
+const TAIL_PINCH = 0.25
+/** Samples along each curved side of an oval callout's tail. */
+const TAIL_CURVE_SAMPLES = 16
 
 function bodyCentre(body: Rect): Point {
   return { x: body.x + body.width / 2, y: body.y + body.height / 2 }
 }
 
-/** The edge of `body` nearest the tip, chosen by the dominant axis from the body centre. */
-function calloutSide(body: Rect, tip: Point): CalloutSide {
-  const centre = bodyCentre(body)
-  const dx = tip.x - centre.x
-  const dy = tip.y - centre.y
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left'
-  return dy >= 0 ? 'bottom' : 'top'
-}
-
-/** The clockwise edge of `body` for a side, as [from, to]. */
-function calloutEdge(body: Rect, side: CalloutSide): [Point, Point] {
-  const right = body.x + body.width
-  const bottom = body.y + body.height
-  switch (side) {
-    case 'top':
-      return [{ x: body.x, y: body.y }, { x: right, y: body.y }]
-    case 'right':
-      return [{ x: right, y: body.y }, { x: right, y: bottom }]
-    case 'bottom':
-      return [{ x: right, y: bottom }, { x: body.x, y: bottom }]
-    default:
-      return [{ x: body.x, y: bottom }, { x: body.x, y: body.y }]
-  }
-}
-
-/**
- * A triangular tail spliced into the clockwise edge from `from` to `to`, following its
- * direction. The two bases straddle the projection of `tip` onto the edge, held inside a
- * central band so the tail never runs off the edge's ends.
- */
-function calloutTail(from: Point, to: Point, tip: Point): Point[] {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  const len = Math.hypot(dx, dy) || 1
-  const ux = dx / len
-  const uy = dy / len
-  const t = clamp(((tip.x - from.x) * ux + (tip.y - from.y) * uy) / len, TAIL_BAND, 1 - TAIL_BAND)
-  const attach = { x: from.x + dx * t, y: from.y + dy * t }
-  const half = TAIL_HALF * len
-  return [
-    { x: attach.x - ux * half, y: attach.y - uy * half },
-    tip,
-    { x: attach.x + ux * half, y: attach.y + uy * half },
-  ]
-}
-
-/** Rectangle body with the tail spliced into the chosen clockwise edge. */
-function calloutRect(body: Rect, side: CalloutSide, tail: Point[]): Point[] {
+/** The callout body's clockwise outline. */
+function calloutBody(kind: ShapeKind, body: Rect): Point[] {
   const { x, y, width: w, height: h } = body
-  const corners: Point[] = [
+  if (kind === 'callout-rounded-rectangle') return roundedRect(body)
+  if (kind === 'callout-oval') {
+    const segments = ellipseSegments(body)
+    const points: Point[] = []
+    for (let i = 0; i < segments; i += 1) {
+      const t = (i / segments) * 2 * Math.PI
+      points.push({ x: x + w / 2 + (w / 2) * Math.cos(t), y: y + h / 2 + (h / 2) * Math.sin(t) })
+    }
+    return points
+  }
+  return [
     { x, y },
     { x: x + w, y },
     { x: x + w, y: y + h },
     { x, y: y + h },
   ]
-  const index = { top: 0, right: 1, bottom: 2, left: 3 }[side]
-  return [...corners.slice(0, index + 1), ...tail, ...corners.slice(index + 1)]
 }
 
-/** Rounded rectangle body with the tail spliced into the flat segment of the chosen edge. */
-function calloutRounded(body: Rect, side: CalloutSide, tail: Point[], radius?: number): Point[] {
-  const { x, y, width: w, height: h } = body
-  const r = radius ?? Math.min(w, h) * 0.2
-  const topLeft = arc(x + r, y + r, r, Math.PI)
-  const topRight = arc(x + w - r, y + r, r, -Math.PI / 2)
-  const bottomRight = arc(x + w - r, y + h - r, r, 0)
-  const bottomLeft = arc(x + r, y + h - r, r, Math.PI / 2)
-  return [
-    ...topLeft,
-    ...(side === 'top' ? tail : []),
-    ...topRight,
-    ...(side === 'right' ? tail : []),
-    ...bottomRight,
-    ...(side === 'bottom' ? tail : []),
-    ...bottomLeft,
-    ...(side === 'left' ? tail : []),
-  ]
+/** Where a tail side leaves the body: the crossing's position along the outline (edge index + fraction) and along the side. */
+interface TailExit {
+  outline: number
+  side: number
+  point: Point
 }
 
-/** Oval body with the tail spliced between the ellipse samples around the tip direction. */
-function calloutOval(body: Rect, tip: Point): Point[] {
-  const { x, y, width: w, height: h } = body
-  const cx = x + w / 2
-  const cy = y + h / 2
-  const rx = w / 2
-  const ry = h / 2
-  const at = (t: number) => ({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) })
-  const mid = Math.atan2(tip.y - cy, tip.x - cx)
-  const start = mid - TAIL_ANGLE
-  const end = mid + TAIL_ANGLE
-  const span = 2 * Math.PI - 2 * TAIL_ANGLE
-  const steps = Math.max(3, Math.round(ellipseSegments(body) * (span / (2 * Math.PI))))
-  const points: Point[] = [at(start), tip]
-  for (let i = 0; i < steps; i += 1) points.push(at(end + (i / steps) * span))
+/** The last crossing of the polyline `side` with the closed `outline`, or null when it never leaves. */
+function tailExit(outline: Point[], side: Point[]): TailExit | null {
+  let exit: TailExit | null = null
+  for (let i = 0; i < side.length - 1; i += 1) {
+    const a = side[i]
+    const b = side[i + 1]
+    for (let j = 0; j < outline.length; j += 1) {
+      const c = outline[j]
+      const d = outline[(j + 1) % outline.length]
+      const denom = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x)
+      if (denom === 0) continue
+      const t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / denom
+      const u = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / denom
+      if (t < 0 || t > 1 || u < 0 || u > 1) continue
+      if (exit && i + t <= exit.side) continue
+      exit = { outline: j + u, side: i + t, point: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t } }
+    }
+  }
+  return exit
+}
+
+/** The outline vertices passed walking clockwise from position `from` to position `to`. */
+function walkOutline(outline: Point[], from: number, to: number): Point[] {
+  const n = outline.length
+  const span = (to - from + n) % n
+  const points: Point[] = []
+  for (let k = Math.floor(from) + 1; k - from < span; k += 1) points.push(outline[k % n])
+  return points
+}
+
+/** A tail side from `base` to `tip`, bent towards `control` (straight without one). */
+function tailSide(base: Point, tip: Point, control?: Point): Point[] {
+  if (!control) return [base, tip]
+  const points: Point[] = []
+  for (let i = 0; i <= TAIL_CURVE_SAMPLES; i += 1) {
+    const t = i / TAIL_CURVE_SAMPLES
+    const a = (1 - t) * (1 - t)
+    const b = 2 * (1 - t) * t
+    const c = t * t
+    points.push({ x: a * base.x + b * control.x + c * tip.x, y: a * base.y + b * control.y + c * tip.y })
+  }
   return points
 }
 
 /**
  * The callout body is always the top `CALLOUT_BODY` of `box`, leaving room for a tail
- * below. The tail's origin follows `tip`: it attaches to the side of the body nearest the
- * tip and is spliced into that edge, so the result stays one closed outline with no seam.
+ * below. The tail is a wedge running from the body centre to `tip`, merged with the body
+ * into one closed outline with no seam, so it leaves the body wherever the tip points,
+ * corners included. The oval's tail has rounded, inward-curving sides.
  */
 export function callout(kind: ShapeKind, box: Rect, tipOverride?: Point): Point[] {
   const { x, y, width: w, height: h } = box
   const body: Rect = { x, y, width: w, height: h * CALLOUT_BODY }
   const tip = tipOverride ?? { x: x + w * TAIL_TIP, y: y + h }
-  if (kind === 'callout-oval') return calloutOval(body, tip)
-  const side = calloutSide(body, tip)
-  const tail = calloutTail(...calloutEdge(body, side), tip)
-  if (kind === 'callout-rounded-rectangle') return calloutRounded(body, side, tail)
-  return calloutRect(body, side, tail)
+  const outline = calloutBody(kind, body)
+  const centre = bodyCentre(body)
+  const length = Math.hypot(tip.x - centre.x, tip.y - centre.y)
+  if (length === 0) return outline
+  const dir = { x: (tip.x - centre.x) / length, y: (tip.y - centre.y) / length }
+  const perp = { x: -dir.y, y: dir.x }
+  const round = kind === 'callout-oval'
+  const half = (round ? TAIL_HALF_OVAL : TAIL_HALF) * Math.min(body.width, body.height)
+  const middle = { x: (centre.x + tip.x) / 2, y: (centre.y + tip.y) / 2 }
+  // The oval's tail sides curve inwards, so it flares smoothly out of the body and tapers to the tip.
+  const side = (sign: number) =>
+    tailSide(
+      { x: centre.x + perp.x * sign * half, y: centre.y + perp.y * sign * half },
+      tip,
+      round ? { x: middle.x + perp.x * sign * half * TAIL_PINCH, y: middle.y + perp.y * sign * half * TAIL_PINCH } : undefined,
+    )
+  const left = side(1)
+  const right = side(-1)
+  const leftExit = tailExit(outline, left)
+  const rightExit = tailExit(outline, right)
+  if (!leftExit || !rightExit) return outline
+  // Walk the body the long way round, from one exit to the other, skipping the stretch the tail covers.
+  const ray = tailExit(outline, [centre, tip])
+  const n = outline.length
+  const covers = (from: TailExit, to: TailExit) =>
+    ray !== null && (ray.outline - from.outline + n) % n < (to.outline - from.outline + n) % n
+  const [first, second, firstSide, secondSide] = covers(leftExit, rightExit)
+    ? [rightExit, leftExit, right, left]
+    : [leftExit, rightExit, left, right]
+  const outward = (side: Point[], exit: TailExit) => [exit.point, ...side.slice(Math.floor(exit.side) + 1, -1)]
+  return [
+    first.point,
+    ...walkOutline(outline, first.outline, second.outline),
+    ...outward(secondSide, second),
+    tip,
+    ...outward(firstSide, first).slice(1).reverse(),
+  ]
 }
 
 /**

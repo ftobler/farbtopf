@@ -56,14 +56,16 @@ export const calloutFamily: ShapeFamily = {
   render(bitmap: Bitmap, kind: ShapeKind, points: readonly Point[], style: ShapeStyle) {
     if (points.length < 2) return
     const box = normalizeRect(points[0], points[1])
-    const unit = unitPosition(box, currentTip(points))
+    // Fill and stroke aim at the same tip so the fill never strays outside the tail's stroke.
+    const tip = currentTip(points)
     const outline = outlineBox(box, style.stroke ? style.width : 1)
     if (style.fill) {
       const target = fillBox(outline, style.stroke ? 0 : 0.25)
-      fillPolygon(bitmap, callout(kind, target, tipIn(target, unit)), style.fill)
+      fillPolygon(bitmap, callout(kind, target, tip), style.fill)
     }
     if (style.stroke) {
-      const polygon = callout(kind, outline, tipIn(outline, unit))
+      // The stroke runs through pixel centres, half a pixel before the fill's continuous coordinates.
+      const polygon = callout(kind, outline, { x: tip.x - 0.5, y: tip.y - 0.5 })
       drawPolyline(bitmap, [...polygon, polygon[0]], style.width, style.stroke, 'round')
     }
   },

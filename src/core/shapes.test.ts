@@ -5,7 +5,7 @@ import type { Rgba } from './color'
 import { normalizeRect } from './geometry'
 import type { Point } from './geometry'
 import { drawEllipse, drawRect } from './raster'
-import { SHAPES, renderShape, shapeById, shapeIconPath, shapePolygon } from './shapes'
+import { SHAPES, callout, renderShape, shapeById, shapeIconPath, shapePolygon } from './shapes'
 import type { ShapeKind, ShapeStyle } from './shapes'
 
 const RED = rgba(255, 0, 0)
@@ -183,6 +183,15 @@ describe('renderShape closed drag shapes', () => {
       for (let x = 20; x < 40; x += 1) expect(painted(bitmap, x, 33), `${kind} ${x}`).toBe(false)
       expect(painted(bitmap, 34, 34)).toBe(false)
     }
+  })
+
+  it('curves the oval callout tail and keeps the rectangular ones straight', () => {
+    const box = { x: 0, y: 0, width: 100, height: 100 }
+    const tip = { x: 100, y: 100 }
+    const outsideBody = (points: Point[]) => points.filter((p) => p.y > 78.01).length
+    // A straight tail adds only its tip below the body; a curved one adds samples along both sides.
+    expect(outsideBody(callout('callout-rectangle', box, tip))).toBe(1)
+    expect(outsideBody(callout('callout-oval', box, tip))).toBeGreaterThan(5)
   })
 
   it('draws callouts as one outline without a line across the tail base', () => {

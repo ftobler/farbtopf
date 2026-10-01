@@ -106,6 +106,26 @@ describe('calloutFamily dynamic tail origin', () => {
   })
 })
 
+describe('calloutFamily tail from the body centre', () => {
+  it('a tip past a corner grows the tail out of that corner along the centre-to-tip line', () => {
+    for (const kind of KINDS) {
+      // Body is (5, 5)-(34, 27.6), centre (19.5, 16.3); the ray towards (52, 50) leaves past the corner.
+      const bitmap = renderWithTip(kind, { x: 52, y: 50 }, FILL_ONLY)
+      expect(painted(bitmap, 38, 35), `${kind} on the ray`).toBe(true)
+      expect(painted(bitmap, 42, 39), `${kind} further along the ray`).toBe(true)
+      expect(painted(bitmap, 44, 30), `${kind} off the ray`).toBe(false)
+    }
+  })
+
+  it('keeps the whole body when the tip sits inside it', () => {
+    for (const kind of KINDS) {
+      const inside = renderWithTip(kind, { x: 20, y: 16 }, FILL_ONLY)
+      expect(painted(inside, 20, 16), kind).toBe(true)
+      expect(painted(inside, 20, 33), kind).toBe(false)
+    }
+  })
+})
+
 describe('calloutFamily tail', () => {
   it('moving the tail replaces the tip anchor', () => {
     const points = calloutFamily.insert('callout-rectangle', SQUARE[0], SQUARE[1])
@@ -120,8 +140,8 @@ describe('calloutFamily tail', () => {
     const before = renderDefault('callout-rectangle', FILL_ONLY)
     const after = renderWithTip('callout-rectangle', { x: 30, y: 42 }, FILL_ONLY)
     expect(after.data).not.toEqual(before.data)
-    expect(painted(after, 29, 35)).toBe(true)
-    expect(painted(before, 29, 35)).toBe(false)
+    expect(painted(after, 27, 35)).toBe(true)
+    expect(painted(before, 27, 35)).toBe(false)
   })
 
   it('keeps the tip at the same relative position when the box resizes', () => {
