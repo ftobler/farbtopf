@@ -1,6 +1,8 @@
 # Farbtopf
 
-A tiny paint pot for your browser — a simple image editor built for quickly annotating and editing images without a heavyweight UI.
+*A tiny paint pot for your browser*
+
+A simple image editor built for quickly annotating and editing images without a heavyweight UI.
 
 Built with React + TypeScript and Vite, deployed to GitHub Pages.
 
