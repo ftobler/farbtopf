@@ -549,6 +549,55 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '100%' })).toBeTruthy()
   })
 
+  it('accumulates small trackpad wheel deltas into a single zoom step', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+
+    for (let index = 0; index < 10; index += 1) {
+      fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -3 })
+    }
+    expect(screen.getByRole('button', { name: '100%' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '150%' })).toBeNull()
+
+    for (let index = 0; index < 30; index += 1) {
+      fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -3 })
+    }
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '200%' })).toBeNull()
+  })
+
+  it('steps one zoom level per mouse-wheel notch', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -100, deltaMode: 0 })
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '200%' })).toBeNull()
+  })
+
+  it('steps one zoom level per line-mode mouse-wheel notch', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -3, deltaMode: 1 })
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+  })
+
+  it('keeps the cursor anchored when an accumulated wheel step fires', () => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    const frame = container.querySelector('.canvas-frame') as HTMLElement
+    workspace.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800, toJSON: () => ({}) }) as DOMRect
+    frame.getBoundingClientRect = () =>
+      ({ x: 200, y: 100, left: 200, top: 100, right: 1000, bottom: 700, width: 800, height: 600, toJSON: () => ({}) }) as DOMRect
+
+    for (let index = 0; index < 40; index += 1) {
+      fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -3, clientX: 400, clientY: 300 })
+    }
+
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+    expect(frame.style.transform).toBe('translate(200px, 50px)')
+  })
+
   it('pans the canvas while dragging with the middle mouse button', () => {
     const { container } = render(<App />)
     const workspace = container.querySelector('.workspace') as HTMLElement

@@ -80,6 +80,20 @@ function fitZoom(width: number, height: number): number {
   return best
 }
 
+/** Wheel delta, in pixels, that a single zoom step waits for. */
+const WHEEL_ZOOM_STEP = 100
+
+/**
+ * A wheel event's deltaY normalized to the pixel scale `WHEEL_ZOOM_STEP` counts
+ * in. A line-mode notch (three lines) and a page both map to one step; pixel
+ * deltas pass through so trackpad events keep accumulating.
+ */
+function wheelZoomDelta(event: WheelEvent): number {
+  if (event.deltaMode === 1) return event.deltaY * (WHEEL_ZOOM_STEP / 3)
+  if (event.deltaMode === 2) return event.deltaY * WHEEL_ZOOM_STEP
+  return event.deltaY
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   const tag = target.tagName
@@ -94,6 +108,8 @@ function App() {
   const messageTimer = useRef<number | null>(null)
   const workspaceRef = useRef<HTMLDivElement | null>(null)
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null)
+  /** Wheel delta carried over between events so trackpads step one zoom level per gesture. */
+  const wheelAccumRef = useRef(0)
 
   const { theme, toggleTheme } = useTheme()
   const customColors = useCustomColors()
@@ -603,7 +619,14 @@ function App() {
     const handleWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
       event.preventDefault()
-      const target = nextZoom(zoom, event.deltaY < 0 ? 1 : -1)
+      const delta = wheelZoomDelta(event)
+      if (delta === 0) return
+      if (Math.sign(delta) !== Math.sign(wheelAccumRef.current)) wheelAccumRef.current = 0
+      wheelAccumRef.current += delta
+      if (Math.abs(wheelAccumRef.current) < WHEEL_ZOOM_STEP) return
+      const direction: 1 | -1 = wheelAccumRef.current < 0 ? 1 : -1
+      wheelAccumRef.current %= WHEEL_ZOOM_STEP
+      const target = nextZoom(zoom, direction)
       if (target === zoom) return
       const frame = workspace.querySelector('.canvas-frame')
       if (frame) {
