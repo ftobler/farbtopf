@@ -23,6 +23,7 @@ interface Props {
   opacity: number
   shapeKind: ShapeKind
   shapeFill: ShapeFill
+  showMiniature: boolean
 }
 
 function setup(initial: Partial<Props> = {}) {
@@ -37,6 +38,7 @@ function setup(initial: Partial<Props> = {}) {
     opacity: 100,
     shapeKind: 'rectangle',
     shapeFill: 'outline',
+    showMiniature: false,
     ...initial,
   }
   const element = () => (
@@ -60,6 +62,7 @@ function setup(initial: Partial<Props> = {}) {
       onPickColor={vi.fn()}
       onSizeChange={vi.fn()}
       transparentSelection={false}
+      showMiniature={props.showMiniature}
     />
   )
   const { container, rerender } = render(element())
@@ -396,5 +399,30 @@ describe('PaintCanvas document actions accept the pending shape first', () => {
     act(() => s.ref.current?.redo())
     expect(s.ref.current?.hasPendingShape()).toBe(false)
     expect(s.image()).toEqual(first)
+  })
+})
+
+describe('PaintCanvas opening the miniature view', () => {
+  it('keeps showing a pending shape', () => {
+    const { shown, drag, setProps } = setup()
+    drag([5, 5], [25, 25])
+    setProps({ showMiniature: true })
+    expect(shown(5, 15)).toEqual(rgbaOf(BLACK))
+  })
+
+  it('keeps showing a freeform shape in progress', () => {
+    const { shown, click, setProps } = setup({ shapeKind: 'freeform' })
+    click(5, 15)
+    click(25, 15)
+    setProps({ showMiniature: true })
+    expect(shown(15, 15)).toEqual(rgbaOf(BLACK))
+  })
+
+  it('keeps showing a floating selection', () => {
+    const { ref, shown, setProps } = setup({ tool: 'select' })
+    act(() => ref.current?.pasteBitmap(new Bitmap(4, 4, RED)))
+    expect(shown(1, 1)).toEqual(rgbaOf(RED))
+    setProps({ showMiniature: true })
+    expect(shown(1, 1)).toEqual(rgbaOf(RED))
   })
 })

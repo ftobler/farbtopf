@@ -1017,10 +1017,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     paint(doc())
   }, [size, paint, doc])
 
-  useEffect(() => {
-    if (showMiniature) paint(doc())
-  }, [showMiniature, paint, doc])
-
   // The part of the image currently visible in the workspace, in image pixels.
   useEffect(() => {
     if (!showMiniature) return
@@ -1212,6 +1208,24 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       previewPolyline()
     }
   }, [paint, previewPolyline, shapeStyle])
+
+  // The miniature only fills in when the canvas is painted, so opening it repaints
+  // what is on screen: a pending shape, curve or lifted selection included.
+  useEffect(() => {
+    if (!showMiniature) return
+    const shape = shapeRef.current
+    if (shape) {
+      const preview = shape.base.clone()
+      renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
+      paint(preview)
+    } else if (polylineRef.current) {
+      previewPolyline()
+    } else if (floatingRef.current) {
+      renderPreview()
+    } else {
+      paint(doc())
+    }
+  }, [showMiniature, paint, doc, previewPolyline, renderPreview])
 
   useEffect(() => {
     if (!polylineActive) return
