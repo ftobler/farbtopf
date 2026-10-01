@@ -19,6 +19,7 @@ interface Props {
   primary: Rgba
   secondary: Rgba
   brushSize: number
+  opacity: number
   shapeKind: ShapeKind
   shapeFill: ShapeFill
 }
@@ -32,6 +33,7 @@ function setup(initial: Partial<Props> = {}) {
     primary: BLACK,
     secondary: WHITE,
     brushSize: 1,
+    opacity: 100,
     shapeKind: 'rectangle',
     shapeFill: 'outline',
     ...initial,
@@ -45,6 +47,7 @@ function setup(initial: Partial<Props> = {}) {
       primary={props.primary}
       secondary={props.secondary}
       brushSize={props.brushSize}
+      opacity={props.opacity}
       brush="round"
       shapeFill={props.shapeFill}
       shapeKind={props.shapeKind}
@@ -76,6 +79,10 @@ function setup(initial: Partial<Props> = {}) {
     const i = (y * image.width + x) * 4
     return Array.from(image.data.slice(i, i + 4))
   }
+  const image = () => {
+    const shownImage = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
+    return Array.from(shownImage.data)
+  }
   const drag = (from: [number, number], to: [number, number]) => {
     fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: from[0], clientY: from[1] })
     fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: to[0], clientY: to[1] })
@@ -86,7 +93,7 @@ function setup(initial: Partial<Props> = {}) {
     fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: y })
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
   }
-  return { ref, shown, drag, click, setProps, commit, onHistoryChange, onDocumentChange }
+  return { ref, shown, image, drag, click, setProps, commit, onHistoryChange, onDocumentChange }
 }
 
 describe('PaintCanvas pending shape follows the toolbar', () => {
@@ -227,5 +234,46 @@ describe('PaintCanvas pending shape is committed when the tool changes', () => {
     expect(shown(5, 15)).toEqual(rgbaOf(WHITE))
     expect(onHistoryChange).not.toHaveBeenCalled()
     expect(ref.current?.hasPendingShape()).toBe(false)
+  })
+})
+
+describe('PaintCanvas pending shape keeps its own style when committed by a tool change', () => {
+  // Size and opacity belong to each tool in the app, so picking another tool also
+  // hands the canvas that tool's settings; none of them may restyle the shape.
+  const style: Partial<Props> = { brushSize: 5, opacity: 60, shapeFill: 'outline-filled', secondary: GREEN }
+
+  const viaEnter = (initial: Partial<Props>, place: (s: ReturnType<typeof setup>) => void) => {
+    const s = setup({ ...style, ...initial })
+    place(s)
+    s.commit()
+    return s.image()
+  }
+
+  const viaSwitch = (initial: Partial<Props>, place: (s: ReturnType<typeof setup>) => void, next: Partial<Props>) => {
+    const s = setup({ ...style, ...initial })
+    place(s)
+    s.setProps(next)
+    expect(s.ref.current?.hasPendingShape()).toBe(false)
+    return s.image()
+  }
+
+  const rectangle = (s: ReturnType<typeof setup>) => s.drag([5, 5], [25, 25])
+
+  it.each<[string, Partial<Props>]>([
+    ['pencil', { tool: 'pencil', brushSize: 1, opacity: 100 }],
+    ['brush', { tool: 'brush', brushSize: 2, opacity: 100 }],
+    ['eraser', { tool: 'eraser', brushSize: 9, opacity: 30 }],
+    ['fill', { tool: 'fill' }],
+    ['another shape kind', { shapeKind: 'ellipse' }],
+  ])('commits a pending rectangle as previewed when switching to %s', (_name, next) => {
+    expect(viaSwitch({}, rectangle, next)).toEqual(viaEnter({}, rectangle))
+  })
+
+  it.each<[string, Partial<Props>]>([
+    ['pencil', { tool: 'pencil', brushSize: 1, opacity: 100 }],
+    ['another shape kind', { shapeKind: 'rectangle' }],
+  ])('commits a pending curve as previewed when switching to %s', (_name, next) => {
+    const curve = (s: ReturnType<typeof setup>) => s.drag([5, 15], [25, 20])
+    expect(viaSwitch({ shapeKind: 'polyline' }, curve, next)).toEqual(viaEnter({ shapeKind: 'polyline' }, curve))
   })
 })

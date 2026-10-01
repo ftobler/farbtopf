@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -214,9 +215,46 @@ interface StrokeState {
  * A polyline being built click by click. The document stays untouched until it is
  * finished; only then is it drawn onto `base` and recorded as a single history entry.
  */
+/**
+ * How a pending shape is drawn. It is taken from the toolbar while the shape tool is
+ * active and kept with the shape, so committing it after another tool is picked (which
+ * brings that tool's own size and opacity) draws it exactly as it was previewed.
+ */
+interface ShapeStyle {
+  width: number
+  primary: Rgba
+  secondary: Rgba
+  fill: ShapeFill
+  /** Opacity as a 0.01..1 blend factor. */
+  strength: number
+}
+
+/** Draws a shape with the given style; `slot` is the colour the outline is drawn in. */
+function renderShape(
+  target: Bitmap,
+  kind: ShapeKind,
+  points: readonly Point[],
+  slot: 'primary' | 'secondary',
+  style: ShapeStyle,
+) {
+  const color = slot === 'secondary' ? style.secondary : style.primary
+  const fillColor = slot === 'secondary' ? style.primary : style.secondary
+  // Below 100 %, outline and fill are drawn at full strength and faded in together,
+  // so where they overlap the shape is not any more opaque.
+  const before = style.strength < 1 ? target.clone() : null
+  renderLiveShape(target, kind, points, {
+    width: style.width,
+    // Open paths have no interior, so they are always stroked however the fill is set.
+    stroke: shapeById(kind).closed && style.fill === 'filled' ? null : color,
+    fill: style.fill === 'filled' ? color : style.fill === 'outline-filled' ? fillColor : null,
+  })
+  if (before) blendToward(target, before, target, style.strength)
+}
+
 interface PolylineState {
   kind: ShapeKind
   slot: 'primary' | 'secondary'
+  style: ShapeStyle
   base: Bitmap
   points: Point[]
   /** The loose end that follows the pointer while dragging or hovering. */
@@ -234,6 +272,7 @@ interface PolylineState {
 interface ShapeState {
   kind: ShapeKind
   slot: 'primary' | 'secondary'
+  style: ShapeStyle
   base: Bitmap
   /** Kind-specific anchor points, owned by the shape's tweak family. */
   points: Point[]
@@ -1059,22 +1098,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [primary, secondary],
   )
 
-  const renderShape = useCallback(
-    (target: Bitmap, kind: ShapeKind, points: readonly Point[], slot: 'primary' | 'secondary') => {
-      const color = colorFor(slot)
-      const fillColor = slot === 'secondary' ? primary : secondary
-      // Below 100 %, outline and fill are drawn at full strength and faded in together,
-      // so where they overlap the shape is not any more opaque.
-      const before = strength < 1 ? target.clone() : null
-      renderLiveShape(target, kind, points, {
-        width: strokeWidthFor('shape', brushSize),
-        // Open paths have no interior, so they are always stroked however the fill is set.
-        stroke: shapeById(kind).closed && shapeFill === 'filled' ? null : color,
-        fill: shapeFill === 'filled' ? color : shapeFill === 'outline-filled' ? fillColor : null,
-      })
-      if (before) blendToward(target, before, target, strength)
-    },
-    [brushSize, colorFor, primary, secondary, shapeFill, strength],
+  const shapeStyle = useMemo<ShapeStyle>(
+    () => ({ width: strokeWidthFor('shape', brushSize), primary, secondary, fill: shapeFill, strength }),
+    [brushSize, primary, secondary, shapeFill, strength],
   )
 
   const cancelShapeRef = useRef<() => void>(() => {})
@@ -1084,10 +1110,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const shape = shapeRef.current
     if (!shape) return
     const preview = shape.base.clone()
-    renderShape(preview, shape.kind, shape.points, shape.slot)
+    renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
     paint(preview)
     setShape({ kind: shape.kind, mode: shape.mode, points: shape.points })
-  }, [paint, renderShape])
+  }, [paint])
 
   /** Draws the placed shape onto the active layer as one undo step. */
   const commitShape = useCallback(() => {
@@ -1103,11 +1129,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }
     recordHistory(shape.base)
     const final = shape.base.clone()
-    renderShape(final, shape.kind, shape.points, shape.slot)
+    renderShape(final, shape.kind, shape.points, shape.slot, shape.style)
     bitmapRef.current = final
     paint(final)
     syncHistory()
-  }, [paint, recordHistory, renderShape, syncHistory])
+  }, [paint, recordHistory, syncHistory])
 
   /** Drops the pending shape, restoring the untouched base and recording no history. */
   const cancelShape = useCallback(() => {
@@ -1132,9 +1158,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (!polyline) return
     const points = polyline.pending ? [...polyline.points, polyline.pending] : polyline.points
     const preview = polyline.base.clone()
-    if (points.length > 1) renderShape(preview, polyline.kind, points, polyline.slot)
+    if (points.length > 1) renderShape(preview, polyline.kind, points, polyline.slot, polyline.style)
     paint(preview)
-  }, [paint, renderShape])
+  }, [paint])
 
   /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
   const finishPolyline = useCallback(() => {
@@ -1151,11 +1177,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }
     recordHistory(polyline.base)
     const final = polyline.base.clone()
-    renderShape(final, polyline.kind, polyline.points, polyline.slot)
+    renderShape(final, polyline.kind, polyline.points, polyline.slot, polyline.style)
     bitmapRef.current = final
     paint(final)
     syncHistory()
-  }, [doc, paint, recordHistory, renderShape, syncHistory])
+  }, [doc, paint, recordHistory, syncHistory])
 
   const finishPolylineRef = useRef(finishPolyline)
   useEffect(() => {
@@ -1173,16 +1199,22 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [tool, shapeKind])
 
   // A shape that is still pending follows the colour, size and fill settings, as in
-  // Paint, so the toolbar restyles it instead of only the next one.
+  // Paint, so the toolbar restyles it instead of only the next one. Picking another
+  // tool commits the shape first (above), so that tool's settings never reach it.
   useEffect(() => {
     const shape = shapeRef.current
     if (shape) {
+      shape.style = shapeStyle
       const preview = shape.base.clone()
-      renderShape(preview, shape.kind, shape.points, shape.slot)
+      renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
       paint(preview)
     }
-    if (polylineRef.current) previewPolyline()
-  }, [paint, previewPolyline, renderShape])
+    const polyline = polylineRef.current
+    if (polyline) {
+      polyline.style = shapeStyle
+      previewPolyline()
+    }
+  }, [paint, previewPolyline, shapeStyle])
 
   useEffect(() => {
     if (!polylineActive) return
@@ -1814,6 +1846,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           polylineRef.current = {
             kind: shapeKind,
             slot,
+            style: shapeStyle,
             base: doc().clone(),
             points: [point],
             pending: point,
@@ -1864,6 +1897,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         shapeRef.current = {
           kind: shapeKind,
           slot,
+          style: shapeStyle,
           base: doc().clone(),
           points,
           mode: 'insert',
@@ -1931,7 +1965,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [brush, brushSize, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, onPickColor, onZoomClick, paint, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
