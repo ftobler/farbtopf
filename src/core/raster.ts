@@ -7,6 +7,9 @@ export type BrushShape = 'square' | 'round'
 
 /** Bresenham line, inclusive of both endpoints. */
 export function linePoints(x0: number, y0: number, x1: number, y1: number): Point[] {
+  if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)) {
+    return []
+  }
   let x = Math.round(x0)
   let y = Math.round(y0)
   const ex = Math.round(x1)

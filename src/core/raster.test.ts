@@ -61,6 +61,37 @@ describe('linePoints', () => {
   it('returns a single point for a zero-length line', () => {
     expect(linePoints(4, 4, 4, 4)).toEqual([{ x: 4, y: 4 }])
   })
+
+  it(
+    'returns no points when any coordinate is NaN',
+    { timeout: 1000 },
+    () => {
+      expect(linePoints(NaN, 0, 3, 3)).toEqual([])
+      expect(linePoints(0, NaN, 3, 3)).toEqual([])
+      expect(linePoints(0, 0, NaN, 3)).toEqual([])
+      expect(linePoints(0, 0, 3, NaN)).toEqual([])
+    },
+  )
+
+  it(
+    'returns no points when any coordinate is infinite',
+    { timeout: 1000 },
+    () => {
+      expect(linePoints(Infinity, 0, 3, 3)).toEqual([])
+      expect(linePoints(0, -Infinity, 3, 3)).toEqual([])
+      expect(linePoints(0, 0, Infinity, 3)).toEqual([])
+      expect(linePoints(0, 0, 3, -Infinity)).toEqual([])
+    },
+  )
+
+  it('leaves a finite line unchanged', () => {
+    expect(linePoints(0, 0, 3, 0)).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ])
+  })
 })
 
 describe('stamp', () => {
