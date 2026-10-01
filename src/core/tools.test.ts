@@ -22,9 +22,9 @@ describe('strokeWidthFor', () => {
 })
 
 describe('strokeColorFor', () => {
-  it('always uses the secondary colour for the eraser', () => {
+  it('swaps the colours for the eraser: secondary on the left button, primary on the right', () => {
     expect(strokeColorFor('eraser', 'primary', BLACK, WHITE)).toBe(WHITE)
-    expect(strokeColorFor('eraser', 'secondary', BLACK, WHITE)).toBe(WHITE)
+    expect(strokeColorFor('eraser', 'secondary', BLACK, WHITE)).toBe(BLACK)
   })
 
   it('uses the slot colour for other tools', () => {
@@ -38,6 +38,7 @@ describe('rightClickActs', () => {
     expect(rightClickActs('zoom')).toBe(true)
     expect(rightClickActs('fill')).toBe(true)
     expect(rightClickActs('picker')).toBe(true)
+    expect(rightClickActs('eraser')).toBe(true)
   })
 
   it('is false for the tools that leave a right click to the context menu', () => {

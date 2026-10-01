@@ -48,11 +48,16 @@ function setup(tool: ToolId) {
     const [r, g, b, a] = Array.from(image.data.slice(i, i + 4))
     return { r, g, b, a }
   }
+  const rightDrag = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    fireEvent.pointerDown(canvas, { button: 2, buttons: 2, pointerId: 1, clientX: from.x, clientY: from.y })
+    fireEvent.pointerMove(canvas, { button: -1, buttons: 2, pointerId: 1, clientX: to.x, clientY: to.y })
+    fireEvent.pointerUp(canvas, { button: 2, buttons: 0, pointerId: 1, clientX: to.x, clientY: to.y })
+  }
   const rightClick = (x: number, y: number) => {
     fireEvent.pointerDown(canvas, { button: 2, buttons: 2, pointerId: 1, clientX: x, clientY: y })
     fireEvent.pointerUp(canvas, { button: 2, buttons: 0, pointerId: 1, clientX: x, clientY: y })
   }
-  return { ref, canvas, context, shown, rightClick, onHistoryChange, onPickColor }
+  return { ref, canvas, context, shown, rightClick, rightDrag, onHistoryChange, onPickColor }
 }
 
 describe('PaintCanvas right click', () => {
@@ -72,5 +77,26 @@ describe('PaintCanvas right click', () => {
     rightClick(5, 5)
     expect(onPickColor).toHaveBeenCalledTimes(1)
     expect(onPickColor).toHaveBeenLastCalledWith(WHITE_PIXEL, 'secondary')
+  })
+
+  it('erases with the primary colour on the bottom layer as one undo step', () => {
+    const { ref, shown, rightDrag, onHistoryChange } = setup('eraser')
+    rightDrag({ x: 5, y: 5 }, { x: 12, y: 5 })
+    expect(shown(5, 5)).toEqual(RED)
+    expect(shown(9, 5)).toEqual(RED)
+    expect(shown(12, 5)).toEqual(RED)
+    expect(shown(5, 15)).toEqual(WHITE_PIXEL)
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+    act(() => ref.current?.undo())
+    expect(shown(9, 5)).toEqual(WHITE_PIXEL)
+    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
+  })
+
+  it('still erases to transparency on an upper layer', () => {
+    const { ref, shown, rightDrag } = setup('eraser')
+    act(() => ref.current?.addLayer())
+    rightDrag({ x: 5, y: 5 }, { x: 12, y: 5 })
+    // The flattened view shows the white bottom layer through the cleared pixels.
+    expect(shown(9, 5)).toEqual(WHITE_PIXEL)
   })
 })

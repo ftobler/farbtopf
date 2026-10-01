@@ -802,8 +802,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [layers, onDocumentChange],
   )
 
-  /** What erasing leaves behind: the secondary colour on the bottom layer, transparency above it. */
-  const eraseColor = useCallback(() => (activeRef.current === 0 ? secondary : TRANSPARENT), [secondary])
+  /**
+   * What erasing leaves behind: on the bottom layer the secondary colour (the
+   * primary one for a right-button stroke), transparency above it.
+   */
+  const eraseColor = useCallback(
+    (slot: 'primary' | 'secondary' = 'primary') =>
+      activeRef.current === 0 ? strokeColorFor('eraser', slot, primary, secondary) : TRANSPARENT,
+    [primary, secondary],
+  )
 
   const publishLayers = useCallback(() => {
     if (!onLayersChange) return
@@ -1873,7 +1880,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         stroke.recorded = true
         if (strength < 1) stroke.work = base.clone()
         const target = stroke.work ?? doc()
-        const color = tool === 'eraser' ? eraseColor() : strokeColorFor(tool, slot, primary, secondary)
+        const color = tool === 'eraser' ? eraseColor(slot) : strokeColorFor(tool, slot, primary, secondary)
         const width = strokeWidthFor(tool, brushSize)
         if (tool === 'airbrush') {
           sprayDab(target, point, width, color, random)
@@ -1992,7 +1999,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const stroke = strokeRef.current
       if (!stroke || stroke.pointerId !== event.pointerId) return
       {
-        const color = stroke.tool === 'eraser' ? eraseColor() : strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
+        const color = stroke.tool === 'eraser' ? eraseColor(stroke.slot) : strokeColorFor(stroke.tool, stroke.slot, primary, secondary)
         const width = strokeWidthFor(stroke.tool, brushSize)
         const target = stroke.work ?? doc()
         if (stroke.tool === 'airbrush') {

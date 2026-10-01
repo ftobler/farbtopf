@@ -41,7 +41,7 @@ export function isShapeTool(id: ToolId): boolean {
 }
 
 /** Tools that act on a right click (with the secondary colour, or zooming out) rather than open the context menu. */
-const RIGHT_CLICK_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['zoom', 'fill', 'picker'])
+const RIGHT_CLICK_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['zoom', 'fill', 'picker', 'eraser'])
 
 export function rightClickActs(id: ToolId): boolean {
   return RIGHT_CLICK_TOOLS.has(id)
@@ -52,14 +52,14 @@ export function strokeWidthFor(_id: ToolId, brushSize: number): number {
   return Math.min(500, Math.max(1, Math.round(Number.isFinite(brushSize) ? brushSize : 1)))
 }
 
-/** The eraser always paints with the secondary colour, whatever button is used. */
+/** The eraser swaps the colours: the secondary one on the left button, the primary one on the right. */
 export function strokeColorFor(
   id: ToolId,
   slot: 'primary' | 'secondary',
   primary: Rgba,
   secondary: Rgba,
 ): Rgba {
-  if (id === 'eraser') return secondary
+  if (id === 'eraser') return slot === 'secondary' ? primary : secondary
   return slot === 'secondary' ? secondary : primary
 }
 
