@@ -769,7 +769,10 @@ textarea {
   z-index: 6;
 }
 
-/* Size and opacity sliders for the sized tools: the layers panel's floating glass, on the left. */
+/*
+ * Size and opacity sliders for the sized tools: two floating glass islands like the layers
+ * panel, stacked and centred as a pair on the left of the workspace.
+ */
 .tool-sliders {
   position: absolute;
   top: 50%;
@@ -779,15 +782,10 @@ textarea {
   flex-direction: column;
   gap: 10px;
   max-height: calc(100% - 24px);
-  padding: 8px 6px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
   z-index: 6;
   user-select: none;
+  /* The gap between the islands belongs to the canvas underneath. */
+  pointer-events: none;
 }
 
 .tool-slider {
@@ -796,11 +794,14 @@ textarea {
   align-items: center;
   gap: 6px;
   width: 52px;
-}
-
-.tool-slider + .tool-slider {
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  padding: 8px 6px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
 }
 
 .tool-slider-header {

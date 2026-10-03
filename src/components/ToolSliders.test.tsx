@@ -49,6 +49,16 @@ describe('ToolSliders', () => {
     }
   })
 
+  it('gives each slider its own island inside the centred group', () => {
+    const { sizeSlider, opacitySlider } = setup()
+    const panel = screen.getByRole('group', { name: 'Tool size and opacity' })
+    const islands = [...panel.children]
+    expect(islands).toHaveLength(2)
+    for (const island of islands) expect(island.classList.contains('tool-slider')).toBe(true)
+    expect(islands[0].contains(sizeSlider)).toBe(true)
+    expect(islands[1].contains(opacitySlider)).toBe(true)
+  })
+
   it('hints what each slider does and its value on hover', () => {
     const { container, sizeSlider, opacitySlider } = setup(12, 80)
     const rows = [...container.querySelectorAll<HTMLElement>('.tool-slider')]
