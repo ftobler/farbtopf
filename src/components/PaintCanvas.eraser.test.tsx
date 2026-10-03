@@ -178,6 +178,46 @@ describe('PaintCanvas eraser preview', () => {
     expect(preview()?.style.width).toBe('8px')
   })
 
+  it('stands in for the pointer, which is hidden while the box is shown', () => {
+    const { preview, hover, canvas } = setup()
+    expect(canvas.style.cursor).toBe('crosshair')
+    hover(20, 20)
+    expect(preview()).not.toBeNull()
+    expect(canvas.style.cursor).toBe('none')
+    fireEvent.pointerLeave(canvas)
+    expect(canvas.style.cursor).toBe('crosshair')
+  })
+
+  it('always covers the pointer position', () => {
+    for (const [brushSize, zoom] of [[1, 1], [1, 3], [2, 2], [3, 4], [8, 1], [9, 2]]) {
+      const { preview, hover, container } = setup({ brushSize, zoom })
+      for (const [x, y] of [[0, 0], [7, 11], [SIZE * zoom - 1, SIZE * zoom - 1]]) {
+        hover(x, y)
+        const box = preview()
+        const left = parseFloat(box?.style.left ?? '')
+        const top = parseFloat(box?.style.top ?? '')
+        expect(x).toBeGreaterThanOrEqual(left)
+        expect(x).toBeLessThan(left + parseFloat(box?.style.width ?? ''))
+        expect(y).toBeGreaterThanOrEqual(top)
+        expect(y).toBeLessThan(top + parseFloat(box?.style.height ?? ''))
+      }
+      container.remove()
+    }
+  })
+
+  it('gives the pointer back while a stroke is dragged past the image edge', () => {
+    const { preview, hover, canvas } = setup({ zoom: 2 })
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 20, clientY: 20 })
+    expect(canvas.style.cursor).toBe('none')
+    hover(SIZE * 2 + 15, 20)
+    expect(preview()).toBeNull()
+    expect(canvas.style.cursor).toBe('crosshair')
+    hover(30, 20)
+    expect(preview()).not.toBeNull()
+    expect(canvas.style.cursor).toBe('none')
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 30, clientY: 20 })
+  })
+
   it('never touches the image or the history', () => {
     const { ref, hover, shown, onHistoryChange } = setup({ secondary: WHITE })
     act(() => ref.current?.loadBitmap(new Bitmap(SIZE, SIZE, BLACK)))

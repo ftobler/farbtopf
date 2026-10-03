@@ -2228,7 +2228,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     (event: ReactPointerEvent<HTMLElement>) => {
       const point = toPoint(event)
       onCursorMoveRef.current(point)
-      if (tool === 'eraser') setEraserHover((last) => (last && pointsEqual(last, point) ? last : point))
+      if (tool === 'eraser') {
+        // Past the image edge (a captured drag) the preview hides and the pointer returns.
+        const raw = toRawPoint(event)
+        const over = raw.x >= 0 && raw.y >= 0 && raw.x < size.width && raw.y < size.height
+        setEraserHover((last) => (!over ? null : last && pointsEqual(last, point) ? last : point))
+      }
       if (tool === 'select' && !selectRef.current) {
         const rect = currentRect()
         const free = toFreePoint(event)
@@ -2691,7 +2696,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         })()
       : 'down'
 
-  const cursor = canvasCursor(tool, hoverCursor)
+  const cursor = canvasCursor(tool, hoverCursor, { eraserPreview: eraserHover !== null })
 
   return (
     <>

@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import css from '../index.css?raw'
 import { TOOLS, type ToolId } from './tools'
+import { FILL_CURSOR, PENCIL_CURSOR } from './cursors'
 import { canvasCursor, workspaceCursor } from './toolCursor'
 
 describe('canvasCursor', () => {
   it('gives every tool its cursor over the image', () => {
     const expected: Record<ToolId, string> = {
       select: 'crosshair',
-      pencil: 'crosshair',
+      pencil: PENCIL_CURSOR,
       brush: 'crosshair',
       airbrush: 'crosshair',
-      eraser: 'crosshair',
-      fill: 'cell',
+      eraser: 'none',
+      fill: FILL_CURSOR,
       picker: 'copy',
       shape: 'crosshair',
       text: 'text',
@@ -25,6 +26,11 @@ describe('canvasCursor', () => {
     expect(canvasCursor('select', 'nwse-resize')).toBe('nwse-resize')
     expect(canvasCursor('select', null)).toBe('crosshair')
     expect(canvasCursor('brush', 'move')).toBe('crosshair')
+  })
+
+  it('hides the pointer for the eraser only while its footprint preview stands in for it', () => {
+    expect(canvasCursor('eraser', null, { eraserPreview: true })).toBe('none')
+    expect(canvasCursor('eraser', null, { eraserPreview: false })).toBe('crosshair')
   })
 })
 

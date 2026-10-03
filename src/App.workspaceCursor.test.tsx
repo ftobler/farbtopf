@@ -31,9 +31,16 @@ describe('App cursor over the workspace around the image', () => {
     const { workspace, canvas, pick } = setup()
     pick('Fill with color')
     expect(workspace.hasAttribute('data-tool-cursor')).toBe(false)
-    expect(canvas.style.cursor).toBe('cell')
+    expect(canvas.style.cursor).toMatch(/^url\("data:image\/svg\+xml,.+, crosshair$/)
     pick('Select')
     expect(workspace.getAttribute('data-tool-cursor')).toBe('crosshair')
+  })
+
+  it('shows the pencil cursor over the image, but not around it', () => {
+    const { workspace, canvas, pick } = setup()
+    pick('Pencil')
+    expect(canvas.style.cursor).toMatch(/^url\("data:image\/svg\+xml,.+, crosshair$/)
+    expect(workspace.hasAttribute('data-tool-cursor')).toBe(false)
   })
 
   it('keeps the resize cursors on the selection handles', () => {
