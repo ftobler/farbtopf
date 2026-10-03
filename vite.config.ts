@@ -9,6 +9,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     setupFiles: ['src/test/setup.ts'],
+    // Load the stylesheet for real so tests can check its cursor rules via `?raw`.
+    css: { include: [/src\/index\.css/] },
     coverage: {
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx', 'src/**/*.d.ts'],

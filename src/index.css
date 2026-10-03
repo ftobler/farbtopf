@@ -925,6 +925,19 @@ textarea {
   outline-offset: 1px;
 }
 
+/* The active tool's cursor over the gray area around the image, for tools that
+   work from there (see core/toolCursor). Floating panels, scrollbars and the image
+   itself set their own cursors instead of inheriting it; the reset has no
+   specificity, so their own rules (like the miniature's grab) still apply.
+   Panning and the busy cursor still win. */
+.workspace[data-tool-cursor="crosshair"] {
+  cursor: crosshair;
+}
+
+:where(.workspace[data-tool-cursor]) > * {
+  cursor: auto;
+}
+
 .workspace.panning {
   cursor: grabbing;
 }

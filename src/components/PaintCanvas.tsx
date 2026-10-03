@@ -48,6 +48,7 @@ import {
 } from '../core/raster'
 import { MAX_CANVAS } from '../core/palette'
 import { eraserPreviewRect } from '../core/cursorPreview'
+import { canvasCursor } from '../core/toolCursor'
 import { blendToward } from '../core/opacity'
 import type { Random } from '../core/random'
 import type { BrushShape } from '../core/raster'
@@ -2690,8 +2691,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         })()
       : 'down'
 
-  const cursor =
-    tool === 'text' ? 'text' : tool === 'fill' ? 'cell' : tool === 'picker' ? 'copy' : tool === 'zoom' ? 'zoom-in' : tool === 'select' ? (hoverCursor ?? 'crosshair') : 'crosshair'
+  const cursor = canvasCursor(tool, hoverCursor)
 
   return (
     <>

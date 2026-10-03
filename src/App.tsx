@@ -66,6 +66,7 @@ import {
 } from './render/fileAccess'
 import { DEFAULT_TEXT_OPTIONS } from './render/text'
 import type { TextOptions } from './render/text'
+import { workspaceCursor } from './core/toolCursor'
 
 /** Single-key shortcuts that pick a specific shape. */
 const SHAPE_SHORTCUTS: Record<string, ShapeKind> = { l: 'line', r: 'rectangle', o: 'ellipse' }
@@ -1035,6 +1036,7 @@ function App() {
 
       <div
         className={`workspace${panning ? ' panning' : ''}`}
+        data-tool-cursor={workspaceCursor(tool) ?? undefined}
         ref={workspaceRef}
         aria-busy={busyShown}
         onPointerDown={handlePanDown}
