@@ -62,7 +62,7 @@ export function StatusBar({
         <GridIcon size={16} />
       </button>
       <span className="status-spacer" />
-      <span className="status-item">{toolLabel}</span>
+      <span className="status-item status-tool">{toolLabel}</span>
       <div className="zoom-control">
         <button
           type="button"

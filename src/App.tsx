@@ -87,8 +87,10 @@ function nextPaint(): Promise<void> {
 }
 
 function fitZoom(width: number, height: number): number {
-  const availableWidth = Math.max(200, window.innerWidth - 96)
-  const availableHeight = Math.max(200, window.innerHeight - 280)
+  // Room the header, status bar and workspace padding take; a phone's slim header needs less.
+  const phone = window.innerWidth < 720
+  const availableWidth = Math.max(200, window.innerWidth - (phone ? 32 : 96))
+  const availableHeight = Math.max(200, window.innerHeight - (phone ? 170 : 280))
   const raw = Math.min(1, availableWidth / width, availableHeight / height)
   let best: number = ZOOM_LEVELS[0]
   for (const level of ZOOM_LEVELS) {
@@ -165,7 +167,8 @@ function App() {
   const [text, setText] = useState<TextOptions>(DEFAULT_TEXT_OPTIONS)
   const [shapeFill, setShapeFill] = useState<ShapeFill>('outline')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rectangle')
-  const [zoom, setZoom] = useState(1)
+  // The default image starts at 100% on a desktop and zoomed out to fit on a phone.
+  const [zoom, setZoom] = useState(() => fitZoom(DEFAULT_CANVAS.width, DEFAULT_CANVAS.height))
   const pixelRatio = useDevicePixelRatio()
   // What the canvas is drawn at; `zoom` stays the nominal level the UI shows.
   const shownZoom = displayZoom(zoom, pixelRatio)
