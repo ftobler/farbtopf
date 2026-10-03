@@ -651,9 +651,10 @@ function App() {
   const handlePanDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       // A plain click on the gray background itself (not the canvas, a handle,
-      // scrollbar or floating panel) settles the selection and deselects.
+      // scrollbar or floating panel) settles the selection and deselects; with the
+      // Select tool, dragging on from there selects the part of the image it covers.
       if (event.button === 0 && event.target === event.currentTarget) {
-        canvasRef.current?.clickOutside(event.clientX, event.clientY)
+        canvasRef.current?.clickOutside(event.clientX, event.clientY, event.pointerId)
         return
       }
       if (event.button !== 1) return

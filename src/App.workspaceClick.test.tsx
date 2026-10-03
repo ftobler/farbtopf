@@ -81,4 +81,67 @@ describe('App workspace background click', () => {
     fireEvent.pointerUp(workspace, { button: 0, pointerId: 3, clientX: 902, clientY: 702 })
     expect(field.textContent).toBe('800 × 600 px')
   })
+
+  describe('dragging from the background with the Select tool', () => {
+    /** Presses the background at `from`, then drags over the canvas, which captures the pointer. */
+    const dragFromBackground = (
+      workspace: HTMLElement,
+      canvas: HTMLCanvasElement,
+      from: [number, number],
+      to: [number, number],
+    ) => {
+      fireEvent.pointerDown(workspace, { button: 0, pointerId: 5, clientX: from[0], clientY: from[1] })
+      fireEvent.pointerMove(canvas, { pointerId: 5, clientX: to[0], clientY: to[1] })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 5, clientX: to[0], clientY: to[1] })
+      fireEvent.click(workspace, { button: 0, clientX: to[0], clientY: to[1] })
+    }
+
+    it('selects the whole image when dragged from above-left to below-right of it', () => {
+      const { workspace, canvas, field } = setup()
+      dragFromBackground(workspace, canvas, [40, 40], [950, 750])
+      expect(canvas.setPointerCapture).toHaveBeenCalledWith(5)
+      expect(field.textContent).toBe('800 × 600 px')
+      expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
+    })
+
+    it('clamps the rectangle to the image', () => {
+      const { workspace, canvas, field } = setup()
+      // Image space: from (850, -50) to (400, 700).
+      dragFromBackground(workspace, canvas, [950, 50], [500, 800])
+      expect(field.textContent).toBe('400 × 600 px')
+    })
+
+    it('replaces an existing selection', () => {
+      const { workspace, canvas, field, select } = setup()
+      select()
+      dragFromBackground(workspace, canvas, [40, 40], [199, 149])
+      expect(field.textContent).toBe('100 × 50 px')
+    })
+
+    it('selects nothing when the rectangle misses the image', () => {
+      const { workspace, canvas, field, select } = setup()
+      select()
+      dragFromBackground(workspace, canvas, [40, 40], [60, 400])
+      expect(field.textContent).toBe('')
+      dragFromBackground(workspace, canvas, [950, 40], [990, 800])
+      expect(field.textContent).toBe('')
+    })
+
+    it('shows the selection while the drag is in progress', () => {
+      const { workspace, canvas, field } = setup()
+      fireEvent.pointerDown(workspace, { button: 0, pointerId: 5, clientX: 40, clientY: 40 })
+      expect(field.textContent).toBe('')
+      fireEvent.pointerMove(canvas, { pointerId: 5, clientX: 149, clientY: 119 })
+      expect(field.textContent).toBe('50 × 20 px')
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 5, clientX: 149, clientY: 119 })
+      expect(field.textContent).toBe('50 × 20 px')
+    })
+
+    it('does not start a drag with other tools', () => {
+      const { workspace, canvas } = setup()
+      fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+      fireEvent.pointerDown(workspace, { button: 0, pointerId: 5, clientX: 40, clientY: 40 })
+      expect(canvas.setPointerCapture).not.toHaveBeenCalled()
+    })
+  })
 })

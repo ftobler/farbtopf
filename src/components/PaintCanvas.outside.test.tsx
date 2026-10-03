@@ -8,7 +8,12 @@ import type { PaintCanvasHandle } from './PaintCanvas'
 
 const RED = { r: 255, g: 0, b: 0, a: 255 }
 
-function setup(tool: 'select' | 'text' = 'select', width = 20, height = 20) {
+function setup(
+  tool: 'select' | 'text' | 'pencil' = 'select',
+  width = 20,
+  height = 20,
+  selectionShape: 'rectangle' | 'freeform' = 'rectangle',
+) {
   const ref = createRef<PaintCanvasHandle>()
   const onHistoryChange = vi.fn()
   const { container } = render(
@@ -30,7 +35,7 @@ function setup(tool: 'select' | 'text' = 'select', width = 20, height = 20) {
       onSelectionChange={vi.fn()}
       onZoomClick={vi.fn()}
       transparentSelection={false}
-      selectionShape="rectangle"
+      selectionShape={selectionShape}
       onTextChange={vi.fn()}
     />,
   )
@@ -120,5 +125,53 @@ describe('PaintCanvas clickOutside', () => {
     act(() => ref.current?.clickOutside(-50, -50))
     expect(container.querySelector('.text-editor')).toBeNull()
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+})
+
+describe('PaintCanvas clickOutside with a pointer', () => {
+  it('starts a rectangle selection clamped to the image', () => {
+    const { ref, canvas } = setup('select', 20, 20)
+    act(() => ref.current?.clickOutside(25, -5, 3))
+    expect(canvas.setPointerCapture).toHaveBeenCalledWith(3)
+    expect(ref.current?.getSelection()).toBeNull()
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 10, clientY: 30 })
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 10, clientY: 30 })
+    expect(ref.current?.getSelection()).toEqual({ x: 10, y: 0, width: 10, height: 20 })
+  })
+
+  it('selects nothing when the rectangle stays beside the image', () => {
+    const { ref, canvas } = setup('select', 20, 20)
+    act(() => ref.current?.clickOutside(-10, 2, 3))
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: -2, clientY: 15 })
+    expect(ref.current?.getSelection()).toBeNull()
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: -2, clientY: 15 })
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('starts a free-form selection along the image edge', () => {
+    const { ref, canvas } = setup('select', 20, 20, 'freeform')
+    act(() => ref.current?.clickOutside(-5, -5, 3))
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 10, clientY: 2 })
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 10, clientY: 10 })
+    fireEvent.pointerUp(canvas, { pointerId: 3, clientX: 2, clientY: 10 })
+    const selection = ref.current?.getSelection()
+    expect(selection).not.toBeNull()
+    expect(selection?.x).toBe(0)
+    expect(selection?.y).toBe(0)
+  })
+
+  it('only deselects with other tools', () => {
+    const { ref, canvas } = setup('pencil')
+    act(() => ref.current?.clickOutside(-5, -5, 3))
+    expect(canvas.setPointerCapture).not.toHaveBeenCalled()
+  })
+
+  it('does not start a drag on a resize handle past the image edge', () => {
+    const { ref, drag, canvas } = setup()
+    drag([10, 10], [19, 19])
+    vi.mocked(canvas.setPointerCapture).mockClear()
+    act(() => ref.current?.clickOutside(22, 22, 3))
+    expect(canvas.setPointerCapture).not.toHaveBeenCalled()
+    expect(ref.current?.getSelection()).toEqual({ x: 10, y: 10, width: 10, height: 10 })
   })
 })

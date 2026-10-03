@@ -119,8 +119,11 @@ export interface PaintCanvasHandle {
    * A primary press on the workspace outside the image, at client coordinates:
    * commits an open text box and a floating selection, then deselects. Presses
    * on a selection handle that reaches past the image edge are ignored.
+   * Given the press's `pointerId` with the Select tool, it also starts a new
+   * selection there: the canvas captures the pointer and the rectangle is
+   * clamped to the image as the drag goes on.
    */
-  clickOutside: (clientX: number, clientY: number) => void
+  clickOutside: (clientX: number, clientY: number, pointerId?: number) => void
   selectAll: () => void
   invertSelection: () => void
   deleteSelection: () => void
@@ -419,6 +422,16 @@ function clampRect(rect: Rect, width: number, height: number): Rect {
     width: Math.min(Math.max(1, rect.width), width - x),
     height: Math.min(Math.max(1, rect.height), height - y),
   }
+}
+
+/**
+ * The marquee from `start` to `end`, either of which may lie outside the image,
+ * clamped to the image; null when the dragged rectangle misses the image.
+ */
+function marqueeRect(start: Point, end: Point, width: number, height: number): Rect | null {
+  const outside = (a: number, b: number, size: number) => (a < 0 && b < 0) || (a >= size && b >= size)
+  if (outside(start.x, end.x, width) || outside(start.y, end.y, height)) return null
+  return clampRect(normalizeRect(clampPoint(start, width, height), clampPoint(end, width, height)), width, height)
 }
 
 function handlePoint(rect: Rect, handle: SelectionHandle): Point {
@@ -783,7 +796,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const polylineRef = useRef<PolylineState | null>(null)
   const shapeRef = useRef<ShapeState | null>(null)
   // The handle is built before the pointer helpers it needs, so it calls through this.
-  const clickOutsideRef = useRef<(clientX: number, clientY: number) => void>(() => {})
+  const clickOutsideRef = useRef<(clientX: number, clientY: number, pointerId?: number) => void>(() => {})
   const [polylineActive, setPolylineActive] = useState(false)
   const [shape, setShape] = useState<ShapeMirror | null>(null)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
@@ -1790,8 +1803,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         updateSelection(null)
       },
-      clickOutside(clientX, clientY) {
-        clickOutsideRef.current(clientX, clientY)
+      clickOutside(clientX, clientY, pointerId) {
+        clickOutsideRef.current(clientX, clientY, pointerId)
       },
       selectAll() {
         acceptPending()
@@ -1934,19 +1947,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     ],
   )
 
-  const toPoint = useCallback((event: ReactPointerEvent<HTMLElement>): Point => {
-    const canvas = canvasRef.current
-    if (!canvas) return { x: 0, y: 0 }
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = rect.width === 0 ? 1 : size.width / rect.width
-    const scaleY = rect.height === 0 ? 1 : size.height / rect.height
-    return clampPoint(
-      { x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY },
-      size.width,
-      size.height,
-    )
-  }, [size.width, size.height])
-
   const clientToCanvas = useCallback((clientX: number, clientY: number): Point => {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
@@ -1956,6 +1956,21 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       y: rect.height === 0 ? 0 : ((clientY - rect.top) * size.height) / rect.height,
     }
   }, [size.width, size.height])
+
+  /** The image pixel under the pointer, which may lie outside the image (unscaled if the canvas has no layout size). */
+  const toRawPoint = useCallback((event: ReactPointerEvent<HTMLElement>): Point => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = rect.width === 0 ? 1 : size.width / rect.width
+    const scaleY = rect.height === 0 ? 1 : size.height / rect.height
+    return floorPoint({ x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY })
+  }, [size.width, size.height])
+
+  const toPoint = useCallback(
+    (event: ReactPointerEvent<HTMLElement>): Point => clampPoint(toRawPoint(event), size.width, size.height),
+    [size.width, size.height, toRawPoint],
+  )
 
   // Strokes and shapes follow the pointer past the image edge; the bitmap
   // primitives clip whatever lands outside, so nothing piles up along the border.
@@ -2229,7 +2244,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const drag = selectRef.current
       if (drag && drag.pointerId === event.pointerId) {
         if (drag.mode === 'marquee') {
-          updateSelection(clampRect(normalizeRect(drag.start, point), size.width, size.height))
+          updateSelection(marqueeRect(drag.start, toRawPoint(event), size.width, size.height))
           return
         }
         if (drag.mode === 'lasso') {
@@ -2309,7 +2324,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = free
     },
-    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, toRawPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
@@ -2334,8 +2349,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const drag = selectRef.current
       if (drag && drag.pointerId === event.pointerId) {
         if (drag.mode === 'marquee') {
-          const rect = clampRect(normalizeRect(drag.start, toPoint(event)), size.width, size.height)
-          if (cancelled || (rect.width < 2 && rect.height < 2)) updateSelection(null)
+          const rect = marqueeRect(drag.start, toRawPoint(event), size.width, size.height)
+          if (cancelled || !rect || (rect.width < 2 && rect.height < 2)) updateSelection(null)
           else updateSelection(rect)
         }
         if (drag.mode === 'lasso') {
@@ -2395,13 +2410,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       strokeRef.current = null
       if (stroke.tool === 'eraser') setEraserSlot('primary')
     },
-    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, updateSelection, zoom],
+    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, toRawPoint, updateSelection, zoom],
   )
 
   // Clicking the workspace background settles pending edits and deselects, but
   // never while a canvas drag is running or on a handle poking past the image.
   const handleClickOutside = useCallback(
-    (clientX: number, clientY: number) => {
+    (clientX: number, clientY: number, pointerId?: number) => {
       if (selectRef.current) return
       const rect = currentRect()
       const point = clientToCanvas(clientX, clientY)
@@ -2411,8 +2426,22 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       acceptPending()
       commitFloating()
       updateSelection(null)
+      if (pointerId === undefined || tool !== 'select') return
+      // With the Select tool the press also starts a selection, so the user can drag
+      // in from beyond a corner instead of hitting it exactly. The canvas captures the
+      // pointer, so the rest of the drag runs through its own handlers; nothing is
+      // selected until the drag reaches the image.
+      canvasRef.current?.setPointerCapture?.(pointerId)
+      const start = floorPoint(point)
+      if (selectionShape === 'freeform') {
+        const edge = clampPoint(start, size.width, size.height)
+        selectRef.current = { pointerId, mode: 'lasso', start: edge, points: [edge] }
+        setLasso([edge])
+        return
+      }
+      selectRef.current = { pointerId, mode: 'marquee', start }
     },
-    [acceptPending, clientToCanvas, commitFloating, currentRect, updateSelection, zoom],
+    [acceptPending, clientToCanvas, commitFloating, currentRect, selectionShape, size.height, size.width, tool, updateSelection, zoom],
   )
   useEffect(() => {
     clickOutsideRef.current = handleClickOutside
