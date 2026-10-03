@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import App from './App'
-import { COMPACT_QUERY, PHONE_QUERY, SINGLE_ROW_QUERY } from './hooks/useHeaderLayout'
+import { COMPACT_QUERY, MEDIUM_QUERY, PHONE_QUERY, SINGLE_ROW_QUERY } from './hooks/useHeaderLayout'
 import { mockMatchMedia, restoreMatchMedia } from './test/matchMedia'
 
 afterEach(restoreMatchMedia)
@@ -15,8 +15,19 @@ describe('App header on small screens', () => {
     expect(screen.getByText('Clipboard')).toBeTruthy()
   })
 
+  it('keeps the labelled ribbon but folds shapes and colours into buttons just below the desktop width', () => {
+    mockMatchMedia([MEDIUM_QUERY])
+    const { container } = render(<App />)
+    expect(container.querySelector('.topbar-compact')).toBeNull()
+    expect(screen.getByText('Clipboard')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Shapes' }).getAttribute('aria-haspopup')).toBe('dialog')
+    expect(screen.getByRole('button', { name: 'Colors' }).getAttribute('aria-haspopup')).toBe('dialog')
+    expect(screen.queryByRole('button', { name: 'Ellipse' })).toBeNull()
+  })
+
   it('collapses the ribbon into group buttons on a tablet', () => {
-    mockMatchMedia([COMPACT_QUERY])
+    mockMatchMedia([MEDIUM_QUERY, COMPACT_QUERY])
     const { container } = render(<App />)
     expect(container.querySelector('.topbar-compact .ribbon-compact')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'File' })).toBeTruthy()
@@ -25,7 +36,7 @@ describe('App header on small screens', () => {
   })
 
   it('folds the menus into a hamburger and the tools into one button on a phone', () => {
-    mockMatchMedia([COMPACT_QUERY, PHONE_QUERY])
+    mockMatchMedia([MEDIUM_QUERY, COMPACT_QUERY, PHONE_QUERY])
     const { container } = render(<App />)
     expect(screen.queryByRole('button', { name: 'File' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Menu' })).toBeTruthy()
@@ -34,7 +45,7 @@ describe('App header on small screens', () => {
   })
 
   it('switches tools from the collapsed phone ribbon', () => {
-    mockMatchMedia([COMPACT_QUERY, PHONE_QUERY])
+    mockMatchMedia([MEDIUM_QUERY, COMPACT_QUERY, PHONE_QUERY])
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Tools options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Eraser' }))
@@ -43,7 +54,7 @@ describe('App header on small screens', () => {
   })
 
   it('opens the new image dialog through the hamburger menu', () => {
-    mockMatchMedia([COMPACT_QUERY, PHONE_QUERY])
+    mockMatchMedia([MEDIUM_QUERY, COMPACT_QUERY, PHONE_QUERY])
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Menu' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'File' }))
@@ -52,7 +63,7 @@ describe('App header on small screens', () => {
   })
 
   it('puts the ribbon into the menu bar row on a short landscape phone', () => {
-    mockMatchMedia([COMPACT_QUERY, SINGLE_ROW_QUERY])
+    mockMatchMedia([MEDIUM_QUERY, COMPACT_QUERY, SINGLE_ROW_QUERY])
     const { container } = render(<App />)
     expect(container.querySelector('.topbar')).toBeNull()
     expect(container.querySelector('.menubar .ribbon-phone')).toBeTruthy()
@@ -63,7 +74,7 @@ describe('App header on small screens', () => {
     const media = mockMatchMedia()
     render(<App />)
     expect(screen.getByRole('button', { name: 'File' })).toBeTruthy()
-    media.setMatching([COMPACT_QUERY, PHONE_QUERY])
+    media.setMatching([MEDIUM_QUERY, COMPACT_QUERY, PHONE_QUERY])
     expect(screen.queryByRole('button', { name: 'File' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Menu' })).toBeTruthy()
   })

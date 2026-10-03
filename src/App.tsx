@@ -1044,7 +1044,7 @@ function App() {
       </MenuBar>
 
       {headerLayout === 'single-row' ? null : (
-        <div className={`topbar${headerLayout === 'full' ? '' : ' topbar-compact'}`}>{ribbon}</div>
+        <div className={`topbar${headerLayout === 'full' || headerLayout === 'medium' ? '' : ' topbar-compact'}`}>{ribbon}</div>
       )}
 
       <div

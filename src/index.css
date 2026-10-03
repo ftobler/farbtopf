@@ -2071,6 +2071,18 @@ label {
   bottom: 0;
 }
 
+/* The medium ribbon's big Colors button: the pair sized like the other 28px ribbon icons. */
+.dropdown-trigger-large .color-pair {
+  width: 30px;
+  height: 28px;
+}
+
+.dropdown-trigger-large .color-pair-primary,
+.dropdown-trigger-large .color-pair-secondary {
+  width: 20px;
+  height: 20px;
+}
+
 .ribbon-popover {
   min-width: 0;
   padding: 10px;

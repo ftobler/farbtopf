@@ -99,7 +99,7 @@ const SHAPE_FILL_ICONS: Record<ShapeFill, ComponentType<IconProps>> = {
   'outline-filled': OutlineFilledIcon,
 }
 
-export type RibbonLayout = 'full' | 'compact' | 'phone'
+export type RibbonLayout = 'full' | 'medium' | 'compact' | 'phone'
 
 export interface RibbonProps {
   tool: ToolId
@@ -143,7 +143,8 @@ export interface RibbonProps {
   brush: BrushId
   onBrushChange: (brush: BrushId) => void
   /**
-   * `full` (default) is the labelled desktop ribbon. `compact` is a single row where groups
+   * `full` (default) is the labelled desktop ribbon; `medium` is the same ribbon with the shape
+   * gallery and the colour palette folded into buttons that open them in a popup. `compact` is a single row where groups
    * collapse into buttons that open their controls in a popup; `phone` also collapses the
    * tools into one button and leaves cut, copy and paste to the Edit menu.
    */
@@ -231,7 +232,8 @@ export function Ribbon({
   onBrushChange,
   layout = 'full',
 }: RibbonProps) {
-  const full = layout === 'full'
+  /** The labelled desktop ribbon: `full`, or `medium` with shapes and colours folded away. */
+  const full = layout === 'full' || layout === 'medium'
   const utilityTools = TOOL_GRID.map(toolById)
   const ShapeFillIcon = SHAPE_FILL_ICONS[shapeFill]
   /** Big ribbon buttons on the desktop, row-height ones when collapsed. */
@@ -522,6 +524,37 @@ export function Ribbon({
     />
   )
 
+  /** The shape gallery and its options folded behind one button, showing the current shape. */
+  const shapesPopover = (showChevron: boolean) => (
+    <Dropdown
+      title="Shapes"
+      ariaLabel="Shapes"
+      popup="dialog"
+      active={tool === 'shape'}
+      triggerClassName={bigTrigger}
+      menuClassName="ribbon-popover ribbon-popover-shapes"
+      showChevron={showChevron}
+      trigger={<ShapeKindIcon kind={shapeKind} size={bigIcon} />}
+    >
+      {(close) => shapeControls(close)}
+    </Dropdown>
+  )
+
+  /** The palette folded behind one button showing the primary and secondary colour. */
+  const colorsPopover = (showChevron: boolean) => (
+    <Dropdown
+      title="Colors"
+      ariaLabel="Colors"
+      popup="dialog"
+      triggerClassName={`${bigTrigger} color-pair-trigger`}
+      menuClassName="ribbon-popover ribbon-popover-colors"
+      showChevron={showChevron}
+      trigger={<ColorPair primary={primary} secondary={secondary} />}
+    >
+      {() => colorPalette}
+    </Dropdown>
+  )
+
   const layersButton = (
     <button
       type="button"
@@ -654,30 +687,9 @@ export function Ribbon({
           <div className="ribbon-tools">{utilityTools.map(renderTool)}</div>
         )}
         {brushDropdown}
-        <Dropdown
-          title="Shapes"
-          ariaLabel="Shapes"
-          popup="dialog"
-          active={tool === 'shape'}
-          triggerClassName="dropdown-trigger"
-          menuClassName="ribbon-popover ribbon-popover-shapes"
-          showChevron={!phone}
-          trigger={<ShapeKindIcon kind={shapeKind} size={18} />}
-        >
-          {(close) => shapeControls(close)}
-        </Dropdown>
+        {shapesPopover(!phone)}
         {phone ? null : <div className="ribbon-separator" />}
-        <Dropdown
-          title="Colors"
-          ariaLabel="Colors"
-          popup="dialog"
-          triggerClassName="dropdown-trigger color-pair-trigger"
-          menuClassName="ribbon-popover ribbon-popover-colors"
-          showChevron={!phone}
-          trigger={<ColorPair primary={primary} secondary={secondary} />}
-        >
-          {() => colorPalette}
-        </Dropdown>
+        {colorsPopover(!phone)}
         {layersButton}
       </div>
     )
@@ -751,11 +763,11 @@ export function Ribbon({
 
       <div className="ribbon-separator" />
 
-      <RibbonGroup label="Shapes">{shapeControls()}</RibbonGroup>
+      <RibbonGroup label="Shapes">{layout === 'medium' ? shapesPopover(true) : shapeControls()}</RibbonGroup>
 
       <div className="ribbon-separator" />
 
-      <RibbonGroup label="Colors">{colorPalette}</RibbonGroup>
+      <RibbonGroup label="Colors">{layout === 'medium' ? colorsPopover(true) : colorPalette}</RibbonGroup>
 
       <div className="ribbon-separator" />
 
