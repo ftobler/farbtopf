@@ -298,32 +298,16 @@ function setCoverage(mask: CoverageMask, x: number, y: number, value: number): v
 }
 
 /**
- * Stamps an upright capital-"I" nib into a coverage mask: a full-height vertical
- * bar with short horizontal caps at the top and bottom. The caps are the full
- * brush width; the bar is roughly a third as wide.
+ * Stamps a solid, flat nib into a coverage mask: a full `size` square, so every
+ * pixel under the tip is covered and a stroke sweeps out one uniform band.
  */
 function paintHighlighterDab(mask: CoverageMask, center: Point, radius: number): void {
   const cx = Math.round(center.x)
   const cy = Math.round(center.y)
   const size = Math.max(1, Math.round(radius * 2))
-  if (size < 3) {
-    const offset = Math.floor((size - 1) / 2)
-    for (let j = 0; j < size; j += 1) {
-      for (let i = 0; i < size; i += 1) setCoverage(mask, cx - offset + i, cy - offset + j, 255)
-    }
-    return
-  }
   const offset = Math.floor((size - 1) / 2)
-  const stemWidth = Math.max(1, Math.round(size / 3))
-  const capHeight = Math.max(1, Math.round(size / 4))
-  const stemStart = Math.floor((size - stemWidth) / 2)
   for (let j = 0; j < size; j += 1) {
-    const cap = j < capHeight || j >= size - capHeight
-    for (let i = 0; i < size; i += 1) {
-      const inStem = i >= stemStart && i < stemStart + stemWidth
-      if (!cap && !inStem) continue
-      setCoverage(mask, cx - offset + i, cy - offset + j, 255)
-    }
+    for (let i = 0; i < size; i += 1) setCoverage(mask, cx - offset + i, cy - offset + j, 255)
   }
 }
 

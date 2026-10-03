@@ -220,21 +220,53 @@ describe('brushes', () => {
     }
   })
 
-  it('stamps an upright capital-I nib with a bar and wider caps', () => {
+  /** The bounding box of every pixel the highlighter changed, and those pixels' colours. */
+  function highlighterFootprint(from: { x: number; y: number }, to: { x: number; y: number }, size: number) {
+    const base = new Bitmap(40, 40, WHITE)
     const mask = createCoverageMask(40, 40)
-    stampHighlighter(mask, { x: 20, y: 20 }, { x: 20, y: 20 }, 12)
-    const coverage = (x: number, y: number) => mask.data[y * 40 + x]
-    // The stem runs the full height through the centre.
-    expect(coverage(20, 20)).toBeGreaterThan(0)
-    expect(coverage(20, 15)).toBeGreaterThan(0)
-    // The top and bottom caps are wider than the stem.
-    expect(coverage(15, 15)).toBeGreaterThan(0)
-    expect(coverage(15, 25)).toBeGreaterThan(0)
-    // Mid-height only the narrow bar is painted.
-    expect(coverage(15, 20)).toBe(0)
-    expect(coverage(25, 20)).toBe(0)
-    // Nothing is painted beyond the nib.
-    expect(coverage(20, 13)).toBe(0)
+    stampHighlighter(mask, from, to, size)
+    const result = compositeHighlighter(base, mask, BLACK, HIGHLIGHTER_ALPHA)
+    let minX = 40
+    let minY = 40
+    let maxX = -1
+    let maxY = -1
+    for (let y = 0; y < 40; y += 1) {
+      for (let x = 0; x < 40; x += 1) {
+        if (result.get(x, y).r === 255) continue
+        minX = Math.min(minX, x)
+        minY = Math.min(minY, y)
+        maxX = Math.max(maxX, x)
+        maxY = Math.max(maxY, y)
+      }
+    }
+    return { result, minX, minY, maxX, maxY }
+  }
+
+  function expectSolidBand(footprint: ReturnType<typeof highlighterFootprint>) {
+    const { result, minX, minY, maxX, maxY } = footprint
+    expect(maxX).toBeGreaterThanOrEqual(minX)
+    const painted = result.get(minX, minY)
+    expect(painted.r).toBeLessThan(255)
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        expect(result.get(x, y), `pixel ${x},${y}`).toEqual(painted)
+      }
+    }
+  }
+
+  it.each([3, 6, 12])('stamps a solid nib with no gaps for a %i px dab', (size) => {
+    const footprint = highlighterFootprint({ x: 20, y: 20 }, { x: 20, y: 20 }, size)
+    expect(footprint.maxX - footprint.minX + 1).toBe(size)
+    expect(footprint.maxY - footprint.minY + 1).toBe(size)
+    expectSolidBand(footprint)
+  })
+
+  it.each([
+    ['horizontal', { x: 8, y: 20 }, { x: 30, y: 20 }],
+    ['vertical', { x: 20, y: 8 }, { x: 20, y: 30 }],
+    ['short', { x: 18, y: 20 }, { x: 21, y: 20 }],
+  ])('paints a %s stroke as one flat band without notches', (_name, from, to) => {
+    expectSolidBand(highlighterFootprint(from, to, 12))
   })
 
   it('bounds, keeps deterministic and matches fast against slow liquify drags', () => {
