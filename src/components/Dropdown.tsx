@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useKeepInViewport } from '../hooks/useKeepInViewport'
 import { CheckIcon, ChevronIcon } from './icons'
 import { focusMenuItem, handleMenuKeyDown } from './menuKeyboard'
 
@@ -37,6 +38,7 @@ export function Dropdown({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  useKeepInViewport(menuRef, open)
 
   useEffect(() => {
     if (!open) return
@@ -166,6 +168,7 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
   const [openLeft, setOpenLeft] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const pointerTypeRef = useRef('mouse')
 
   // Flip the flyout to the left when it would spill past the right viewport edge.
   useLayoutEffect(() => {
@@ -183,8 +186,17 @@ export function MenuSubmenu({ children, label, icon, disabled }: MenuSubmenuProp
   return (
     <div
       className="menu-submenu"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      // Hover opens the flyout for a mouse only: a tap also fires (emulated) mouseenter, and
+      // opening there would let the tap's click toggle the submenu straight back shut.
+      onPointerEnter={(event) => {
+        pointerTypeRef.current = event.pointerType
+      }}
+      onMouseEnter={() => {
+        if (pointerTypeRef.current === 'mouse') setOpen(true)
+      }}
+      onMouseLeave={() => {
+        if (pointerTypeRef.current === 'mouse') setOpen(false)
+      }}
     >
       <button
         ref={triggerRef}

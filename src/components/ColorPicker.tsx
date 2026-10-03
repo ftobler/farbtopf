@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { clampByte, hsvToRgb, parseColor, rgbToHsv, toCss, toHexWithAlpha } from '../core/color'
 import type { Hsv, Rgba } from '../core/color'
+import { useKeepInViewport } from '../hooks/useKeepInViewport'
 import { PaletteIcon, PlusIcon, TrashIcon } from './icons'
 import { Slider } from './Slider'
 
@@ -35,6 +36,8 @@ function toRgbText(color: Rgba): RgbText {
 export function ColorPicker(props: ColorPickerProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  useKeepInViewport(panelRef, open)
 
   useEffect(() => {
     if (!open) return
@@ -70,7 +73,12 @@ export function ColorPicker(props: ColorPickerProps) {
       </button>
 
       {open ? (
-        <div className="dropdown-menu dropdown-end color-picker-panel" role="dialog" aria-label="Color picker">
+        <div
+          ref={panelRef}
+          className="dropdown-menu dropdown-end color-picker-panel"
+          role="dialog"
+          aria-label="Color picker"
+        >
           <ColorPickerPanel key={props.target} {...props} />
         </div>
       ) : null}

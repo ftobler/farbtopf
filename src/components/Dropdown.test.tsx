@@ -200,4 +200,21 @@ describe('MenuSubmenu', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(zoomIn)
   })
+
+  it('opens on a tap without the emulated hover closing it again', () => {
+    render(
+      <Dropdown title="View" ariaLabel="View" trigger={<span>V</span>}>
+        {() => (
+          <MenuSubmenu label="Zoom">{() => <MenuItem>Zoom in</MenuItem>}</MenuSubmenu>
+        )}
+      </Dropdown>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'View' }))
+    const zoom = screen.getByRole('menuitem', { name: 'Zoom' })
+    // A tap: pointerenter (touch), then the browser's emulated mouseenter, then click.
+    fireEvent.pointerEnter(zoom, { pointerType: 'touch' })
+    fireEvent.mouseEnter(zoom)
+    fireEvent.click(zoom)
+    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toBeTruthy()
+  })
 })
