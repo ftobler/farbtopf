@@ -39,6 +39,6 @@ export const CANVAS_PRESETS: readonly CanvasPreset[] = [
   { label: '1920 x 1080', width: 1920, height: 1080 },
 ]
 
-export const DEFAULT_CANVAS = { width: 800, height: 600 }
+export const DEFAULT_CANVAS = { width: 640, height: 400 }
 export const MIN_CANVAS = 16
 export const MAX_CANVAS = 4096

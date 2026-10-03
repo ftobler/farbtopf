@@ -103,7 +103,7 @@ describe('App edit context menu', () => {
   it('crops the image to the selection', () => {
     const { canvas, run, item, openMenu } = setup()
     canvas.getBoundingClientRect = () =>
-      ({ x: 100, y: 100, left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600, toJSON: () => ({}) }) as DOMRect
+      ({ x: 100, y: 100, left: 100, top: 100, right: 740, bottom: 500, width: 640, height: 400, toJSON: () => ({}) }) as DOMRect
     canvas.setPointerCapture = vi.fn()
     canvas.releasePointerCapture = vi.fn()
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 110, clientY: 120 })

@@ -43,12 +43,12 @@ describe('App paste', () => {
 
   it('pastes a smaller image as a selection without changing the canvas size', async () => {
     render(<App />)
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     await act(async () => {
       window.dispatchEvent(pasteEvent())
     })
     await waitFor(() => expect(screen.getByLabelText('Selection size').textContent).toBe('40 × 30 px'))
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Select' }).getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -59,7 +59,7 @@ describe('App paste', () => {
     await act(async () => {
       window.dispatchEvent(pasteEvent())
     })
-    await waitFor(() => expect(screen.getByText('1000 × 600 px')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('1000 × 400 px')).toBeTruthy())
   })
 
   it('does not swallow Ctrl+V so the native paste event can fire', () => {
@@ -76,7 +76,7 @@ describe('App paste', () => {
       window.dispatchEvent(pasteEvent())
     })
     await waitFor(() => expect(screen.getByLabelText('Selection size').textContent).toBe('40 × 30 px'))
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
   })
 
   it('pastes from the clipboard API as a selection too', async () => {
@@ -90,7 +90,7 @@ describe('App paste', () => {
       window.dispatchEvent(emptyPasteEvent())
     })
     await waitFor(() => expect(screen.getByLabelText('Selection size').textContent).toBe('40 × 30 px'))
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
   })
 

@@ -162,7 +162,7 @@ describe('App save', () => {
     })
     await clickFileItem('Open…')
     expect(document.querySelector('.toast')).toBeNull()
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
   })
 
   it('falls back to the file input without the picker', async () => {

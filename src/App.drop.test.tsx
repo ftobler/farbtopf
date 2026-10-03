@@ -37,7 +37,7 @@ async function makeDirty() {
 describe('App drop', () => {
   it('opens a dropped image like File > Open', async () => {
     render(<App />)
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     const drop = dragEvent('drop', [image()])
     await act(async () => {
       window.dispatchEvent(drop)
@@ -71,7 +71,7 @@ describe('App drop', () => {
       window.dispatchEvent(drop)
     })
     expect(drop.defaultPrevented).toBe(true)
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     expect(screen.getByText('Could not open that image')).toBeTruthy()
   })
 
@@ -82,7 +82,7 @@ describe('App drop', () => {
       window.dispatchEvent(dragEvent('drop', [image()]))
     })
     expect(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeTruthy()
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     expect(screen.queryByText('Opened photo.png')).toBeNull()
   })
 

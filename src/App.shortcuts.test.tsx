@@ -26,12 +26,12 @@ afterEach(() => {
 const BLACK = [0, 0, 0, 255]
 const WHITE = [255, 255, 255, 255]
 
-/** Renders the app with the 800×600 image laid out at (100, 100) on screen, at 100 %. */
+/** Renders the app with the 640×400 image laid out at (100, 100) on screen, at 100 %. */
 function setup() {
   const { container } = render(<App />)
   const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
   canvas.getBoundingClientRect = () =>
-    ({ x: 100, y: 100, left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600, toJSON: () => ({}) }) as DOMRect
+    ({ x: 100, y: 100, left: 100, top: 100, right: 740, bottom: 500, width: 640, height: 400, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
 
@@ -122,7 +122,7 @@ describe('App keyboard shortcuts', () => {
     expect(pressed('Select')).toBe(false)
     ctrl('a')
     expect(pressed('Select')).toBe(true)
-    expect(selectionSize()).toBe('800 × 600 px')
+    expect(selectionSize()).toBe('640 × 400 px')
   })
 
   it('zooms in with + or = and out with -', () => {

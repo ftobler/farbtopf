@@ -71,12 +71,12 @@ afterEach(() => {
   setClipboard(undefined)
 })
 
-/** Renders the app with the 800×600 image laid out at (100, 100) on screen, at 100 %. */
+/** Renders the app with the 640×400 image laid out at (100, 100) on screen, at 100 %. */
 function setup() {
   const { container } = render(<App />)
   const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
   canvas.getBoundingClientRect = () =>
-    ({ x: 100, y: 100, left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600, toJSON: () => ({}) }) as DOMRect
+    ({ x: 100, y: 100, left: 100, top: 100, right: 740, bottom: 500, width: 640, height: 400, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
 
@@ -195,7 +195,7 @@ describe('App clipboard copy', () => {
     await message('Copied to the clipboard')
     expect(written).toHaveLength(1)
     expect(Object.keys(written[0])).toEqual(['image/png'])
-    expect(await written[0]['image/png'].text()).toBe('800x600')
+    expect(await written[0]['image/png'].text()).toBe('640x400')
   })
 
   it('copies only the selection when there is one', async () => {
@@ -222,7 +222,7 @@ describe('App clipboard copy', () => {
     await press('c')
     await message('Copied to the clipboard')
     expect(fetchSpy).not.toHaveBeenCalled()
-    expect(await written[0]['image/png'].text()).toBe('800x600')
+    expect(await written[0]['image/png'].text()).toBe('640x400')
   })
 })
 
@@ -248,9 +248,9 @@ describe('App clipboard cut', () => {
     paintBlack()
     await clickEditItem('Cut')
     await message('Cut to the clipboard')
-    expect(await written[0]['image/png'].text()).toBe('800x600')
+    expect(await written[0]['image/png'].text()).toBe('640x400')
     expect(pixel(0, 0)).toEqual(WHITE)
-    expect(pixel(799, 599)).toEqual(WHITE)
+    expect(pixel(639, 399)).toEqual(WHITE)
   })
 
   it('leaves the selection untouched when writing to the clipboard fails', async () => {
@@ -290,7 +290,7 @@ describe('App clipboard cut', () => {
     await press('x')
     await message('Cut to the clipboard')
     expect(fetchSpy).not.toHaveBeenCalled()
-    expect(await written[0]['image/png'].text()).toBe('800x600')
+    expect(await written[0]['image/png'].text()).toBe('640x400')
     expect(pixel(0, 0)).toEqual(WHITE)
   })
 })

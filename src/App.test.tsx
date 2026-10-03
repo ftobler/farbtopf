@@ -12,7 +12,7 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByRole('button', { name: 'Pencil' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Fill with color' })).toBeTruthy()
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
   })
 
   it('renders the color palette inside the topbar', () => {
@@ -132,7 +132,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Scale' }))
     const dialog = screen.getByRole('dialog', { name: 'Scale selection' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
-    expect(screen.getByText('Scaled selection to 800 × 600')).toBeTruthy()
+    expect(screen.getByText('Scaled selection to 640 × 400')).toBeTruthy()
   })
 
   it('arranges the image commands in a two by two grid', () => {
@@ -588,14 +588,14 @@ describe('App', () => {
     workspace.getBoundingClientRect = () =>
       ({ x: 0, y: 0, left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800, toJSON: () => ({}) }) as DOMRect
     frame.getBoundingClientRect = () =>
-      ({ x: 200, y: 100, left: 200, top: 100, right: 1000, bottom: 700, width: 800, height: 600, toJSON: () => ({}) }) as DOMRect
+      ({ x: 200, y: 100, left: 200, top: 100, right: 840, bottom: 500, width: 640, height: 400, toJSON: () => ({}) }) as DOMRect
 
     for (let index = 0; index < 40; index += 1) {
       fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -3, clientX: 400, clientY: 300 })
     }
 
     expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
-    expect(frame.style.transform).toBe('translate(200px, 50px)')
+    expect(frame.style.transform).toBe('translate(80px, -100px)')
   })
 
   it('pans the canvas while dragging with the middle mouse button', () => {
@@ -663,17 +663,17 @@ describe('App', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
     expect(screen.queryByRole('menu')).toBeNull()
-    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    expect(screen.getByText('400 × 640 px')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate 180°' }))
-    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    expect(screen.getByText('400 × 640 px')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
-    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    expect(screen.getByText('400 × 640 px')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Rotate options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate left 90°' }))
-    expect(screen.getByText('800 × 600 px')).toBeTruthy()
+    expect(screen.getByText('640 × 400 px')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
-    expect(screen.getByText('600 × 800 px')).toBeTruthy()
+    expect(screen.getByText('400 × 640 px')).toBeTruthy()
   })
 
   it('flips from the flip icon without opening the menu', () => {

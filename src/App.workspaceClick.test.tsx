@@ -2,14 +2,14 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
 
-/** Renders the app with the 800×600 image laid out at (100, 100) on screen, at 100 %. */
+/** Renders the app with the 640×400 image laid out at (100, 100) on screen, at 100 %. */
 function setup() {
   const { container } = render(<App />)
   fireEvent.click(screen.getByRole('button', { name: 'Select' }))
   const workspace = container.querySelector('.workspace') as HTMLElement
   const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
   canvas.getBoundingClientRect = () =>
-    ({ x: 100, y: 100, left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600, toJSON: () => ({}) }) as DOMRect
+    ({ x: 100, y: 100, left: 100, top: 100, right: 740, bottom: 500, width: 640, height: 400, toJSON: () => ({}) }) as DOMRect
   canvas.setPointerCapture = vi.fn()
   canvas.releasePointerCapture = vi.fn()
   workspace.setPointerCapture = vi.fn()
@@ -75,11 +75,11 @@ describe('App workspace background click', () => {
     const { field, workspace } = setup()
     fireEvent.click(screen.getByRole('button', { name: 'Select options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: /^Select all/ }))
-    expect(field.textContent).toBe('800 × 600 px')
+    expect(field.textContent).toBe('640 × 400 px')
     // Just outside the bottom-right corner, on the part of its handle beyond the image.
-    fireEvent.pointerDown(workspace, { button: 0, pointerId: 3, clientX: 902, clientY: 702 })
-    fireEvent.pointerUp(workspace, { button: 0, pointerId: 3, clientX: 902, clientY: 702 })
-    expect(field.textContent).toBe('800 × 600 px')
+    fireEvent.pointerDown(workspace, { button: 0, pointerId: 3, clientX: 742, clientY: 502 })
+    fireEvent.pointerUp(workspace, { button: 0, pointerId: 3, clientX: 742, clientY: 502 })
+    expect(field.textContent).toBe('640 × 400 px')
   })
 
   describe('dragging from the background with the Select tool', () => {
@@ -100,7 +100,7 @@ describe('App workspace background click', () => {
       const { workspace, canvas, field } = setup()
       dragFromBackground(workspace, canvas, [40, 40], [950, 750])
       expect(canvas.setPointerCapture).toHaveBeenCalledWith(5)
-      expect(field.textContent).toBe('800 × 600 px')
+      expect(field.textContent).toBe('640 × 400 px')
       expect(screen.getByRole('button', { name: 'Crop' }).hasAttribute('disabled')).toBe(false)
     })
 
@@ -108,7 +108,7 @@ describe('App workspace background click', () => {
       const { workspace, canvas, field } = setup()
       // Image space: from (850, -50) to (400, 700).
       dragFromBackground(workspace, canvas, [950, 50], [500, 800])
-      expect(field.textContent).toBe('400 × 600 px')
+      expect(field.textContent).toBe('240 × 400 px')
     })
 
     it('replaces an existing selection', () => {
