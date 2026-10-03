@@ -1879,3 +1879,66 @@ textarea {
   background: var(--slider-thumb-bg);
   transform: translateX(-50%);
 }
+
+/* Busy indicator while a pasted or opened image is read and decoded. */
+.app--busy,
+.app--busy * {
+  cursor: wait !important;
+}
+
+.busy-status {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 110;
+  pointer-events: none;
+}
+
+.busy-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.busy-spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: busy-spin 0.8s linear infinite;
+}
+
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy-spinner {
+    animation: busy-pulse 1.6s ease-in-out infinite alternate;
+    border-color: var(--accent);
+  }
+
+  @keyframes busy-pulse {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0.35;
+    }
+  }
+}

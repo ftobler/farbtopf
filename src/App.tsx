@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { ContextMenu } from './components/ContextMenu'
 import { MenuBar } from './components/MenuBar'
@@ -69,6 +70,20 @@ import type { TextOptions } from './render/text'
 /** Single-key shortcuts that pick a specific shape. */
 const SHAPE_SHORTCUTS: Record<string, ShapeKind> = { l: 'line', r: 'rectangle', o: 'ellipse' }
 
+/** How long loading an image may take before the busy indicator shows, so instant loads do not flicker. */
+const BUSY_DELAY_MS = 150
+/** Decoding an image file at least this big blocks long enough to show the busy indicator right away. */
+const LARGE_IMAGE_BYTES = 1_000_000
+
+/** Resolves once the browser has had a chance to paint. */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    const afterFrame = () => window.setTimeout(resolve, 0)
+    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(afterFrame)
+    else afterFrame()
+  })
+}
+
 function fitZoom(width: number, height: number): number {
   const availableWidth = Math.max(200, window.innerWidth - 96)
   const availableHeight = Math.max(200, window.innerHeight - 280)
@@ -106,6 +121,9 @@ function App() {
   /** Where Save writes to: the file the document was opened from or last saved as, when the browser gave us one. */
   const fileHandleRef = useRef<FileSystemFileHandle | null>(null)
   const messageTimer = useRef<number | null>(null)
+  const busyRef = useRef(false)
+  const busyShownRef = useRef(false)
+  const busyTimer = useRef<number | null>(null)
   const workspaceRef = useRef<HTMLDivElement | null>(null)
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null)
   /** Wheel delta carried over between events so trackpads step one zoom level per gesture. */
@@ -181,6 +199,7 @@ function App() {
   const [showLayers, setShowLayers] = useState(false)
   const [layers, setLayers] = useState<{ list: LayerInfo[]; active: number }>({ list: [], active: 0 })
   const [message, setMessage] = useState<string | null>(null)
+  const [busyShown, setBusyShown] = useState(false)
   /** Name of the file the document came from or was saved to; null for a new image. */
   const [fileName, setFileName] = useState<string | null>(null)
   /** Counts edits; the document is dirty while it differs from the count at the last save, open or New. */
@@ -232,8 +251,54 @@ function App() {
   useEffect(() => {
     return () => {
       if (messageTimer.current !== null) window.clearTimeout(messageTimer.current)
+      if (busyTimer.current !== null) window.clearTimeout(busyTimer.current)
     }
   }, [])
+
+  /** Shows the busy indicator now (only while a load is running), committing it synchronously. */
+  const showBusy = useCallback(() => {
+    if (busyTimer.current !== null) {
+      window.clearTimeout(busyTimer.current)
+      busyTimer.current = null
+    }
+    if (!busyRef.current || busyShownRef.current) return
+    busyShownRef.current = true
+    flushSync(() => setBusyShown(true))
+  }, [])
+
+  /**
+   * Runs the image load `task` behind the busy indicator, which shows once it takes
+   * longer than BUSY_DELAY_MS. A load requested while another is running is ignored.
+   */
+  const runBusy = useCallback(
+    async (task: () => Promise<void>) => {
+      if (busyRef.current) return
+      busyRef.current = true
+      busyTimer.current = window.setTimeout(showBusy, BUSY_DELAY_MS)
+      try {
+        await task()
+      } finally {
+        if (busyTimer.current !== null) window.clearTimeout(busyTimer.current)
+        busyTimer.current = null
+        busyRef.current = false
+        busyShownRef.current = false
+        setBusyShown(false)
+      }
+    },
+    [showBusy],
+  )
+
+  /**
+   * Call before decoding `bytes` of image, which blocks the main thread: a large image
+   * shows the indicator at once, and a showing indicator gets a frame to paint first.
+   */
+  const beforeDecode = useCallback(
+    async (bytes: number) => {
+      if (bytes >= LARGE_IMAGE_BYTES) showBusy()
+      if (busyShownRef.current) await nextPaint()
+    },
+    [showBusy],
+  )
 
   useEffect(() => {
     document.title = `${dirty ? '*' : ''}${fileName ? `${fileName} - ` : ''}Farbtopf`
@@ -275,62 +340,69 @@ function App() {
   }, [requestDestructive])
 
   const openFile = useCallback(
-    async (file: File, handle: FileSystemFileHandle | null = null) => {
-      try {
-        const dataUrl = await readFileAsDataUrl(file)
-        await canvasRef.current?.loadDataUrl(dataUrl)
-        const size = canvasRef.current?.getSize()
-        if (size) {
-          setCanvasSize(size)
-          setZoom(fitZoom(size.width, size.height))
-          setPan({ x: 0, y: 0 })
+    (file: File, handle: FileSystemFileHandle | null = null) =>
+      runBusy(async () => {
+        try {
+          const dataUrl = await readFileAsDataUrl(file)
+          await beforeDecode(file.size)
+          await canvasRef.current?.loadDataUrl(dataUrl)
+          const size = canvasRef.current?.getSize()
+          if (size) {
+            setCanvasSize(size)
+            setZoom(fitZoom(size.width, size.height))
+            setPan({ x: 0, y: 0 })
+          }
+          setCursor(null)
+          fileHandleRef.current = handle
+          setFileName(file.name)
+          markSaved()
+          notify(`Opened ${file.name}`)
+        } catch {
+          notify('Could not open that image')
         }
-        setCursor(null)
-        fileHandleRef.current = handle
-        setFileName(file.name)
-        markSaved()
-        notify(`Opened ${file.name}`)
-      } catch {
-        notify('Could not open that image')
-      }
-    },
-    [markSaved, notify],
+      }),
+    [beforeDecode, markSaved, notify, runBusy],
   )
 
-  /** Pastes an image file as a floating selection that the select tool can move. */
-  const pasteFile = useCallback(
+  /** Pastes an image file as a floating selection that the select tool can move (without the busy indicator). */
+  const pasteBlob = useCallback(
     async (file: Blob) => {
       try {
         const dataUrl = await readFileAsDataUrl(file)
         const handle = canvasRef.current
         if (!handle) return
+        await beforeDecode(file.size)
         setTool('select')
         await handle.pasteDataUrl(dataUrl)
       } catch {
         notify('Could not paste that image')
       }
     },
-    [notify],
+    [beforeDecode, notify],
   )
+
+  const pasteFile = useCallback((file: Blob) => runBusy(() => pasteBlob(file)), [pasteBlob, runBusy])
 
   const handlePasteFromClipboard = useCallback(async () => {
     if (!navigator.clipboard?.read) {
       notify('Clipboard paste is not supported here')
       return
     }
-    try {
-      const items = await navigator.clipboard.read()
-      for (const item of items) {
-        const type = item.types.find((entry) => entry.startsWith('image/'))
-        if (!type) continue
-        await pasteFile(await item.getType(type))
-        return
+    await runBusy(async () => {
+      try {
+        const items = await navigator.clipboard.read()
+        for (const item of items) {
+          const type = item.types.find((entry) => entry.startsWith('image/'))
+          if (!type) continue
+          await pasteBlob(await item.getType(type))
+          return
+        }
+        notify('No image in the clipboard')
+      } catch {
+        notify('Could not paste from the clipboard')
       }
-      notify('No image in the clipboard')
-    } catch {
-      notify('Could not paste from the clipboard')
-    }
-  }, [notify, pasteFile])
+    })
+  }, [notify, pasteBlob, runBusy])
 
   const copyDataUrl = useCallback(
     async (dataUrl: string | undefined) => {
@@ -888,7 +960,7 @@ function App() {
   const toolLabel = useMemo(() => toolById(tool).label, [tool])
 
   return (
-    <div className={dropTarget ? 'app app--drop-target' : 'app'}>
+    <div className={`app${dropTarget ? ' app--drop-target' : ''}${busyShown ? ' app--busy' : ''}`}>
       <MenuBar
         canUndo={canUndo}
         canRedo={canRedo}
@@ -964,6 +1036,7 @@ function App() {
       <div
         className={`workspace${panning ? ' panning' : ''}`}
         ref={workspaceRef}
+        aria-busy={busyShown}
         onPointerDown={handlePanDown}
         onPointerMove={handlePanMove}
         onPointerUp={handlePanUp}
@@ -1041,6 +1114,16 @@ function App() {
             onDelete={(index) => canvasRef.current?.deleteLayer(index)}
             onMove={(from, to) => canvasRef.current?.moveLayer(from, to)}
           />
+        ) : null}
+      </div>
+
+      {/* Outside the workspace, whose aria-busy would otherwise hold back the announcement. */}
+      <div className="busy-status" role="status" aria-live="polite">
+        {busyShown ? (
+          <div className="busy-indicator">
+            <span className="busy-spinner" aria-hidden="true" />
+            Loading image…
+          </div>
         ) : null}
       </div>
 
