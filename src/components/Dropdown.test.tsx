@@ -142,6 +142,40 @@ describe('Dropdown', () => {
   })
 })
 
+describe('Dropdown popover', () => {
+  function renderPopover() {
+    render(
+      <Dropdown title="Shapes" ariaLabel="Shapes" popup="dialog" trigger={<span>S</span>}>
+        {() => (
+          <>
+            <button type="button">Line</button>
+            <button type="button">Ellipse</button>
+          </>
+        )}
+      </Dropdown>,
+    )
+    return screen.getByRole('button', { name: 'Shapes' })
+  }
+
+  it('opens a labelled dialog of arbitrary controls', () => {
+    const trigger = renderPopover()
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole('dialog', { name: 'Shapes' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(dialog.contains(screen.getByRole('button', { name: 'Ellipse' }))).toBe(true)
+  })
+
+  it('focuses the first control and hands focus back to the trigger on Escape', () => {
+    const trigger = renderPopover()
+    fireEvent.click(trigger)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Line' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+})
+
 describe('MenuSubmenu', () => {
   it('opens with ArrowRight and closes with ArrowLeft, moving focus', () => {
     render(

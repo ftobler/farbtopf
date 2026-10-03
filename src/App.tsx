@@ -51,6 +51,7 @@ import type { ShapeFill, ToolId } from './core/tools'
 import { ZOOM_LEVELS, displayZoom, nextZoom } from './core/zoom'
 import { useCustomColors } from './hooks/useCustomColors'
 import { useDevicePixelRatio } from './hooks/useDevicePixelRatio'
+import { useHeaderLayout } from './hooks/useHeaderLayout'
 import { useTheme } from './hooks/useTheme'
 import { downloadDataUrl, readFileAsDataUrl } from './render/image'
 import {
@@ -131,6 +132,7 @@ function App() {
   const wheelAccumRef = useRef(0)
 
   const { theme, toggleTheme } = useTheme()
+  const headerLayout = useHeaderLayout()
   const customColors = useCustomColors()
 
   const [tool, setTool] = useState<ToolId>('brush')
@@ -960,6 +962,51 @@ function App() {
 
   const toolLabel = useMemo(() => toolById(tool).label, [tool])
 
+  const ribbon = (
+    <Ribbon
+      tool={tool}
+      onToolChange={setTool}
+      brushSize={brushSize}
+      onBrushSizeChange={setBrushSize}
+      shapeFill={shapeFill}
+      onShapeFillChange={setShapeFill}
+      shapeKind={shapeKind}
+      onShapeKindChange={setShapeKind}
+      hasSelection={hasSelection}
+      onCrop={handleCrop}
+      onScale={openScaleDialog}
+      onFlip={handleFlip}
+      onRotate={handleRotate}
+      lastRotation={lastRotation}
+      lastFlip={lastFlip}
+      onCustomRotate={() => setShowRotateDialog(true)}
+      onPaste={handlePasteFromClipboard}
+      onCut={handleCutFromCanvas}
+      onCopy={handleCopyFromCanvas}
+      primary={primary}
+      secondary={secondary}
+      palette={DEFAULT_PALETTE}
+      customColors={customColors.colors}
+      onPrimaryChange={setPrimary}
+      onSecondaryChange={setSecondary}
+      onSwap={handleSwapColors}
+      onAddCustomColor={customColors.add}
+      onRemoveCustomColor={customColors.remove}
+      showLayers={showLayers}
+      onToggleLayers={() => setShowLayers((value) => !value)}
+      transparentSelection={transparentSelection}
+      onTransparentSelectionChange={setTransparentSelection}
+      selectionShape={selectionShape}
+      onSelectionShapeChange={setSelectionShape}
+      onSelectAll={handleSelectAll}
+      onInvertSelection={handleInvertSelection}
+      onDeleteSelection={handleDeleteSelection}
+      brush={brush}
+      onBrushChange={setBrush}
+      layout={headerLayout === 'single-row' ? 'phone' : headerLayout}
+    />
+  )
+
   return (
     <div className={`app${dropTarget ? ' app--drop-target' : ''}${busyShown ? ' app--busy' : ''}`}>
       <MenuBar
@@ -988,51 +1035,14 @@ function App() {
         onToggleFullscreen={handleToggleFullscreen}
         onToggleMiniature={() => setShowMiniature((value) => !value)}
         onToggleTheme={toggleTheme}
-      />
+        collapsed={headerLayout === 'phone' || headerLayout === 'single-row'}
+      >
+        {headerLayout === 'single-row' ? ribbon : null}
+      </MenuBar>
 
-      <div className="topbar">
-        <Ribbon
-          tool={tool}
-          onToolChange={setTool}
-          brushSize={brushSize}
-          onBrushSizeChange={setBrushSize}
-          shapeFill={shapeFill}
-          onShapeFillChange={setShapeFill}
-          shapeKind={shapeKind}
-          onShapeKindChange={setShapeKind}
-          hasSelection={hasSelection}
-          onCrop={handleCrop}
-          onScale={openScaleDialog}
-          onFlip={handleFlip}
-          onRotate={handleRotate}
-          lastRotation={lastRotation}
-          lastFlip={lastFlip}
-          onCustomRotate={() => setShowRotateDialog(true)}
-          onPaste={handlePasteFromClipboard}
-          onCut={handleCutFromCanvas}
-          onCopy={handleCopyFromCanvas}
-          primary={primary}
-          secondary={secondary}
-          palette={DEFAULT_PALETTE}
-          customColors={customColors.colors}
-          onPrimaryChange={setPrimary}
-          onSecondaryChange={setSecondary}
-          onSwap={handleSwapColors}
-          onAddCustomColor={customColors.add}
-          onRemoveCustomColor={customColors.remove}
-          showLayers={showLayers}
-          onToggleLayers={() => setShowLayers((value) => !value)}
-          transparentSelection={transparentSelection}
-          onTransparentSelectionChange={setTransparentSelection}
-          selectionShape={selectionShape}
-          onSelectionShapeChange={setSelectionShape}
-          onSelectAll={handleSelectAll}
-          onInvertSelection={handleInvertSelection}
-          onDeleteSelection={handleDeleteSelection}
-          brush={brush}
-          onBrushChange={setBrush}
-        />
-      </div>
+      {headerLayout === 'single-row' ? null : (
+        <div className={`topbar${headerLayout === 'full' ? '' : ' topbar-compact'}`}>{ribbon}</div>
+      )}
 
       <div
         className={`workspace${panning ? ' panning' : ''}`}

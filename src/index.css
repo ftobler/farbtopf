@@ -1986,3 +1986,256 @@ label {
     }
   }
 }
+
+/*
+ * Compact header, below the desktop width (see useHeaderLayout): the ribbon is one row of
+ * group buttons that open their controls in popups, and never wraps.
+ */
+.topbar-compact {
+  min-height: 0;
+  padding: 4px 8px;
+  padding-left: calc(8px + env(safe-area-inset-left, 0px));
+  padding-right: calc(8px + env(safe-area-inset-right, 0px));
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+}
+
+.ribbon-compact {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ribbon-compact .ribbon-separator {
+  margin: 4px 2px;
+}
+
+.ribbon-compact .dropdown-trigger:not(.split-button) {
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.ribbon-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* On a phone the group buttons spread over the whole row. */
+.topbar-compact .ribbon-phone {
+  flex: 1;
+  justify-content: space-between;
+  gap: 2px;
+}
+
+/* Popup triggers without a chevron get a small corner caret instead. */
+.ribbon-phone > .dropdown > .dropdown-trigger:not(.split-button) {
+  position: relative;
+}
+
+.ribbon-phone > .dropdown > .dropdown-trigger:not(.split-button)::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  border: 3px solid transparent;
+  border-right-color: var(--text-muted);
+  border-bottom-color: var(--text-muted);
+}
+
+.color-pair {
+  position: relative;
+  display: inline-block;
+  width: 24px;
+  height: 22px;
+}
+
+.color-pair-primary,
+.color-pair-secondary {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.color-pair-primary {
+  left: 0;
+  top: 0;
+}
+
+.color-pair-secondary {
+  right: 0;
+  bottom: 0;
+}
+
+.ribbon-popover {
+  min-width: 0;
+  padding: 10px;
+}
+
+.ribbon-popover-shapes {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ribbon-popover-colors {
+  width: max-content;
+  max-width: calc(100vw - 16px);
+}
+
+/* In the popover: the current colours and the picker on top, the swatches below. */
+.ribbon-popover-colors .color-palette {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "current picker"
+    "swatches swatches";
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ribbon-popover-colors .current-colors {
+  grid-area: current;
+  justify-content: start;
+  grid-template-columns: auto auto auto;
+  grid-template-rows: auto;
+  column-gap: 8px;
+}
+
+.ribbon-popover-colors .color-swatch.secondary {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.ribbon-popover-colors .swap-button {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.ribbon-popover-colors .swap-button svg {
+  transform: none;
+}
+
+.ribbon-popover-colors .swatches {
+  grid-area: swatches;
+}
+
+.ribbon-popover-colors .color-picker {
+  grid-area: picker;
+  justify-self: end;
+}
+
+/* Phone menu bar: one hamburger menu, the quick actions and the theme toggle. */
+.menubar-collapsed {
+  gap: 4px;
+}
+
+.menubar-hamburger-menu {
+  min-width: 230px;
+}
+
+/* In the hamburger menu, submenus unfold in place instead of flying out past the screen edge. */
+.menubar-hamburger-menu .menu-submenu-panel {
+  position: static;
+  margin: 2px 0 4px 18px;
+  padding: 0 0 0 6px;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.menubar-hamburger-menu .menu-submenu-panel::before {
+  display: none;
+}
+
+.menubar-hamburger-menu .menu-submenu-trigger[aria-expanded="true"] .menu-item-arrow svg {
+  transform: none;
+}
+
+/* A short landscape phone: the ribbon shares the menu bar's row. */
+.menubar .ribbon-compact {
+  flex: 0 1 auto;
+}
+
+/* Touch screens: primary controls of the compact header get finger-sized targets. */
+@media (pointer: coarse) {
+  .menu-item {
+    min-height: 40px;
+  }
+
+  .size-option {
+    height: 40px;
+  }
+
+  .menubar-collapsed .icon-button,
+  .ribbon-compact .icon-button,
+  .ribbon-compact .dropdown-trigger:not(.split-button) {
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .ribbon-compact .split-button.dropdown-trigger {
+    height: 40px;
+  }
+
+  .ribbon-compact .split-button-action {
+    width: 38px;
+  }
+
+  .ribbon-compact .split-button-arrow {
+    width: 14px;
+  }
+
+  .ribbon-popover .shape-gallery {
+    grid-template-columns: repeat(7, 34px);
+    grid-auto-rows: 34px;
+  }
+
+  .ribbon-popover .shape-gallery-button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .ribbon-popover .swatch,
+  .ribbon-popover .swatch-empty {
+    width: 24px;
+    height: 24px;
+  }
+
+  .ribbon-popover .swatch-grid {
+    grid-template-rows: repeat(2, 24px);
+    column-gap: 7px;
+    row-gap: 8px;
+  }
+
+  .ribbon-popover .custom-row {
+    grid-template-columns: repeat(10, 24px);
+    column-gap: 7px;
+  }
+}
+
+/* The narrowest phones (320 px): squeeze the phone row a little further. */
+@media (max-width: 359.98px) {
+  .ribbon-phone .icon-button,
+  .ribbon-phone .dropdown-trigger:not(.split-button) {
+    min-width: 36px;
+    width: 36px;
+  }
+
+  .ribbon-phone .split-button-action {
+    width: 32px;
+  }
+
+  .ribbon-phone .split-button-arrow {
+    width: 12px;
+  }
+}

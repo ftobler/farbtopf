@@ -561,6 +561,15 @@ export function ChevronIcon(props: IconProps) {
   )
 }
 
+/** Three bars: the hamburger that opens the folded menus on a phone. */
+export function MenuIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Svg>
+  )
+}
+
 export function CheckIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -584,6 +593,17 @@ export function SelectIcon(props: IconProps) {
   return (
     <Svg {...props}>
       <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
+    </Svg>
+  )
+}
+
+/** A framed picture: the collapsed Image group (crop, rotate, scale, flip). */
+export function ImageIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="9.5" r="1.6" />
+      <path d="m4 17.5 5-5 4 4 2.5-2.5 4.5 4.5" />
     </Svg>
   )
 }

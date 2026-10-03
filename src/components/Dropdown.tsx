@@ -20,7 +20,16 @@ export interface DropdownProps {
    * the arrow part opens the menu.
    */
   onAction?: () => void
+  /**
+   * `menu` (default) for a list of menu items; `dialog` for a popover holding arbitrary
+   * controls, such as a collapsed ribbon group.
+   */
+  popup?: 'menu' | 'dialog'
+  /** Extra class names for the popup panel. */
+  menuClassName?: string
 }
+
+const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), select, textarea, [tabindex]:not([tabindex="-1"])'
 
 export function Dropdown({
   trigger,
@@ -33,6 +42,8 @@ export function Dropdown({
   triggerClassName,
   active,
   onAction,
+  popup = 'menu',
+  menuClassName,
 }: DropdownProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -42,8 +53,15 @@ export function Dropdown({
 
   useEffect(() => {
     if (!open) return
-    if (menuRef.current) focusMenuItem(menuRef.current)
-  }, [open])
+    const menu = menuRef.current
+    if (!menu) return
+    if (popup === 'menu') {
+      focusMenuItem(menu)
+      return
+    }
+    const first = menu.querySelector<HTMLElement>(FOCUSABLE)
+    ;(first ?? menu).focus()
+  }, [open, popup])
 
   useEffect(() => {
     if (!open) return
@@ -91,7 +109,7 @@ export function Dropdown({
             title={title ? `${title} options` : undefined}
             aria-label={ariaLabel ? `${ariaLabel} options` : undefined}
             aria-expanded={open}
-            aria-haspopup="menu"
+            aria-haspopup={popup}
             onClick={() => setOpen((value) => !value)}
           >
             <ChevronIcon size={14} />
@@ -105,7 +123,7 @@ export function Dropdown({
           title={title}
           aria-label={ariaLabel}
           aria-expanded={open}
-          aria-haspopup="menu"
+          aria-haspopup={popup}
           aria-pressed={active === undefined ? undefined : active}
           onClick={() => setOpen((value) => !value)}
         >
@@ -116,10 +134,13 @@ export function Dropdown({
       {open ? (
         <div
           ref={menuRef}
-          className={`dropdown-menu dropdown-${align}${placement === 'up' ? ' dropdown-up' : ''}`}
-          role="menu"
+          className={`dropdown-menu dropdown-${align}${placement === 'up' ? ' dropdown-up' : ''}${
+            popup === 'dialog' ? ' dropdown-popover' : ''
+          }${menuClassName ? ` ${menuClassName}` : ''}`}
+          role={popup}
+          aria-label={popup === 'dialog' ? (ariaLabel ?? title) : undefined}
           tabIndex={-1}
-          onKeyDown={(event) => handleMenuKeyDown(event, menuRef.current)}
+          onKeyDown={popup === 'menu' ? (event) => handleMenuKeyDown(event, menuRef.current) : undefined}
         >
           {children(() => setOpen(false))}
         </div>
