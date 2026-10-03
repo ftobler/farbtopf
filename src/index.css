@@ -789,12 +789,14 @@ textarea {
 }
 
 .tool-slider {
+  /* One step between the icon, the value and the start of the slider. */
+  --tool-slider-spacing: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: calc(var(--tool-slider-spacing) + 2px);
   width: 52px;
-  padding: 8px 6px;
+  padding: 10px 6px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -808,7 +810,7 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--tool-slider-spacing);
   color: var(--text-muted);
 }
 
