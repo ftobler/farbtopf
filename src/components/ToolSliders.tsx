@@ -1,5 +1,4 @@
-import { useRef } from 'react'
-import type { ReactNode, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { ReactNode } from 'react'
 import {
   MAX_OPACITY,
   MAX_SIZE,
@@ -14,8 +13,9 @@ import {
   stepSize,
 } from '../core/toolSettings'
 import { OpacityIcon, SizeIcon } from './icons'
+import { Slider } from './Slider'
 
-interface VerticalSliderProps {
+interface ToolSliderProps {
   label: string
   icon: ReactNode
   value: number
@@ -32,40 +32,8 @@ interface VerticalSliderProps {
   onSlidingChange?: (sliding: boolean) => void
 }
 
-/**
- * A vertical slider (WAI-ARIA slider pattern): drag or press on the track, or use the
- * arrow, Page Up/Down, Home and End keys while it has focus.
- */
-function VerticalSlider({
-  label,
-  icon,
-  value,
-  min,
-  max,
-  valueText,
-  position,
-  fromPosition,
-  keyStep,
-  onChange,
-  onSlidingChange,
-}: VerticalSliderProps) {
-  const pointerRef = useRef<number | null>(null)
-
-  const update = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    if (rect.height <= 0) return
-    onChange(fromPosition(1 - (event.clientY - rect.top) / rect.height))
-  }
-
-  const end = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (pointerRef.current !== event.pointerId) return
-    pointerRef.current = null
-    event.currentTarget.releasePointerCapture?.(event.pointerId)
-    onSlidingChange?.(false)
-  }
-
-  const percent = Math.min(1, Math.max(0, position)) * 100
-
+/** One labelled vertical slider of the panel: icon and value on top, the shared slider below. */
+function ToolSlider({ label, icon, valueText, ...slider }: ToolSliderProps) {
   return (
     <div className="tool-slider" title={`${label}: ${valueText}`}>
       <div className="tool-slider-header">
@@ -74,43 +42,7 @@ function VerticalSlider({
           {valueText}
         </span>
       </div>
-      <div
-        className="tool-slider-track"
-        role="slider"
-        tabIndex={0}
-        aria-label={label}
-        aria-orientation="vertical"
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={value}
-        aria-valuetext={valueText}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return
-          event.preventDefault()
-          event.currentTarget.focus()
-          event.currentTarget.setPointerCapture?.(event.pointerId)
-          pointerRef.current = event.pointerId
-          onSlidingChange?.(true)
-          update(event)
-        }}
-        onPointerMove={(event) => {
-          if (pointerRef.current === event.pointerId) update(event)
-        }}
-        onPointerUp={end}
-        onPointerCancel={end}
-        onKeyDown={(event: ReactKeyboardEvent<HTMLDivElement>) => {
-          const next = keyStep(value, event.key)
-          if (next === null) return
-          // Keep arrows and friends from also driving the workspace shortcuts.
-          event.preventDefault()
-          event.stopPropagation()
-          onChange(Math.min(max, Math.max(min, next)))
-        }}
-      >
-        <span className="tool-slider-rail" />
-        <span className="tool-slider-fill" style={{ height: `${percent}%` }} />
-        <span className="tool-slider-thumb" style={{ bottom: `${percent}%` }} />
-      </div>
+      <Slider orientation="vertical" className="tool-slider-track" label={label} valueText={valueText} {...slider} />
     </div>
   )
 }
@@ -184,7 +116,7 @@ export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSl
         event.stopPropagation()
       }}
     >
-      <VerticalSlider
+      <ToolSlider
         label="Size"
         icon={<SizeIcon size={16} className="tool-slider-icon" />}
         value={size}
@@ -197,7 +129,7 @@ export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSl
         onChange={onSizeChange}
         onSlidingChange={onSlidingChange}
       />
-      <VerticalSlider
+      <ToolSlider
         label="Opacity"
         icon={<OpacityIcon size={16} className="tool-slider-icon" />}
         value={opacity}

@@ -1,6 +1,7 @@
 import type { Point } from '../core/geometry'
 import { ZOOM_LEVELS, nearestZoomIndex, nextZoom } from '../core/zoom'
 import { GridIcon, SelectIcon, ZoomInIcon, ZoomOutIcon } from './icons'
+import { Slider } from './Slider'
 
 export interface StatusBarProps {
   cursor: Point | null
@@ -72,15 +73,13 @@ export function StatusBar({
         >
           <ZoomOutIcon size={16} />
         </button>
-        <input
-          type="range"
+        <Slider
           className="zoom-slider"
-          aria-label="Zoom"
+          label="Zoom"
           min={0}
           max={ZOOM_LEVELS.length - 1}
-          step={1}
           value={nearestZoomIndex(zoom)}
-          onChange={(event) => onZoomChange(ZOOM_LEVELS[Number(event.target.value)])}
+          onChange={(index) => onZoomChange(ZOOM_LEVELS[index])}
         />
         <button
           type="button"

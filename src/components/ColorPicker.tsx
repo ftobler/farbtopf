@@ -3,6 +3,7 @@ import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { clampByte, hsvToRgb, parseColor, rgbToHsv, toCss, toHexWithAlpha } from '../core/color'
 import type { Hsv, Rgba } from '../core/color'
 import { PaletteIcon, PlusIcon, TrashIcon } from './icons'
+import { Slider } from './Slider'
 
 export type ColorSlot = 'primary' | 'secondary'
 
@@ -109,13 +110,12 @@ function ColorPickerPanel({
     emit({ ...hsvToRgb(next), a: alpha }, next)
   }
 
-  const handleHueChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const next = { h: Number(event.target.value), s: hsv.s, v: hsv.v }
+  const handleHueChange = (h: number) => {
+    const next = { h, s: hsv.s, v: hsv.v }
     emit({ ...hsvToRgb(next), a: alpha }, next)
   }
 
-  const handleAlphaChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = Number(event.target.value)
+  const handleAlphaChange = (value: number) => {
     const next = clampByte(value)
     setAlpha(next)
     setHexText(toHexWithAlpha({ ...hsvToRgb(hsv), a: next }))
@@ -189,35 +189,25 @@ function ColorPickerPanel({
         <span className="sv-cursor" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
       </div>
 
-      <div
-        className="slider-track hue-track"
-        style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
-      >
-        <input
-          type="range"
-          className="slider-input"
-          min={0}
-          max={360}
-          value={Math.round(hsv.h)}
-          aria-label="Hue"
-          onChange={handleHueChange}
-        />
-      </div>
+      <Slider
+        className="hue-slider"
+        label="Hue"
+        min={0}
+        max={360}
+        value={Math.round(hsv.h)}
+        trackBackground="linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)"
+        onChange={handleHueChange}
+      />
 
-      <div
-        className="slider-track alpha-track"
-        style={{ backgroundImage: `linear-gradient(to right, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0), rgb(${rgb.r}, ${rgb.g}, ${rgb.b}))` }}
-      >
-        <input
-          type="range"
-          className="slider-input"
-          min={0}
-          max={255}
-          value={Math.round(alpha)}
-          aria-label="Alpha"
-          onChange={handleAlphaChange}
-        />
-      </div>
+      <Slider
+        className="alpha-slider"
+        label="Alpha"
+        min={0}
+        max={255}
+        value={Math.round(alpha)}
+        trackBackground={`linear-gradient(to right, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0), rgb(${rgb.r}, ${rgb.g}, ${rgb.b}))`}
+        onChange={handleAlphaChange}
+      />
 
       <div className="color-picker-preview-row">
         <span className="color-picker-preview" style={{ background: preview }} aria-label="Color preview" role="img" />

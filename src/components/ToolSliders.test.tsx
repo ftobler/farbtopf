@@ -73,9 +73,9 @@ describe('ToolSliders', () => {
 
   it('places the size thumb on the logarithmic scale', () => {
     const { container } = setup(12, 80)
-    const thumbs = container.querySelectorAll<HTMLElement>('.tool-slider-thumb')
-    expect(parseFloat(thumbs[0].style.bottom)).toBeCloseTo(sizeToSlider(12) * 100, 3)
-    expect(parseFloat(thumbs[1].style.bottom)).toBeCloseTo(((80 - 1) / 99) * 100, 3)
+    const tracks = container.querySelectorAll<HTMLElement>('.tool-slider-track')
+    expect(parseFloat(tracks[0].style.getPropertyValue('--slider-position'))).toBeCloseTo(sizeToSlider(12), 3)
+    expect(parseFloat(tracks[1].style.getPropertyValue('--slider-position'))).toBeCloseTo((80 - 1) / 99, 3)
   })
 
   it('sets the size logarithmically from where the track is pressed and dragged', () => {
@@ -90,6 +90,16 @@ describe('ToolSliders', () => {
     onSizeChange.mockClear()
     fireEvent.pointerMove(sizeSlider, { pointerId: 1, clientY: 20 })
     expect(onSizeChange).not.toHaveBeenCalled()
+  })
+
+  it('uses the shared slider style', () => {
+    const { sizeSlider, opacitySlider } = setup()
+    for (const slider of [sizeSlider, opacitySlider]) {
+      expect(slider.classList.contains('slider')).toBe(true)
+      expect(slider.classList.contains('slider-vertical')).toBe(true)
+      expect(slider.querySelector('.slider-rail')).toBeTruthy()
+      expect(slider.querySelector('.slider-thumb')).toBeTruthy()
+    }
   })
 
   it('sets the opacity linearly', () => {

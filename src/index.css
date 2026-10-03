@@ -676,52 +676,8 @@ textarea {
   border-radius: 5px;
 }
 
-.zoom-slider {
+.zoom-control .zoom-slider {
   width: 110px;
-  height: 22px;
-  margin: 0;
-  padding: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.zoom-slider::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border);
-}
-
-.zoom-slider::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  margin-top: -5px;
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.zoom-slider::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border);
-}
-
-.zoom-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.zoom-slider:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
 }
 
 .zoom-label {
@@ -863,56 +819,8 @@ textarea {
   white-space: nowrap;
 }
 
-.tool-slider-track {
-  position: relative;
-  width: 28px;
+.tool-slider .tool-slider-track {
   height: min(130px, 18vh);
-  border-radius: 6px;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.tool-slider-track:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.tool-slider-rail,
-.tool-slider-fill {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 4px;
-  border-radius: 2px;
-  transform: translateX(-50%);
-}
-
-.tool-slider-rail {
-  top: 0;
-  background: var(--border-strong);
-}
-
-.tool-slider-fill {
-  background: var(--accent);
-}
-
-.tool-slider-thumb {
-  position: absolute;
-  left: 50%;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transform: translate(-50%, 50%);
-  box-sizing: border-box;
-}
-
-.tool-slider-track:hover .tool-slider-thumb,
-.tool-slider-track:active .tool-slider-thumb {
-  width: 16px;
-  height: 16px;
 }
 
 /* One dab of the current tool, centred in the workspace while a tool slider is dragged. */
@@ -1458,23 +1366,6 @@ textarea {
   pointer-events: none;
 }
 
-.slider-track {
-  position: relative;
-  height: 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-}
-
-.slider-input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
 .color-picker-preview-row {
   display: flex;
   align-items: center;
@@ -1883,4 +1774,105 @@ textarea {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * The app's one slider look, taken from the status bar's zoom slider: a thin rail and a
+ * round accent thumb. Native range inputs and the vertical ARIA sliders both use it.
+ */
+.slider {
+  --slider-rail: var(--border);
+  --slider-rail-size: 4px;
+  --slider-thumb-size: 14px;
+  --slider-thumb-bg: var(--accent);
+  --slider-thumb-border: 1px solid var(--border-strong);
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* A gradient track (hue, alpha) needs a little more room to read. */
+.slider-gradient {
+  --slider-rail-size: 8px;
+}
+
+.slider:where(input[type="range"]) {
+  display: block;
+  width: 100%;
+  height: 22px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+}
+
+.slider:where(input[type="range"])::-webkit-slider-runnable-track {
+  height: var(--slider-rail-size);
+  border-radius: calc(var(--slider-rail-size) / 2);
+  background: var(--slider-rail);
+}
+
+.slider:where(input[type="range"])::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  margin-top: calc((var(--slider-rail-size) - var(--slider-thumb-size)) / 2);
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
+  border: var(--slider-thumb-border);
+  border-radius: 50%;
+  background: var(--slider-thumb-bg);
+}
+
+.slider:where(input[type="range"])::-moz-range-track {
+  height: var(--slider-rail-size);
+  border-radius: calc(var(--slider-rail-size) / 2);
+  background: var(--slider-rail);
+}
+
+.slider:where(input[type="range"])::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
+  border: var(--slider-thumb-border);
+  border-radius: 50%;
+  background: var(--slider-thumb-bg);
+}
+
+/* The same rail and thumb turned upright; --slider-position runs 0 (bottom) to 1 (top). */
+.slider-vertical {
+  position: relative;
+  width: 22px;
+  height: 130px;
+  touch-action: none;
+}
+
+.slider-vertical .slider-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--slider-rail-size);
+  border-radius: calc(var(--slider-rail-size) / 2);
+  background: var(--slider-rail);
+  transform: translateX(-50%);
+}
+
+.slider-vertical .slider-thumb {
+  position: absolute;
+  left: 50%;
+  /* Like a native range, the thumb stays within the track at both ends. */
+  bottom: calc((100% - var(--slider-thumb-size)) * var(--slider-position, 0));
+  box-sizing: border-box;
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
+  border: var(--slider-thumb-border);
+  border-radius: 50%;
+  background: var(--slider-thumb-bg);
+  transform: translateX(-50%);
 }
