@@ -1204,6 +1204,13 @@ label {
   padding: 2px;
   margin: 0;
   border: none;
+  /*
+   * The autofocused textarea would otherwise draw the browser's focus ring: a
+   * second, solid outline around the box that is never stamped. The dashed
+   * .text-overlay frame is the box's only outline. (An outline takes no room,
+   * so the text sits exactly where it did.)
+   */
+  outline: none;
   background: transparent;
   color: inherit;
   font-family: var(--font);
