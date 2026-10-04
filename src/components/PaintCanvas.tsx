@@ -496,6 +496,44 @@ function hitHandle(rect: Rect, point: Point, tolerance: number): SelectionHandle
   return bestDistance <= tolerance ? best : null
 }
 
+/**
+ * The id of the live shape handle nearest `point` within `tolerance`, or null. The
+ * nearest wins, so a press on an endpoint never grabs an overlapping control handle.
+ */
+function hitShapeHandle(kind: ShapeKind, points: Point[], point: Point, tolerance: number): string | null {
+  let active: string | null = null
+  let best = Infinity
+  for (const handle of shapeHandles(kind, points)) {
+    const reach = distance(point, handle.point)
+    if (reach <= tolerance && reach < best) {
+      best = reach
+      active = handle.id
+    }
+  }
+  return active
+}
+
+/**
+ * Starts dragging handle `active` of a pending shape. A corner handle remembers
+ * its opposite corner so Shift can keep the aspect ratio.
+ */
+function grabShapeHandle(
+  shape: ShapeState,
+  active: string,
+  pointerId: number,
+  point: Point,
+  modifiers: DragModifiers,
+): void {
+  const handles = shapeHandles(shape.kind, shape.points)
+  const corner = handles.find((handle) => handle.id === active)
+  const anchor = handles.find((handle) => handle.id === OPPOSITE_CORNER[active])
+  shape.pointerId = pointerId
+  shape.activeHandle = active
+  shape.dragPoint = point
+  shape.modifiers = modifiers
+  shape.grab = corner && anchor ? { anchor: anchor.point, corner: corner.point } : null
+}
+
 function handleCursor(handle: SelectionHandle): string {
   if (handle === 'n' || handle === 's') return 'ns-resize'
   if (handle === 'e' || handle === 'w') return 'ew-resize'
@@ -2175,27 +2213,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (shape) {
           // A pending shape is only retargeted by grabbing one of its handles.
           if (shape.mode !== 'tweak') return
-          const tolerance = SHAPE_DOT_HIT / zoom
-          // The nearest handle wins, so a press on an endpoint never grabs a
-          // neighbouring control handle that overlaps it.
-          let active: string | null = null
-          let best = Infinity
-          const handles = shapeHandles(shape.kind, shape.points)
-          for (const handle of handles) {
-            const reach = distance(point, handle.point)
-            if (reach <= tolerance && reach < best) {
-              best = reach
-              active = handle.id
-            }
-          }
+          const active = hitShapeHandle(shape.kind, shape.points, point, SHAPE_DOT_HIT / zoom)
           if (active) {
-            shape.pointerId = event.pointerId
-            shape.activeHandle = active
-            shape.dragPoint = point
-            shape.modifiers = dragModifiers(event)
-            const corner = handles.find((handle) => handle.id === active)
-            const anchor = handles.find((handle) => handle.id === OPPOSITE_CORNER[active])
-            shape.grab = corner && anchor ? { anchor: anchor.point, corner: corner.point } : null
+            grabShapeHandle(shape, active, event.pointerId, point, dragModifiers(event))
             return
           }
           // A press outside the handles places the pending shape, then starts the next.
@@ -2491,6 +2511,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (rect && hitHandle(rect, point, HANDLE_HIT / zoom)) return
       // Nor on the part of a floating selection hanging past the image edge.
       if (rect && floatingRef.current && pointInRect(point, rect)) return
+      // A pending shape's handle dragged past the image edge is drawn over the
+      // workspace; a press there grabs it again, and the canvas runs the drag.
+      const shape = shapeRef.current
+      if (shape && shape.mode === 'tweak' && shape.pointerId === null) {
+        const active = hitShapeHandle(shape.kind, shape.points, floorPoint(point), SHAPE_DOT_HIT / zoom)
+        if (active) {
+          if (pointerId === undefined) return
+          canvasRef.current?.setPointerCapture?.(pointerId)
+          grabShapeHandle(shape, active, pointerId, floorPoint(point), { constrain: false, fromCentre: false })
+          return
+        }
+      }
       acceptPending()
       commitFloating()
       updateSelection(null)
