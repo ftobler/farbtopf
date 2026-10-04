@@ -29,7 +29,7 @@ import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, distanceToSegment, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
-import { compositeLayers, drawOver, moveItem, snapshotBytes, thumbnail } from '../core/layers'
+import { compositeLayers, drawOver, moveItem, snapshotBytes, stackBytes, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
   blit,
@@ -206,6 +206,8 @@ export interface PaintCanvasProps {
 interface DocSnapshot {
   layers: Layer[]
   active: number
+  /** Set when every layer's bitmap is replaced, so the snapshot retains the whole stack. */
+  bytes?: number
 }
 
 interface StrokeState {
@@ -1094,9 +1096,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   /** Records an undo step; `before` is the active layer's bitmap as it was before the change. */
   const recordHistory = useCallback(
-    (before: Bitmap) => {
+    (before: Bitmap, bytes?: number) => {
       const stack = layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: before } : layer))
-      historyRef.current.record({ layers: stack, active: activeRef.current })
+      historyRef.current.record({ layers: stack, active: activeRef.current, bytes })
       onDocumentChangeRef.current?.()
     },
     [layers],
@@ -1647,7 +1649,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** Applies a whole-image operation to every layer as one undo step. */
   const applyToLayers = useCallback(
     (transform: (bitmap: Bitmap, bottom: boolean) => Bitmap) => {
-      recordHistory(doc().clone())
+      recordHistory(doc().clone(), stackBytes(layers()))
       const next = currentLayers().map((layer, index) => ({ ...layer, bitmap: transform(layer.bitmap, index === 0) }))
       const { width, height } = next[0].bitmap
       setSize({ width, height })
@@ -1655,7 +1657,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setLayers(next, activeRef.current)
       syncHistory()
     },
-    [currentLayers, doc, recordHistory, setLayers, syncHistory],
+    [currentLayers, doc, layers, recordHistory, setLayers, syncHistory],
   )
 
   /**
@@ -2705,8 +2707,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       acceptPending()
       commitFloating()
       const { width, height } = doc()
-      const source = { layers: currentLayers(), active: activeRef.current }
+      const source: DocSnapshot = { layers: currentLayers(), active: activeRef.current }
       source.layers[source.active] = { ...source.layers[source.active], bitmap: doc().clone() }
+      source.bytes = stackBytes(source.layers)
       event.currentTarget.setPointerCapture?.(event.pointerId)
       canvasResizeRef.current = {
         pointerId: event.pointerId,
