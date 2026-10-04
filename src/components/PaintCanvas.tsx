@@ -1820,6 +1820,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
       },
       redo() {
+        if (!historyRef.current.canRedo) return
         // Nothing that is still being dragged out may keep running past this point.
         abortPointerInteraction()
         // Placing a pending shape or freeform shape would clear the redo stack, so redo
