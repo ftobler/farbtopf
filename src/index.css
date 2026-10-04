@@ -1275,6 +1275,13 @@ label {
   height: 30px;
 }
 
+.text-toolbar-separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
 .color-palette {
   display: flex;
   align-items: center;

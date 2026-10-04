@@ -73,9 +73,11 @@ import { bitmapFromDataUrl } from '../render/image'
 import { insertShape, moveShapeHandle, renderLiveShape, shapeHandles } from '../core/tweaks'
 import type { DragModifiers } from '../core/dragConstraint'
 import { constrainDrag, dragLineEnd, dragModeFor, dragModifiers, keepAspect } from '../core/dragConstraint'
-import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
+import { blendSubpixel, textRenderMode } from '../core/textRaster'
+import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText, renderTextSubpixel } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
+import { AntialiasIcon, SubpixelIcon } from './icons'
 
 export interface PaintCanvasHandle {
   newDocument: (width: number, height: number) => void
@@ -441,7 +443,7 @@ const MIN_TEXT_SIZE = 24
 const DEFAULT_TEXT_WIDTH = 200
 /** How far, in screen pixels, the pointer may wander before a text click becomes a drag. */
 const TEXT_DRAG_SLOP = 4
-const TEXT_TOOLBAR_WIDTH = 300
+const TEXT_TOOLBAR_WIDTH = 384
 const TEXT_TOOLBAR_HEIGHT = 40
 const TEXT_TOOLBAR_GAP = 8
 /** Roughly the height of the font menu; used to decide if it fits below. */
@@ -2122,14 +2124,22 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     editorRef.current = null
     setEditor(null)
     if (current.value.trim().length === 0) return
-    const rendered = renderText(current.value, {
-      ...text,
-      color: colorFor(current.slot),
-      maxWidth: current.width,
-    })
-    if (!rendered) return
-    recordHistory(doc().clone())
-    blitAlphaRotated(doc(), rendered, current.x, current.y, rectCentre(current), current.angle)
+    const options = { ...text, color: colorFor(current.slot), maxWidth: current.width }
+    // Subpixel text needs the pixel grid's R-G-B stripes, so a turned box falls back
+    // to greyscale; hard-edged text is turned with nearest sampling to stay hard.
+    const mode = textRenderMode(text, current.angle)
+    if (mode === 'subpixel') {
+      const coverage = renderTextSubpixel(current.value, options)
+      if (!coverage) return
+      recordHistory(doc().clone())
+      blendSubpixel(doc(), coverage, current.x, current.y, options.color)
+    } else {
+      const rendered = renderText(current.value, { ...options, antialias: mode !== 'aliased' })
+      if (!rendered) return
+      recordHistory(doc().clone())
+      const sampling = mode === 'aliased' ? 'nearest' : 'bilinear'
+      blitAlphaRotated(doc(), rendered, current.x, current.y, rectCentre(current), current.angle, sampling)
+    }
     paint(doc())
     syncHistory()
   }, [colorFor, doc, recordHistory, paint, syncHistory, text])
@@ -3049,6 +3059,32 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             onClick={() => onTextChangeRef.current({ underline: !text.underline })}
           >
             <span className="text-format-glyph glyph-underline">U</span>
+          </button>
+          <span className="text-toolbar-separator" aria-hidden="true" />
+          <button
+            type="button"
+            className="icon-button text-format-button"
+            aria-label="Anti-aliasing"
+            title="Anti-aliasing: smooth text edges (off: hard pixel edges)"
+            aria-pressed={text.antialias}
+            onClick={() => onTextChangeRef.current({ antialias: !text.antialias })}
+          >
+            <AntialiasIcon size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-button text-format-button"
+            aria-label="Subpixel rendering"
+            title={
+              text.antialias
+                ? 'Subpixel rendering: sharper text for LCD screens (upright text only)'
+                : 'Subpixel rendering needs anti-aliasing'
+            }
+            aria-pressed={text.subpixel}
+            disabled={!text.antialias}
+            onClick={() => onTextChangeRef.current({ subpixel: !text.subpixel })}
+          >
+            <SubpixelIcon size={18} />
           </button>
         </div>
       ) : null}

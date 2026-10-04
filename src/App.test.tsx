@@ -253,6 +253,31 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Font' }).textContent).toContain('Georgia')
   })
 
+  it('keeps the anti-aliasing and subpixel choices for the next text box', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+    const canvas = document.querySelector('.paint-canvas') as HTMLCanvasElement
+    const openBox = () => {
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 40, clientY: 40 })
+    }
+    openBox()
+    const antialias = () => screen.getByRole('button', { name: 'Anti-aliasing' })
+    const subpixel = () => screen.getByRole('button', { name: 'Subpixel rendering' }) as HTMLButtonElement
+
+    fireEvent.click(subpixel())
+    expect(subpixel().getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(antialias())
+    expect(antialias().getAttribute('aria-pressed')).toBe('false')
+    expect(subpixel().disabled).toBe(true)
+
+    fireEvent.keyDown(document.querySelector('.text-editor') as HTMLTextAreaElement, { key: 'Escape' })
+    expect(document.querySelector('.text-editor')).toBeNull()
+    openBox()
+    expect(antialias().getAttribute('aria-pressed')).toBe('false')
+    expect(subpixel().getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('shows icons in the file and edit menus', () => {
     render(<App />)
     fireEvent.click(screen.getByText('File'))

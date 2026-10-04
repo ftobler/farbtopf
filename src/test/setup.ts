@@ -38,6 +38,7 @@ function createContextMock() {
     measureText: (text: string) => ({ width: text.length * 6 }),
     fillRect: vi.fn(),
     clearRect: vi.fn(),
+    setTransform: vi.fn(),
     save: vi.fn(),
     restore: vi.fn(),
   }

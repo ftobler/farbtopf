@@ -1,6 +1,8 @@
 import { Bitmap } from '../core/bitmap'
 import type { Rgba } from '../core/color'
 import { toCss } from '../core/color'
+import type { SubpixelCoverage } from '../core/textRaster'
+import { subpixelCoverage, thresholdAlpha } from '../core/textRaster'
 
 export interface TextOptions {
   fontFamily: string
@@ -8,6 +10,10 @@ export interface TextOptions {
   bold: boolean
   italic: boolean
   underline: boolean
+  /** Smooth glyph edges. Off gives hard pixel edges like classic Paint. */
+  antialias: boolean
+  /** ClearType-style LCD rendering; only applies with anti-aliasing on. */
+  subpixel: boolean
 }
 
 export interface TextRenderOptions extends TextOptions {
@@ -43,6 +49,11 @@ export const DEFAULT_TEXT_OPTIONS: TextOptions = {
   bold: false,
   italic: false,
   underline: false,
+  antialias: true,
+  // Off by default: subpixel text only looks right at 100 % on an RGB-stripe LCD.
+  // Zoomed, rotated, scaled, on phones/OLEDs or on BGR panels it shows colour
+  // fringes, and an image outlives the screen it was made on.
+  subpixel: false,
 }
 
 export function fontSizeForBrush(brushSize: number): number {
@@ -104,12 +115,18 @@ function wrapLines(text: string, maxWidth: number, measure: Measure): string[] {
 }
 
 /**
- * Rasterises a (possibly multi-line) string into a transparent bitmap. The first
- * baseline is placed exactly where a CSS line box of the same line-height puts it,
- * so the committed text lines up with the live textarea.
+ * Lays out and rasterises a (possibly multi-line) string. The first baseline is
+ * placed exactly where a CSS line box of the same line-height puts it, so the
+ * committed text lines up with the live textarea. `scaleX` stretches only the
+ * raster horizontally (3 for subpixel coverage); the layout stays in image pixels.
  */
-export function renderText(text: string, options: TextRenderOptions): Bitmap | null {
-  const { color, padding = 2, lineHeight = TEXT_LINE_HEIGHT } = options
+function rasterise(
+  text: string,
+  options: TextRenderOptions,
+  fill: string,
+  scaleX: number,
+): { image: ImageData; width: number; height: number } | null {
+  const { padding = 2, lineHeight = TEXT_LINE_HEIGHT } = options
 
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
@@ -132,14 +149,15 @@ export function renderText(text: string, options: TextRenderOptions): Bitmap | n
   const width = wraps ? Math.max(1, Math.min(Math.ceil(maxWidth), naturalWidth)) : naturalWidth
   const height = Math.ceil(lineHeightPx * lines.length + padding * 2)
 
-  canvas.width = width
+  canvas.width = width * scaleX
   canvas.height = height
 
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
+  if (scaleX !== 1) ctx.setTransform(scaleX, 0, 0, 1, 0, 0)
   ctx.font = font
   ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = toCss(color)
+  ctx.fillStyle = fill
 
   const metrics = ctx.measureText('Mg')
   const ascent = metrics.fontBoundingBoxAscent || options.fontSize * 0.8
@@ -157,5 +175,29 @@ export function renderText(text: string, options: TextRenderOptions): Bitmap | n
     }
   })
 
-  return Bitmap.fromImageData(ctx.getImageData(0, 0, width, height))
+  return { image: ctx.getImageData(0, 0, width * scaleX, height), width, height }
+}
+
+/**
+ * Rasterises text into a transparent bitmap in the text colour. Without
+ * anti-aliasing every pixel is the full colour or nothing (glyph alpha cut at 50 %).
+ */
+export function renderText(text: string, options: TextRenderOptions): Bitmap | null {
+  const raster = rasterise(text, options, toCss(options.color), 1)
+  if (!raster) return null
+  const bitmap = Bitmap.fromImageData(raster.image)
+  return options.antialias === false ? thresholdAlpha(bitmap, options.color) : bitmap
+}
+
+/**
+ * Rasterises text for subpixel (ClearType-style) rendering: the glyphs are drawn
+ * at three times the horizontal resolution and filtered into per-pixel R, G, B
+ * coverage the same size as {@link renderText}'s bitmap. Lay it on the image with
+ * `blendSubpixel`.
+ */
+export function renderTextSubpixel(text: string, options: TextRenderOptions): SubpixelCoverage | null {
+  const raster = rasterise(text, options, '#000', 3)
+  if (!raster) return null
+  const coverage = subpixelCoverage(Bitmap.fromImageData(raster.image))
+  return { ...coverage, width: raster.width }
 }

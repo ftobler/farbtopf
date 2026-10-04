@@ -107,6 +107,27 @@ export function TextIcon(props: IconProps) {
   )
 }
 
+/** A diagonal with a soft halo: smoothed (anti-aliased) edges. */
+export function AntialiasIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 18 18 6" strokeWidth={5.5} opacity={0.3} />
+      <path d="M6 18 18 6" />
+    </Svg>
+  )
+}
+
+/** Red, green and blue stripes: the subpixels of an LCD pixel. */
+export function SubpixelIcon(props: IconProps) {
+  return (
+    <Svg {...props} stroke="none">
+      <rect x="5" y="5" width="4" height="14" rx="1" fill="#e5484d" />
+      <rect x="10" y="5" width="4" height="14" rx="1" fill="#30a46c" />
+      <rect x="15" y="5" width="4" height="14" rx="1" fill="#3e63dd" />
+    </Svg>
+  )
+}
+
 export function PasteIcon(props: IconProps) {
   return (
     <Svg {...props}>

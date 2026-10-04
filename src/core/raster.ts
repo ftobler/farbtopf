@@ -564,10 +564,16 @@ function sampleBilinear(source: Bitmap, u: number, v: number): Rgba {
 }
 
 /**
+ * How a turned bitmap is read: `bilinear` keeps the turned edges smooth, `nearest`
+ * keeps a hard-edged source hard-edged (no blended pixels).
+ */
+export type Sampling = 'bilinear' | 'nearest'
+
+/**
  * Alpha-composites `source`, placed with its top-left at (`dx`,`dy`), over `dst`
  * after turning it by `angle` radians (clockwise on screen) about `centre`. At 0
  * this is exactly {@link blitAlpha}; otherwise each covered pixel samples the
- * source bilinearly so the turned edges stay smooth.
+ * source bilinearly (or, with `nearest`, takes the closest source pixel as is).
  */
 export function blitAlphaRotated(
   dst: Bitmap,
@@ -576,6 +582,7 @@ export function blitAlphaRotated(
   dy: number,
   centre: Point,
   angle: number,
+  sampling: Sampling = 'bilinear',
 ): void {
   if (angle === 0) {
     blitAlpha(dst, source, dx, dy)
@@ -604,7 +611,14 @@ export function blitAlphaRotated(
       const u = settle(centre.x + rx * cos + ry * sin - dx - 0.5)
       const v = settle(centre.y - rx * sin + ry * cos - dy - 0.5)
       if (u <= -1 || v <= -1 || u >= source.width || v >= source.height) continue
-      compositeOver(dst, x, y, sampleBilinear(source, u, v))
+      if (sampling === 'nearest') {
+        const sx = Math.floor(u + 0.5)
+        const sy = Math.floor(v + 0.5)
+        if (sx < 0 || sy < 0 || sx >= source.width || sy >= source.height) continue
+        compositeOver(dst, x, y, source.get(sx, sy))
+      } else {
+        compositeOver(dst, x, y, sampleBilinear(source, u, v))
+      }
     }
   }
 }

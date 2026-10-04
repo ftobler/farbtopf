@@ -929,6 +929,33 @@ describe('blitAlphaRotated', () => {
     expect(dst.get(7, 7).a).toBe(255)
   })
 
+  it('keeps hard edges at an oblique angle with nearest-neighbour sampling', () => {
+    const dst = new Bitmap(20, 20, WHITE)
+    const solid = new Bitmap(6, 6, BLACK)
+    blitAlphaRotated(dst, solid, 7, 7, { x: 10, y: 10 }, Math.PI / 4, 'nearest')
+    let black = 0
+    for (let y = 0; y < 20; y += 1) {
+      for (let x = 0; x < 20; x += 1) {
+        const pixel = dst.get(x, y)
+        expect([0, 255]).toContain(pixel.r)
+        expect(pixel.r === pixel.g && pixel.g === pixel.b).toBe(true)
+        if (pixel.r === 0) black += 1
+      }
+    }
+    expect(dst.get(10, 10)).toEqual(BLACK)
+    // About the 36 pixels of the square, turned.
+    expect(black).toBeGreaterThan(28)
+    expect(black).toBeLessThan(44)
+  })
+
+  it('samples exactly like blitAlpha at 0 with nearest-neighbour sampling', () => {
+    const expected = new Bitmap(20, 20, WHITE)
+    const actual = new Bitmap(20, 20, WHITE)
+    blitAlpha(expected, sample(), 10, 10)
+    blitAlphaRotated(actual, sample(), 10, 10, { x: 12, y: 11 }, 0, 'nearest')
+    expect(Array.from(actual.data)).toEqual(Array.from(expected.data))
+  })
+
   it('clips to the destination', () => {
     const dst = new Bitmap(4, 4)
     blitAlphaRotated(dst, new Bitmap(6, 6, BLACK), -3, -3, { x: 0, y: 0 }, 0.3)
