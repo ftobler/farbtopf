@@ -4,10 +4,16 @@ import { renderShape } from '../shapes'
 import type { ShapeFamily, TweakHandle } from './types'
 
 const HANDLE_IDS = ['p0', 'c1', 'c2', 'p3'] as const
+const LINE_HANDLE_IDS = ['p0', 'p1'] as const
 
+/**
+ * Open paths with draggable ends: the cubic curve [p0, c1, c2, p3], and the straight
+ * line as its two-point case [p0, p1].
+ */
 export const curveFamily: ShapeFamily = {
-  kinds: ['polyline'],
-  insert(_kind, start, end) {
+  kinds: ['polyline', 'line'],
+  insert(kind, start, end) {
+    if (kind === 'line') return [start, end]
     const dx = end.x - start.x
     const dy = end.y - start.y
     return [
@@ -17,10 +23,17 @@ export const curveFamily: ShapeFamily = {
       end,
     ]
   },
-  handles(_kind, points): TweakHandle[] {
+  handles(kind, points): TweakHandle[] {
+    if (kind === 'line') return points.slice(0, 2).map((point, index) => ({ id: LINE_HANDLE_IDS[index], point }))
     return points.slice(0, 4).map((point, index) => ({ id: HANDLE_IDS[index], point }))
   },
-  move(_kind, points, id, point) {
+  move(kind, points, id, point) {
+    if (kind === 'line') {
+      if (points.length < 2) return null
+      if (id === 'p0') return [point, points[1]]
+      if (id === 'p1') return [points[0], point]
+      return null
+    }
     if (points.length < 4) return null
     const [p0, c1, c2, p3] = points
     switch (id) {

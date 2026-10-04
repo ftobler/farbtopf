@@ -65,6 +65,27 @@ export function constrainDrag(
 }
 
 /**
+ * The ends of a line whose `grabbed` end is dragged to `point`, `other` being the
+ * far end as it was when the handle was grabbed. Shift snaps the line to 45° steps
+ * around the end that stays put; Ctrl keeps the line's midpoint where it was, so the
+ * other end mirrors the drag (and Shift then snaps around that midpoint).
+ */
+export function dragLineEnd(
+  other: Point,
+  grabbed: Point,
+  point: Point,
+  modifiers: DragModifiers,
+): { other: Point; grabbed: Point } {
+  const snap = { constrain: modifiers.constrain, fromCentre: false }
+  if (!modifiers.fromCentre) return { other, grabbed: constrainDrag(other, point, 'line', snap).end }
+  // Worked in doubled coordinates, so a midpoint on a half pixel stays exact.
+  const sum = { x: other.x + grabbed.x, y: other.y + grabbed.y }
+  const doubled = constrainDrag(sum, { x: 2 * point.x, y: 2 * point.y }, 'line', snap).end
+  const end = { x: tidy(Math.round(doubled.x / 2)), y: tidy(Math.round(doubled.y / 2)) }
+  return { other: { x: tidy(sum.x - end.x), y: tidy(sum.y - end.y) }, grabbed: end }
+}
+
+/**
  * Where a corner handle lands when the box keeps its aspect ratio: `point`
  * projected onto the diagonal from the fixed `anchor` through the handle's
  * original position `corner`, rounded to a pixel.

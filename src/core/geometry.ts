@@ -50,6 +50,16 @@ export function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
+/** How far `point` lies from the segment between `a` and `b`. */
+export function distanceToSegment(point: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const length = dx * dx + dy * dy
+  if (length === 0) return distance(point, a)
+  const t = clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / length, 0, 1)
+  return distance(point, { x: a.x + t * dx, y: a.y + t * dy })
+}
+
 export function pointsEqual(a: Point, b: Point): boolean {
   return a.x === b.x && a.y === b.y
 }

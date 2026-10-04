@@ -27,7 +27,7 @@ import type { BrushId, CoverageMask } from '../core/brushes'
 import type { Rgba } from '../core/color'
 import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
-import { clamp, clampPoint, distance, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
+import { clamp, clampPoint, distance, distanceToSegment, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
 import { compositeLayers, drawOver, moveItem, snapshotBytes, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
@@ -70,7 +70,7 @@ import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { bitmapFromDataUrl } from '../render/image'
 import { insertShape, moveShapeHandle, renderLiveShape, shapeHandles } from '../core/tweaks'
 import type { DragModifiers } from '../core/dragConstraint'
-import { constrainDrag, dragModeFor, dragModifiers, keepAspect } from '../core/dragConstraint'
+import { constrainDrag, dragLineEnd, dragModeFor, dragModifiers, keepAspect } from '../core/dragConstraint'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
@@ -299,11 +299,25 @@ interface ShapeState {
   dragPoint: Point
   /** The modifier keys held during the drag (Shift constrains, Ctrl draws from the centre). */
   modifiers: DragModifiers
-  /** For a corner handle: the fixed opposite corner and where the handle started, to keep the aspect. */
+  /**
+   * For a corner handle: the fixed opposite corner and where the handle started, to
+   * keep the aspect. For a line end: the other end and where the grabbed end started.
+   */
   grab: { anchor: Point; corner: Point } | null
+  /** While the whole shape is dragged by its body: where the press was and the anchors then. */
+  body: { press: Point; points: Point[] } | null
 }
 
 const OPPOSITE_CORNER: Record<string, string> = { nw: 'se', se: 'nw', ne: 'sw', sw: 'ne' }
+const OTHER_LINE_END: Record<string, string> = { p0: 'p1', p1: 'p0' }
+
+/** The handle id while a shape is dragged by its body rather than a handle. */
+const BODY_HANDLE = 'body'
+
+/** The handle whose start position `grab` pins while `handle` is dragged, if any. */
+function grabAnchorFor(kind: ShapeKind, handle: string): string | undefined {
+  return kind === 'line' ? OTHER_LINE_END[handle] : OPPOSITE_CORNER[handle]
+}
 
 /**
  * Recomputes a pending shape's anchors from its drag point and modifier keys:
@@ -317,6 +331,18 @@ function applyShapeDrag(shape: ShapeState): void {
     return
   }
   if (!shape.activeHandle) return
+  if (shape.activeHandle === BODY_HANDLE && shape.body) {
+    const { press, points } = shape.body
+    const dx = shape.dragPoint.x - press.x
+    const dy = shape.dragPoint.y - press.y
+    shape.points = points.map((point) => ({ x: point.x + dx, y: point.y + dy }))
+    return
+  }
+  if (shape.kind === 'line' && shape.grab) {
+    const { other, grabbed } = dragLineEnd(shape.grab.anchor, shape.grab.corner, shape.dragPoint, shape.modifiers)
+    shape.points = shape.activeHandle === 'p0' ? [grabbed, other] : [other, grabbed]
+    return
+  }
   const target =
     shape.modifiers.constrain && shape.grab
       ? keepAspect(shape.grab.anchor, shape.grab.corner, shape.dragPoint)
@@ -399,6 +425,8 @@ const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', '
 const HANDLE_HIT = 4
 /** Grab radius, in screen pixels, for a live shape's tweak handles. */
 const SHAPE_DOT_HIT = 8
+/** How far, in screen pixels, past the edge of a pending line's stroke its body can be grabbed. */
+const LINE_BODY_HIT = 4
 /** An insertion drag shorter than this many screen pixels counts as a click. */
 const SHAPE_CLICK_SLOP = 5
 const DOUBLE_CLICK_MS = 300
@@ -526,12 +554,13 @@ function grabShapeHandle(
 ): void {
   const handles = shapeHandles(shape.kind, shape.points)
   const corner = handles.find((handle) => handle.id === active)
-  const anchor = handles.find((handle) => handle.id === OPPOSITE_CORNER[active])
+  const anchor = handles.find((handle) => handle.id === grabAnchorFor(shape.kind, active))
   shape.pointerId = pointerId
   shape.activeHandle = active
   shape.dragPoint = point
   shape.modifiers = modifiers
   shape.grab = corner && anchor ? { anchor: anchor.point, corner: corner.point } : null
+  shape.body = null
 }
 
 function handleCursor(handle: SelectionHandle): string {
@@ -2218,6 +2247,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             grabShapeHandle(shape, active, event.pointerId, point, dragModifiers(event))
             return
           }
+          // A line is thin, so its body is grabbed a few pixels either side of the stroke.
+          if (
+            shape.kind === 'line' &&
+            shape.points.length >= 2 &&
+            distanceToSegment(point, shape.points[0], shape.points[1]) <= shape.style.width / 2 + LINE_BODY_HIT / zoom
+          ) {
+            shape.pointerId = event.pointerId
+            shape.activeHandle = BODY_HANDLE
+            shape.dragPoint = point
+            shape.modifiers = dragModifiers(event)
+            shape.grab = null
+            shape.body = { press: point, points: shape.points }
+            return
+          }
           // A press outside the handles places the pending shape, then starts the next.
           commitShape()
         }
@@ -2235,6 +2278,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           dragPoint: point,
           modifiers: dragModifiers(event),
           grab: null,
+          body: null,
         }
         setShape({ kind: shapeKind, mode: 'insert', points })
         return
@@ -2483,6 +2527,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         shape.activeHandle = null
         shape.pointerId = null
         shape.grab = null
+        shape.body = null
         previewShape()
         return
       }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clampPoint,
   distance,
+  distanceToSegment,
   floorPoint,
   normalizeRect,
   pointInRect,
@@ -87,5 +88,23 @@ describe('rectsEqual', () => {
 describe('distance', () => {
   it('uses euclidean distance', () => {
     expect(distance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5)
+  })
+})
+
+describe('distanceToSegment', () => {
+  const a = { x: 0, y: 0 }
+  const b = { x: 10, y: 0 }
+
+  it('measures straight across to the segment between its ends', () => {
+    expect(distanceToSegment({ x: 4, y: 3 }, a, b)).toBe(3)
+  })
+
+  it('measures to the nearest end past either end', () => {
+    expect(distanceToSegment({ x: 13, y: 4 }, a, b)).toBe(5)
+    expect(distanceToSegment({ x: -3, y: -4 }, a, b)).toBe(5)
+  })
+
+  it('measures to the point of a zero-length segment', () => {
+    expect(distanceToSegment({ x: 3, y: 4 }, a, a)).toBe(5)
   })
 })

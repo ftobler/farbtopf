@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Bitmap } from '../bitmap'
 import { BLACK } from '../color'
 import type { Point } from '../geometry'
-import { drawBezier } from '../raster'
+import { drawBezier, drawLine } from '../raster'
 import type { ShapeStyle } from '../shapes'
 import { curveFamily } from './curve'
 
@@ -63,5 +63,32 @@ describe('curveFamily', () => {
     const bitmap = new Bitmap(40, 40)
     curveFamily.render(bitmap, 'polyline', points, { width: 3, stroke: null, fill: BLACK })
     expect(bitmap.data.every((value) => value === 0)).toBe(true)
+  })
+})
+
+describe('curveFamily lines', () => {
+  it('inserts a line as its two ends', () => {
+    expect(curveFamily.insert('line', P0, P3)).toEqual([P0, P3])
+  })
+
+  it('exposes a handle at each end', () => {
+    expect(curveFamily.handles('line', [P0, P3])).toEqual([
+      { id: 'p0', point: P0 },
+      { id: 'p1', point: P3 },
+    ])
+  })
+
+  it('moves only the dragged end', () => {
+    expect(curveFamily.move('line', [P0, P3], 'p0', { x: 1, y: 2 })).toEqual([{ x: 1, y: 2 }, P3])
+    expect(curveFamily.move('line', [P0, P3], 'p1', { x: 9, y: 8 })).toEqual([P0, { x: 9, y: 8 }])
+    expect(curveFamily.move('line', [P0, P3], 'c1', { x: 9, y: 8 })).toBeNull()
+  })
+
+  it('draws exactly the plain round-capped line', () => {
+    const actual = new Bitmap(40, 40)
+    curveFamily.render(actual, 'line', [P0, { x: 33, y: 12 }], STROKE)
+    const expected = new Bitmap(40, 40)
+    drawLine(expected, P0, { x: 33, y: 12 }, STROKE.width, BLACK, 'round')
+    expect(actual.data).toEqual(expected.data)
   })
 })

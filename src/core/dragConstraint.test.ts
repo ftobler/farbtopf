@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { constrainDrag, dragModeFor, dragModifiers, keepAspect } from './dragConstraint'
+import { constrainDrag, dragLineEnd, dragModeFor, dragModifiers, keepAspect } from './dragConstraint'
 
 const NONE = { constrain: false, fromCentre: false }
 const SHIFT = { constrain: true, fromCentre: false }
@@ -119,5 +119,39 @@ describe('keepAspect', () => {
 
   it('returns the point unchanged for a degenerate box', () => {
     expect(keepAspect({ x: 3, y: 3 }, { x: 3, y: 3 }, { x: 7, y: 9 })).toEqual({ x: 7, y: 9 })
+  })
+})
+
+describe('dragLineEnd', () => {
+  const other = { x: 0, y: 0 }
+  const grabbed = { x: 10, y: 0 }
+
+  it('moves the grabbed end to the pointer and leaves the other end alone', () => {
+    expect(dragLineEnd(other, grabbed, { x: 7, y: 9 }, NONE)).toEqual({ other, grabbed: { x: 7, y: 9 } })
+  })
+
+  it('snaps the line to 45 degree steps around the other end with Shift', () => {
+    expect(dragLineEnd(other, grabbed, { x: 20, y: 3 }, SHIFT)).toEqual({ other, grabbed: { x: 20, y: 0 } })
+    expect(dragLineEnd(other, grabbed, { x: 10, y: 9 }, SHIFT)).toEqual({ other, grabbed: { x: 10, y: 10 } })
+    expect(dragLineEnd(other, grabbed, { x: -1, y: -12 }, SHIFT)).toEqual({ other, grabbed: { x: 0, y: -12 } })
+  })
+
+  it('mirrors the other end about the midpoint the line had when grabbed with Ctrl', () => {
+    expect(dragLineEnd(other, grabbed, { x: 12, y: 4 }, CTRL)).toEqual({
+      other: { x: -2, y: -4 },
+      grabbed: { x: 12, y: 4 },
+    })
+  })
+
+  it('keeps a half-pixel midpoint exact with Ctrl', () => {
+    const result = dragLineEnd({ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 8, y: 2 }, CTRL)
+    expect(result).toEqual({ other: { x: -3, y: -2 }, grabbed: { x: 8, y: 2 } })
+  })
+
+  it('snaps around the midpoint with Shift and Ctrl together', () => {
+    expect(dragLineEnd(other, grabbed, { x: 14, y: 1 }, BOTH)).toEqual({
+      other: { x: -4, y: 0 },
+      grabbed: { x: 14, y: 0 },
+    })
   })
 })
