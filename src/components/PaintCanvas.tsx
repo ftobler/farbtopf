@@ -1423,6 +1423,47 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     paint(preview)
   }, [paint])
 
+  /** Repaints what is on screen: any pending shape, curve or lifted selection included. */
+  const repaintCurrentView = useCallback(() => {
+    const shape = shapeRef.current
+    if (shape) {
+      const preview = shape.base.clone()
+      renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
+      paint(preview)
+    } else if (polylineRef.current) {
+      previewPolyline()
+    } else if (floatingRef.current) {
+      renderPreview()
+    } else {
+      paint(doc())
+    }
+  }, [doc, paint, previewPolyline, renderPreview])
+
+  /**
+   * Repaints once more on the next frame after a new image is loaded or pasted.
+   * The load paints synchronously too, but some browsers keep showing the old
+   * pixels until the user interacts; a repaint in a fresh frame settles it.
+   */
+  const repaintFrameRef = useRef<number | null>(null)
+  const scheduleRepaint = useCallback(() => {
+    if (repaintFrameRef.current !== null) return
+    const run = () => {
+      repaintFrameRef.current = null
+      repaintCurrentView()
+    }
+    repaintFrameRef.current =
+      typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : window.setTimeout(run, 0)
+  }, [repaintCurrentView])
+  useEffect(
+    () => () => {
+      if (repaintFrameRef.current === null) return
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(repaintFrameRef.current)
+      else window.clearTimeout(repaintFrameRef.current)
+      repaintFrameRef.current = null
+    },
+    [],
+  )
+
   /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
   const finishPolyline = useCallback(() => {
     const polyline = polylineRef.current
@@ -1491,19 +1532,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   // what is on screen: a pending shape, curve or lifted selection included.
   useEffect(() => {
     if (!showMiniature) return
-    const shape = shapeRef.current
-    if (shape) {
-      const preview = shape.base.clone()
-      renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
-      paint(preview)
-    } else if (polylineRef.current) {
-      previewPolyline()
-    } else if (floatingRef.current) {
-      renderPreview()
-    } else {
-      paint(doc())
-    }
-  }, [showMiniature, paint, doc, previewPolyline, renderPreview])
+    repaintCurrentView()
+  }, [showMiniature, repaintCurrentView])
 
   useEffect(() => {
     if (!polylineActive) return
@@ -1590,8 +1620,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setLayers([{ id: 1, name: 'Background', bitmap }], 0)
       updateSelection(null)
       syncHistory()
+      scheduleRepaint()
     },
-    [setLayers, syncHistory, updateSelection],
+    [scheduleRepaint, setLayers, syncHistory, updateSelection],
   )
 
   const restore = useCallback(
@@ -1721,6 +1752,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       renderPreview()
       updateSelection({ x, y, width: bitmap.width, height: bitmap.height })
       syncHistory()
+      scheduleRepaint()
     },
     [
       applyToLayers,
@@ -1730,6 +1762,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       recordHistory,
       renderPreview,
       resizeTo,
+      scheduleRepaint,
       syncHistory,
       updateSelection,
       visibleOrigin,
