@@ -69,6 +69,8 @@ import { backingScale } from '../core/zoom'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { bitmapFromDataUrl } from '../render/image'
 import { insertShape, moveShapeHandle, renderLiveShape, shapeHandles } from '../core/tweaks'
+import type { DragModifiers } from '../core/dragConstraint'
+import { constrainDrag, dragModeFor, dragModifiers, keepAspect } from '../core/dragConstraint'
 import { DEFAULT_TEXT_OPTIONS, FONT_FAMILIES, TEXT_LINE_HEIGHT, renderText } from '../render/text'
 import type { TextOptions } from '../render/text'
 import { Dropdown, MenuItem } from './Dropdown'
@@ -293,6 +295,33 @@ interface ShapeState {
   activeHandle: string | null
   /** Where the insertion drag started. */
   insertStart: Point
+  /** The latest pointer position of the drag, so a modifier key can redo it without a move. */
+  dragPoint: Point
+  /** The modifier keys held during the drag (Shift constrains, Ctrl draws from the centre). */
+  modifiers: DragModifiers
+  /** For a corner handle: the fixed opposite corner and where the handle started, to keep the aspect. */
+  grab: { anchor: Point; corner: Point } | null
+}
+
+const OPPOSITE_CORNER: Record<string, string> = { nw: 'se', se: 'nw', ne: 'sw', sw: 'ne' }
+
+/**
+ * Recomputes a pending shape's anchors from its drag point and modifier keys:
+ * inserting honours Shift (square / 45° line) and Ctrl (from the centre), and a
+ * corner handle keeps the aspect ratio while Shift is held.
+ */
+function applyShapeDrag(shape: ShapeState): void {
+  if (shape.mode === 'insert') {
+    const { start, end } = constrainDrag(shape.insertStart, shape.dragPoint, dragModeFor(shape.kind), shape.modifiers)
+    shape.points = insertShape(shape.kind, start, end)
+    return
+  }
+  if (!shape.activeHandle) return
+  const target =
+    shape.modifiers.constrain && shape.grab
+      ? keepAspect(shape.grab.anchor, shape.grab.corner, shape.dragPoint)
+      : shape.dragPoint
+  shape.points = moveShapeHandle(shape.kind, shape.points, shape.activeHandle, target)
 }
 
 /** The part of a pending shape the overlay redraws from. */
@@ -1433,6 +1462,30 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [shape])
 
+  // Pressing or releasing Shift or Ctrl mid-drag reshapes the pending shape at
+  // once, from the last pointer position, without waiting for the pointer to move.
+  const shapeActive = shape !== null
+  useEffect(() => {
+    if (!shapeActive) return
+    const onModifier = (event: KeyboardEvent) => {
+      if (event.key !== 'Shift' && event.key !== 'Control' && event.key !== 'Meta') return
+      const current = shapeRef.current
+      if (!current || current.pointerId === null) return
+      if (current.mode !== 'insert' && !current.activeHandle) return
+      const next = dragModifiers(event)
+      if (next.constrain === current.modifiers.constrain && next.fromCentre === current.modifiers.fromCentre) return
+      current.modifiers = next
+      applyShapeDrag(current)
+      previewShape()
+    }
+    window.addEventListener('keydown', onModifier)
+    window.addEventListener('keyup', onModifier)
+    return () => {
+      window.removeEventListener('keydown', onModifier)
+      window.removeEventListener('keyup', onModifier)
+    }
+  }, [shapeActive, previewShape])
+
   const resetDocument = useCallback(
     (bitmap: Bitmap) => {
       polylineRef.current = null
@@ -2127,7 +2180,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           // neighbouring control handle that overlaps it.
           let active: string | null = null
           let best = Infinity
-          for (const handle of shapeHandles(shape.kind, shape.points)) {
+          const handles = shapeHandles(shape.kind, shape.points)
+          for (const handle of handles) {
             const reach = distance(point, handle.point)
             if (reach <= tolerance && reach < best) {
               best = reach
@@ -2137,6 +2191,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           if (active) {
             shape.pointerId = event.pointerId
             shape.activeHandle = active
+            shape.dragPoint = point
+            shape.modifiers = dragModifiers(event)
+            const corner = handles.find((handle) => handle.id === active)
+            const anchor = handles.find((handle) => handle.id === OPPOSITE_CORNER[active])
+            shape.grab = corner && anchor ? { anchor: anchor.point, corner: corner.point } : null
             return
           }
           // A press outside the handles places the pending shape, then starts the next.
@@ -2153,6 +2212,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           pointerId: event.pointerId,
           activeHandle: null,
           insertStart: point,
+          dragPoint: point,
+          modifiers: dragModifiers(event),
+          grab: null,
         }
         setShape({ kind: shapeKind, mode: 'insert', points })
         return
@@ -2295,13 +2357,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const shape = shapeRef.current
       if (shape) {
         if (shape.pointerId === null || shape.pointerId !== event.pointerId) return
-        if (shape.mode === 'insert') {
-          shape.points = insertShape(shape.kind, shape.insertStart, free)
-        } else if (shape.activeHandle) {
-          shape.points = moveShapeHandle(shape.kind, shape.points, shape.activeHandle, free)
-        } else {
-          return
-        }
+        if (shape.mode !== 'insert' && !shape.activeHandle) return
+        shape.dragPoint = free
+        shape.modifiers = dragModifiers(event)
+        applyShapeDrag(shape)
         previewShape()
         return
       }
@@ -2396,11 +2455,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             cancelShape()
             return
           }
-          shape.points = insertShape(shape.kind, shape.insertStart, end)
+          shape.dragPoint = end
+          shape.modifiers = dragModifiers(event)
+          applyShapeDrag(shape)
           shape.mode = 'tweak'
         }
         shape.activeHandle = null
         shape.pointerId = null
+        shape.grab = null
         previewShape()
         return
       }
