@@ -34,6 +34,7 @@ import type { Layer, LayerInfo } from '../core/layers'
 import {
   blit,
   blitAlpha,
+  blitAlphaRotated,
   crop,
   drawLine,
   extractRegion,
@@ -52,6 +53,7 @@ import { canvasCursor } from '../core/toolCursor'
 import { blendToward } from '../core/opacity'
 import type { Random } from '../core/random'
 import type { BrushShape } from '../core/raster'
+import { ROTATE_HANDLE_OFFSET, rectCentre, rotationToward, unrotateAround } from '../core/rotation'
 import {
   applyMask,
   fillSelection,
@@ -364,11 +366,13 @@ interface TextEditorState {
   height: number
   value: string
   slot: 'primary' | 'secondary'
+  /** Turn about the box centre, in radians clockwise, as for a shape. */
+  angle: number
 }
 
 interface TextResizeState {
   pointerId: number
-  handle: SelectionHandle
+  handle: SelectionHandle | 'rotate'
 }
 
 /** A text box being dragged out on the canvas, before the editor opens. */
@@ -614,6 +618,18 @@ function resizeTextBox(
   if (handle.includes('n')) top = clamp(Math.round(point.y), 0, bottom - MIN_TEXT_SIZE)
   if (handle.includes('s')) bottom = clamp(Math.round(point.y), top + MIN_TEXT_SIZE, height)
   return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+/**
+ * The CSS that turns a text box's editor and outline about the box centre, so the
+ * live preview matches what `blitAlphaRotated` stamps. Nothing for an upright box.
+ */
+function textBoxTurn(box: Rect & { angle: number }, zoom: number): { transform?: string; transformOrigin?: string } {
+  if (box.angle === 0) return {}
+  return {
+    transform: `rotate(${box.angle}rad)`,
+    transformOrigin: `${(box.width * zoom) / 2}px ${(box.height * zoom) / 2}px`,
+  }
 }
 
 /** Grows `rect` to the minimum text box size and slides it back inside the canvas. */
@@ -2113,7 +2129,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     })
     if (!rendered) return
     recordHistory(doc().clone())
-    blitAlpha(doc(), rendered, current.x, current.y)
+    blitAlphaRotated(doc(), rendered, current.x, current.y, rectCentre(current), current.angle)
     paint(doc())
     syncHistory()
   }, [colorFor, doc, recordHistory, paint, syncHistory, text])
@@ -2470,7 +2486,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (cancelled) return
         const lineHeight = Math.round(text.fontSize * TEXT_LINE_HEIGHT) + 4
         const rect = placeTextBox(place.start, toPoint(event), TEXT_DRAG_SLOP / zoom, lineHeight, size.width, size.height)
-        const next: TextEditorState = { ...rect, value: '', slot: 'primary' }
+        const next: TextEditorState = { ...rect, value: '', slot: 'primary', angle: 0 }
         editorRef.current = next
         setEditor(next)
         return
@@ -2745,7 +2761,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   )
 
   const handleTextHandleDown = useCallback(
-    (event: ReactPointerEvent<HTMLSpanElement>, handle: SelectionHandle) => {
+    (event: ReactPointerEvent<HTMLSpanElement>, handle: SelectionHandle | 'rotate') => {
       if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
@@ -2763,8 +2779,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const current = editorRef.current
       if (!current) return
       const point = clientToCanvas(event.clientX, event.clientY)
-      const next = resizeTextBox(current, drag.handle, point, size.width, size.height)
-      const updated = { ...current, ...next }
+      const centre = rectCentre(current)
+      // Like a shape's: the rotate handle turns the box about its centre, and the
+      // resize handles act along the turned box's own axes.
+      const updated =
+        drag.handle === 'rotate'
+          ? { ...current, angle: rotationToward(centre, point) }
+          : {
+              ...current,
+              ...resizeTextBox(current, drag.handle, unrotateAround(point, centre, current.angle), size.width, size.height),
+            }
       editorRef.current = updated
       setEditor(updated)
     },
@@ -3040,6 +3064,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             top: editor.y * zoom,
             width: editor.width * zoom,
             height: editor.height * zoom,
+            ...textBoxTurn(editor, zoom),
             fontFamily: text.fontFamily,
             fontSize: text.fontSize * zoom,
             fontWeight: text.bold ? 700 : 400,
@@ -3075,8 +3100,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
             top: editor.y * zoom,
             width: editor.width * zoom,
             height: editor.height * zoom,
+            ...textBoxTurn(editor, zoom),
           }}
         >
+          <span
+            className="text-rotate-handle shape-rotate-handle"
+            title="Rotate"
+            style={{ top: -ROTATE_HANDLE_OFFSET * zoom }}
+            onPointerDown={(event) => handleTextHandleDown(event, 'rotate')}
+            onPointerMove={handleTextHandleMove}
+            onPointerUp={handleTextHandleUp}
+            onPointerCancel={handleTextHandleUp}
+          />
           {SELECTION_HANDLES.map((handle) => (
             <span
               key={handle}

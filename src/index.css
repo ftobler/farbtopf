@@ -1226,6 +1226,26 @@ label {
   touch-action: none;
 }
 
+/* The same dot as a pending shape's rotate handle (.shape-overlay .shape-rotate-handle). */
+.text-rotate-handle {
+  position: absolute;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.text-rotate-handle:active {
+  cursor: grabbing;
+}
+
 .text-handle-nw { left: 0; top: 0; }
 .text-handle-n { left: 50%; top: 0; }
 .text-handle-ne { left: 100%; top: 0; }

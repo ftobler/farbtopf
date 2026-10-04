@@ -6,6 +6,8 @@ import type { Point } from './geometry'
 import {
   bezierPoints,
   blit,
+  blitAlpha,
+  blitAlphaRotated,
   crop,
   drawBezier,
   drawEllipse,
@@ -874,5 +876,62 @@ describe('invertColors', () => {
   it('keeps the alpha channel', () => {
     const source = new Bitmap(1, 1, { r: 10, g: 20, b: 30, a: 40 })
     expect(invertColors(source).get(0, 0)).toEqual({ r: 245, g: 235, b: 225, a: 40 })
+  })
+})
+
+describe('blitAlphaRotated', () => {
+  const HALF_RED = rgba(255, 0, 0, 128)
+
+  function sample(): Bitmap {
+    const src = new Bitmap(4, 2)
+    src.set(0, 0, RED_OPAQUE)
+    src.set(1, 0, HALF_RED)
+    src.set(0, 1, BLACK)
+    return src
+  }
+
+  it('matches blitAlpha exactly at 0', () => {
+    const expected = new Bitmap(20, 20, WHITE)
+    const actual = new Bitmap(20, 20, WHITE)
+    blitAlpha(expected, sample(), 10, 10)
+    blitAlphaRotated(actual, sample(), 10, 10, { x: 12, y: 11 }, 0)
+    expect(Array.from(actual.data)).toEqual(Array.from(expected.data))
+  })
+
+  it('turns the source a quarter clockwise about the centre', () => {
+    const dst = new Bitmap(20, 20)
+    blitAlphaRotated(dst, sample(), 10, 10, { x: 12, y: 11 }, Math.PI / 2)
+    // The top-left pixel lands top-right of the turned box, the one below it to its left.
+    expect(dst.get(12, 9)).toEqual(RED_OPAQUE)
+    expect(dst.get(11, 9)).toEqual(BLACK)
+    expect(dst.get(12, 10)).toEqual(HALF_RED)
+    expect(dst.get(10, 9)).toEqual(rgba(0, 0, 0, 0))
+  })
+
+  it('turns the source half way round about the centre', () => {
+    const dst = new Bitmap(20, 20)
+    blitAlphaRotated(dst, sample(), 10, 10, { x: 12, y: 11 }, Math.PI)
+    expect(dst.get(13, 11)).toEqual(RED_OPAQUE)
+    expect(dst.get(13, 10)).toEqual(BLACK)
+    expect(dst.get(12, 11)).toEqual(HALF_RED)
+  })
+
+  it('blends partial pixels at an oblique angle over what is underneath', () => {
+    const dst = new Bitmap(20, 20, WHITE)
+    const solid = new Bitmap(6, 6, BLACK)
+    blitAlphaRotated(dst, solid, 7, 7, { x: 10, y: 10 }, Math.PI / 4)
+    expect(dst.get(10, 10)).toEqual(BLACK)
+    expect(dst.get(0, 0)).toEqual(WHITE)
+    // The turned square reaches past its unturned edges along the axes...
+    expect(dst.get(10, 6)).not.toEqual(WHITE)
+    // ...and pulls in from its unturned corners, which end up only partly covered or bare.
+    expect(dst.get(7, 7)).not.toEqual(BLACK)
+    expect(dst.get(7, 7).a).toBe(255)
+  })
+
+  it('clips to the destination', () => {
+    const dst = new Bitmap(4, 4)
+    blitAlphaRotated(dst, new Bitmap(6, 6, BLACK), -3, -3, { x: 0, y: 0 }, 0.3)
+    expect(dst.get(0, 0)).toEqual(BLACK)
   })
 })

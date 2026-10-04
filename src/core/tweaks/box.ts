@@ -2,13 +2,13 @@ import type { Bitmap } from '../bitmap'
 import type { Point, Rect } from '../geometry'
 import { normalizeRect } from '../geometry'
 import { drawEllipse, drawPolyline, fillPolygon } from '../raster'
+import { rectCentre, rotateAround, rotateHandlePoint, rotationToward, unrotateAround } from '../rotation'
 import type { ShapeKind, ShapeStyle } from '../shapes'
 import { fillBox, outlineBox, renderShape, shapePolygon } from '../shapes'
 import { DEFAULT_RADIUS_RATIO, RADIUS_ID, boxHandles, maxRadius, resizeBox, scaleRadius } from './shared'
 import type { ShapeFamily, TweakHandle } from './types'
 
 const ROTATE_ID = 'rotate'
-const ROTATE_HANDLE_OFFSET = 18
 
 function radiusFromPoints(points: readonly Point[]): number {
   if (points.length < 3) return 0
@@ -20,20 +20,7 @@ function rotationFromPoints(points: readonly Point[]): number {
 }
 
 function boxCentre(points: readonly Point[]): Point {
-  const box = normalizeRect(points[0], points[1])
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-}
-
-function rotateAround(point: Point, centre: Point, angle: number): Point {
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  const dx = point.x - centre.x
-  const dy = point.y - centre.y
-  return { x: centre.x + dx * cos - dy * sin, y: centre.y + dx * sin + dy * cos }
-}
-
-function unrotateAround(point: Point, centre: Point, angle: number): Point {
-  return rotateAround(point, centre, -angle)
+  return rectCentre(normalizeRect(points[0], points[1]))
 }
 
 function rotatePoints(points: readonly Point[], centre: Point, angle: number): Point[] {
@@ -70,11 +57,7 @@ function boxHandleSet(points: readonly Point[]): TweakHandle[] {
 }
 
 function rotateHandle(points: readonly Point[]): TweakHandle {
-  const box = normalizeRect(points[0], points[1])
-  const centre = boxCentre(points)
-  const angle = rotationFromPoints(points)
-  const local: Point = { x: box.x + box.width / 2, y: box.y - ROTATE_HANDLE_OFFSET }
-  return { id: ROTATE_ID, point: rotateAround(local, centre, angle) }
+  return { id: ROTATE_ID, point: rotateHandlePoint(normalizeRect(points[0], points[1]), rotationFromPoints(points)) }
 }
 
 function boxHandlesWithRotate(points: readonly Point[]): TweakHandle[] {
@@ -117,7 +100,7 @@ function moveBox(points: readonly Point[], id: string, point: Point): Point[] | 
   const angle = rotationFromPoints(points)
   const centre = boxCentre(points)
   if (id === ROTATE_ID) {
-    const next = Math.atan2(point.y - centre.y, point.x - centre.x) + Math.PI / 2
+    const next = rotationToward(centre, point)
     return [points[0], points[1], { x: 0, y: next }]
   }
   const local = unrotateAround(point, centre, angle)
@@ -133,7 +116,7 @@ function moveRounded(points: readonly Point[], id: string, point: Point): Point[
   const centre = boxCentre(points)
   const radius = radiusFromPoints(points)
   if (id === ROTATE_ID) {
-    const next = Math.atan2(point.y - centre.y, point.x - centre.x) + Math.PI / 2
+    const next = rotationToward(centre, point)
     return [points[0], points[1], { x: radius, y: next }]
   }
   const local = unrotateAround(point, centre, angle)

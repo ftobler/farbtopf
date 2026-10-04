@@ -508,24 +508,103 @@ export function blitAlpha(dst: Bitmap, source: Bitmap, dx: number, dy: number): 
   for (let y = 0; y < source.height; y += 1) {
     for (let x = 0; x < source.width; x += 1) {
       const src = source.get(x, y)
-      const sx = dx + x
-      const sy = dy + y
-      if (!dst.contains(sx, sy)) continue
-      const sa = src.a / 255
-      if (sa === 0) continue
-      if (sa === 1) {
-        dst.set(sx, sy, src)
-        continue
-      }
-      const under = dst.get(sx, sy)
-      const ua = under.a / 255
-      const outA = sa + ua * (1 - sa)
-      dst.set(sx, sy, {
-        r: (src.r * sa + under.r * ua * (1 - sa)) / outA,
-        g: (src.g * sa + under.g * ua * (1 - sa)) / outA,
-        b: (src.b * sa + under.b * ua * (1 - sa)) / outA,
-        a: outA * 255,
-      })
+      compositeOver(dst, dx + x, dy + y, src)
+    }
+  }
+}
+
+/** Composites `src` over the pixel of `dst` at (`x`,`y`), if there is one. */
+function compositeOver(dst: Bitmap, x: number, y: number, src: Rgba): void {
+  if (!dst.contains(x, y)) return
+  const sa = src.a / 255
+  if (sa === 0) return
+  if (sa === 1) {
+    dst.set(x, y, src)
+    return
+  }
+  const under = dst.get(x, y)
+  const ua = under.a / 255
+  const outA = sa + ua * (1 - sa)
+  dst.set(x, y, {
+    r: (src.r * sa + under.r * ua * (1 - sa)) / outA,
+    g: (src.g * sa + under.g * ua * (1 - sa)) / outA,
+    b: (src.b * sa + under.b * ua * (1 - sa)) / outA,
+    a: outA * 255,
+  })
+}
+
+/** Snaps values a rounding error away from a whole number onto it, so quarter turns sample exactly. */
+const settle = (value: number) => Math.round(value * 1e9) / 1e9
+
+/** The colour of `source` at continuous pixel coordinates (`u`,`v`), bilinearly blended; transparent outside. */
+function sampleBilinear(source: Bitmap, u: number, v: number): Rgba {
+  const x0 = Math.floor(u)
+  const y0 = Math.floor(v)
+  const fx = u - x0
+  const fy = v - y0
+  let r = 0
+  let g = 0
+  let b = 0
+  let a = 0
+  const add = (x: number, y: number, weight: number) => {
+    if (weight === 0) return
+    const pixel = source.get(x, y)
+    const alpha = pixel.a * weight
+    r += pixel.r * alpha
+    g += pixel.g * alpha
+    b += pixel.b * alpha
+    a += alpha
+  }
+  add(x0, y0, (1 - fx) * (1 - fy))
+  add(x0 + 1, y0, fx * (1 - fy))
+  add(x0, y0 + 1, (1 - fx) * fy)
+  add(x0 + 1, y0 + 1, fx * fy)
+  if (a === 0) return { r: 0, g: 0, b: 0, a: 0 }
+  return { r: r / a, g: g / a, b: b / a, a }
+}
+
+/**
+ * Alpha-composites `source`, placed with its top-left at (`dx`,`dy`), over `dst`
+ * after turning it by `angle` radians (clockwise on screen) about `centre`. At 0
+ * this is exactly {@link blitAlpha}; otherwise each covered pixel samples the
+ * source bilinearly so the turned edges stay smooth.
+ */
+export function blitAlphaRotated(
+  dst: Bitmap,
+  source: Bitmap,
+  dx: number,
+  dy: number,
+  centre: Point,
+  angle: number,
+): void {
+  if (angle === 0) {
+    blitAlpha(dst, source, dx, dy)
+    return
+  }
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const corners = [
+    { x: dx, y: dy },
+    { x: dx + source.width, y: dy },
+    { x: dx, y: dy + source.height },
+    { x: dx + source.width, y: dy + source.height },
+  ].map((p) => ({
+    x: centre.x + (p.x - centre.x) * cos - (p.y - centre.y) * sin,
+    y: centre.y + (p.x - centre.x) * sin + (p.y - centre.y) * cos,
+  }))
+  const left = Math.max(0, Math.floor(Math.min(...corners.map((p) => p.x))) - 1)
+  const top = Math.max(0, Math.floor(Math.min(...corners.map((p) => p.y))) - 1)
+  const right = Math.min(dst.width, Math.ceil(Math.max(...corners.map((p) => p.x))) + 1)
+  const bottom = Math.min(dst.height, Math.ceil(Math.max(...corners.map((p) => p.y))) + 1)
+  for (let y = top; y < bottom; y += 1) {
+    const ry = y + 0.5 - centre.y
+    for (let x = left; x < right; x += 1) {
+      const rx = x + 0.5 - centre.x
+      // Back into the upright source: turn the pixel centre by -angle.
+      const u = settle(centre.x + rx * cos + ry * sin - dx - 0.5)
+      const v = settle(centre.y - rx * sin + ry * cos - dy - 0.5)
+      if (u <= -1 || v <= -1 || u >= source.width || v >= source.height) continue
+      compositeOver(dst, x, y, sampleBilinear(source, u, v))
     }
   }
 }
