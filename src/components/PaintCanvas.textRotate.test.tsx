@@ -79,8 +79,8 @@ function setup() {
     fireEvent.pointerMove(handle, { pointerId: 2, clientX: to[0], clientY: to[1] })
     fireEvent.pointerUp(handle, { pointerId: 2, clientX: to[0], clientY: to[1] })
   }
-  /** Drags the rotate handle from above the centre to `to`. */
-  const rotateTo = (to: [number, number]) => dragHandle('.text-rotate-handle', [55, -8], to)
+  /** Drags the rotate handle from its spot left of the box (-8,27) to `to`. */
+  const rotateTo = (to: [number, number]) => dragHandle('.text-rotate-handle', [-8, 27], to)
   return { canvas, container, editor, overlay, open, dragHandle, rotateTo, shown, onHistoryChange }
 }
 
@@ -100,10 +100,49 @@ describe('PaintCanvas rotatable text box', () => {
     expect(overlay()?.style.transform).toBe('')
   })
 
+  it('puts the rotate handle left of the box, vertically centred, clear of the toolbar', () => {
+    const { container, open } = setup()
+    open()
+    const handle = container.querySelector<HTMLElement>('.text-overlay .text-rotate-handle')
+    expect(handle?.style.left).toBe('-18px')
+    expect(handle?.style.top).toBe('50%')
+    const toolbar = container.querySelector('.text-toolbar')
+    expect(toolbar?.contains(handle ?? null)).toBe(false)
+  })
+
+  it('does not commit the box when its rotate handle is pressed', () => {
+    const { container, open, editor, onHistoryChange } = setup()
+    open()
+    const handle = container.querySelector<HTMLElement>('.text-rotate-handle')
+    if (!handle) throw new Error('no rotate handle')
+    fireEvent.mouseDown(handle, { button: 0, clientX: -8, clientY: 27 })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 2, clientX: -8, clientY: 27 })
+    expect(editor()).not.toBeNull()
+    expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
+  })
+
+  it('keeps the angle under the pointer: no jump on grab, then follows it', () => {
+    const { container, open, editor } = setup()
+    open()
+    const handle = container.querySelector<HTMLElement>('.text-rotate-handle')
+    if (!handle) throw new Error('no rotate handle')
+    handle.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 2, clientX: -8, clientY: 27 })
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: -8, clientY: 27 })
+    expect(turn(editor())).toBeCloseTo(0, 6)
+    // Up and to the left of the centre (55,27) by 45°: an eighth turn clockwise.
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: 15, clientY: -13 })
+    expect(turn(editor())).toBeCloseTo(Math.PI / 4, 6)
+    // Below the centre: a quarter turn anticlockwise.
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: 55, clientY: 90 })
+    expect(turn(editor())).toBeCloseTo(-Math.PI / 2, 6)
+    fireEvent.pointerUp(handle, { pointerId: 2, clientX: 55, clientY: 90 })
+  })
+
   it('turns the box about its centre when the rotate handle is dragged, without recording a step', () => {
     const { open, rotateTo, editor, overlay, onHistoryChange } = setup()
     open()
-    rotateTo([95, 27])
+    rotateTo([55, 0])
     expect(turn(editor())).toBeCloseTo(Math.PI / 2, 6)
     expect(turn(overlay())).toBeCloseTo(Math.PI / 2, 6)
     // Both turn about the box centre, in the frame's pixels.
@@ -116,7 +155,7 @@ describe('PaintCanvas rotatable text box', () => {
   it('keeps typing into a turned box', () => {
     const { open, rotateTo, editor } = setup()
     const textarea = open()
-    rotateTo([95, 27])
+    rotateTo([55, 0])
     fireEvent.change(textarea, { target: { value: 'hello' } })
     expect(editor()?.value).toBe('hello')
     expect(turn(editor())).toBeCloseTo(Math.PI / 2, 6)
@@ -125,7 +164,7 @@ describe('PaintCanvas rotatable text box', () => {
   it('resizes a turned box along its own axes', () => {
     const { open, rotateTo, dragHandle, editor } = setup()
     open()
-    rotateTo([95, 27])
+    rotateTo([55, 0])
     // Turned a quarter clockwise, the box's right edge faces down: its handle sits at (55,72).
     dragHandle('.text-handle-e', [55, 72], [55, 62])
     expect(editor()?.style.width).toBe('80px')
@@ -135,7 +174,7 @@ describe('PaintCanvas rotatable text box', () => {
   it('stamps the text at the same angle as the preview', () => {
     const { open, rotateTo, editor, shown, onHistoryChange } = setup()
     const textarea = open()
-    rotateTo([55, 90])
+    rotateTo([95, 27])
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(editor()).toBeNull()
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
@@ -158,7 +197,7 @@ describe('PaintCanvas rotatable text box', () => {
   it('discards a turned box on Escape and opens the next one upright', () => {
     const { open, rotateTo, editor, onHistoryChange } = setup()
     const textarea = open()
-    rotateTo([55, 90])
+    rotateTo([95, 27])
     fireEvent.keyDown(textarea, { key: 'Escape' })
     expect(editor()).toBeNull()
     expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
@@ -169,7 +208,7 @@ describe('PaintCanvas rotatable text box', () => {
   it('commits a turned box when the canvas is clicked outside it', () => {
     const { canvas, open, rotateTo, editor, shown } = setup()
     open()
-    rotateTo([55, 90])
+    rotateTo([95, 27])
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 3, clientX: 5, clientY: 90 })
     expect(editor()).toBeNull()
     expect(shown(95, 42)).toEqual(rgbaOf(RED))

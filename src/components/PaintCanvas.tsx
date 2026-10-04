@@ -2790,11 +2790,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (!current) return
       const point = clientToCanvas(event.clientX, event.clientY)
       const centre = rectCentre(current)
-      // Like a shape's: the rotate handle turns the box about its centre, and the
-      // resize handles act along the turned box's own axes.
+      // Like a shape's: the rotate handle (on the left, clear of the toolbar above)
+      // turns the box about its centre, and the resize handles act along the
+      // turned box's own axes.
       const updated =
         drag.handle === 'rotate'
-          ? { ...current, angle: rotationToward(centre, point) }
+          ? { ...current, angle: rotationToward(centre, point, 'left') }
           : {
               ...current,
               ...resizeTextBox(current, drag.handle, unrotateAround(point, centre, current.angle), size.width, size.height),
@@ -3142,7 +3143,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           <span
             className="text-rotate-handle shape-rotate-handle"
             title="Rotate"
-            style={{ top: -ROTATE_HANDLE_OFFSET * zoom }}
+            style={{ left: -ROTATE_HANDLE_OFFSET * zoom, top: '50%' }}
             onPointerDown={(event) => handleTextHandleDown(event, 'rotate')}
             onPointerMove={handleTextHandleMove}
             onPointerUp={handleTextHandleUp}

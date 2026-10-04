@@ -86,7 +86,7 @@ function setup(text: TextOptions = DEFAULT_TEXT_OPTIONS) {
     const handle = container.querySelector<HTMLElement>('.text-rotate-handle')
     if (!handle) throw new Error('no rotate handle')
     handle.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(handle, { button: 0, pointerId: 2, clientX: 55, clientY: -8 })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 2, clientX: -8, clientY: 27 })
     fireEvent.pointerMove(handle, { pointerId: 2, clientX: to[0], clientY: to[1] })
     fireEvent.pointerUp(handle, { pointerId: 2, clientX: to[0], clientY: to[1] })
   }

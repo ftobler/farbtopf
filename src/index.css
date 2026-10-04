@@ -1226,10 +1226,13 @@ label {
   touch-action: none;
 }
 
-/* The same dot as a pending shape's rotate handle (.shape-overlay .shape-rotate-handle). */
+/*
+ * The same dot as a pending shape's rotate handle (.shape-overlay .shape-rotate-handle).
+ * It sits left of the box (left/top set inline), so the toolbar above never covers it.
+ */
 .text-rotate-handle {
   position: absolute;
-  left: 50%;
+  top: 50%;
   width: 9px;
   height: 9px;
   box-sizing: border-box;
