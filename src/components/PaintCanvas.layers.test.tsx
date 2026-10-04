@@ -57,7 +57,7 @@ function setup(initialTool: ToolId = 'pencil', primary = BLACK) {
   }
   const layers = () => onLayersChange.mock.calls.at(-1)?.[0].map((layer) => layer.name)
   const active = () => onLayersChange.mock.calls.at(-1)?.[1]
-  return { ref, canvas, click, shown, layers, active, setTool, onPickColor }
+  return { ref, canvas, click, shown, layers, active, setTool, onPickColor, onHistoryChange }
 }
 
 const black = [0, 0, 0, 255]
@@ -159,6 +159,20 @@ describe('PaintCanvas layers', () => {
     act(() => ref.current?.redo())
     act(() => ref.current?.redo())
     expect(shown(5, 5)).toEqual(black)
+  })
+
+  it('reports the new undo step after adding a layer', () => {
+    const { ref, onHistoryChange } = setup()
+    act(() => ref.current?.addLayer())
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
+  })
+
+  it('reports the new undo step after a layer change clears the redo stack', () => {
+    const { ref, onHistoryChange } = setup()
+    act(() => ref.current?.addLayer())
+    act(() => ref.current?.undo())
+    act(() => ref.current?.addLayer())
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
   })
 
   it('returns to the layer a change was made on when undoing it', () => {

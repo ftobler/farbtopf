@@ -1656,8 +1656,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         index === active ? { ...layer, bitmap: layer.bitmap.clone() } : layer,
       )
       setLayers(isolated, active)
+      syncHistory()
     },
-    [doc, recordHistory, setLayers],
+    [doc, recordHistory, setLayers, syncHistory],
   )
 
   /** Builds the document described by `rect`, keeping content at its image position. */
