@@ -29,7 +29,7 @@ import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, distanceToSegment, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
 import { History } from '../core/history'
-import { compositeLayers, drawOver, moveItem, snapshotBytes, thumbnail } from '../core/layers'
+import { compositeLayers, drawOver, moveItem, snapshotBytes, stackBytes, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
   blit,
@@ -206,6 +206,8 @@ export interface PaintCanvasProps {
 interface DocSnapshot {
   layers: Layer[]
   active: number
+  /** Set when every layer's bitmap is replaced, so the snapshot retains the whole stack. */
+  bytes?: number
 }
 
 interface StrokeState {
@@ -1094,9 +1096,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   /** Records an undo step; `before` is the active layer's bitmap as it was before the change. */
   const recordHistory = useCallback(
-    (before: Bitmap) => {
+    (before: Bitmap, bytes?: number) => {
       const stack = layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: before } : layer))
-      historyRef.current.record({ layers: stack, active: activeRef.current })
+      historyRef.current.record({ layers: stack, active: activeRef.current, bytes })
       onDocumentChangeRef.current?.()
     },
     [layers],
@@ -1419,6 +1421,47 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     paint(preview)
   }, [paint])
 
+  /** Repaints what is on screen: any pending shape, curve or lifted selection included. */
+  const repaintCurrentView = useCallback(() => {
+    const shape = shapeRef.current
+    if (shape) {
+      const preview = shape.base.clone()
+      renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
+      paint(preview)
+    } else if (polylineRef.current) {
+      previewPolyline()
+    } else if (floatingRef.current) {
+      renderPreview()
+    } else {
+      paint(doc())
+    }
+  }, [doc, paint, previewPolyline, renderPreview])
+
+  /**
+   * Repaints once more on the next frame after a new image is loaded or pasted.
+   * The load paints synchronously too, but some browsers keep showing the old
+   * pixels until the user interacts; a repaint in a fresh frame settles it.
+   */
+  const repaintFrameRef = useRef<number | null>(null)
+  const scheduleRepaint = useCallback(() => {
+    if (repaintFrameRef.current !== null) return
+    const run = () => {
+      repaintFrameRef.current = null
+      repaintCurrentView()
+    }
+    repaintFrameRef.current =
+      typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : window.setTimeout(run, 0)
+  }, [repaintCurrentView])
+  useEffect(
+    () => () => {
+      if (repaintFrameRef.current === null) return
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(repaintFrameRef.current)
+      else window.clearTimeout(repaintFrameRef.current)
+      repaintFrameRef.current = null
+    },
+    [],
+  )
+
   /** Draws the vertices placed so far as one undo step; a lone vertex is dropped. */
   const finishPolyline = useCallback(() => {
     const polyline = polylineRef.current
@@ -1483,32 +1526,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }
   }, [paint, previewPolyline, shapeStyle])
 
-  /** Repaints what is on screen: a pending shape, curve or lifted selection included. */
-  const paintShown = useCallback(() => {
-    const shape = shapeRef.current
-    if (shape) {
-      const preview = shape.base.clone()
-      renderShape(preview, shape.kind, shape.points, shape.slot, shape.style)
-      paint(preview)
-    } else if (polylineRef.current) {
-      previewPolyline()
-    } else if (floatingRef.current) {
-      renderPreview()
-    } else {
-      paint(doc())
-    }
-  }, [paint, doc, previewPolyline, renderPreview])
-
   // A resize (such as a paste that grows the canvas) or a new pixel ratio repaints
   // the canvas, which must keep showing a paste or pending shape, not just the image.
   useEffect(() => {
-    paintShown()
-  }, [size, pixelRatio, paintShown])
+    repaintCurrentView()
+  }, [size, pixelRatio, repaintCurrentView])
 
-  // The miniature only fills in when the canvas is painted, so opening it repaints what is on screen.
+  // The miniature only fills in when the canvas is painted, so opening it repaints
+  // what is on screen: a pending shape, curve or lifted selection included.
   useEffect(() => {
-    if (showMiniature) paintShown()
-  }, [showMiniature, paintShown])
+    if (!showMiniature) return
+    repaintCurrentView()
+  }, [showMiniature, repaintCurrentView])
 
   useEffect(() => {
     if (!polylineActive) return
@@ -1595,8 +1624,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setLayers([{ id: 1, name: 'Background', bitmap }], 0)
       updateSelection(null)
       syncHistory()
+      scheduleRepaint()
     },
-    [setLayers, syncHistory, updateSelection],
+    [scheduleRepaint, setLayers, syncHistory, updateSelection],
   )
 
   const restore = useCallback(
@@ -1621,7 +1651,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** Applies a whole-image operation to every layer as one undo step. */
   const applyToLayers = useCallback(
     (transform: (bitmap: Bitmap, bottom: boolean) => Bitmap) => {
-      recordHistory(doc().clone())
+      recordHistory(doc().clone(), stackBytes(layers()))
       const next = currentLayers().map((layer, index) => ({ ...layer, bitmap: transform(layer.bitmap, index === 0) }))
       const { width, height } = next[0].bitmap
       setSize({ width, height })
@@ -1629,7 +1659,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setLayers(next, activeRef.current)
       syncHistory()
     },
-    [currentLayers, doc, recordHistory, setLayers, syncHistory],
+    [currentLayers, doc, layers, recordHistory, setLayers, syncHistory],
   )
 
   /**
@@ -1661,8 +1691,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         index === active ? { ...layer, bitmap: layer.bitmap.clone() } : layer,
       )
       setLayers(isolated, active)
+      syncHistory()
     },
-    [doc, recordHistory, setLayers],
+    [doc, recordHistory, setLayers, syncHistory],
   )
 
   /** Builds the document described by `rect`, keeping content at its image position. */
@@ -1725,6 +1756,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       renderPreview()
       updateSelection({ x, y, width: bitmap.width, height: bitmap.height })
       syncHistory()
+      scheduleRepaint()
     },
     [
       applyToLayers,
@@ -1734,6 +1766,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       recordHistory,
       renderPreview,
       resizeTo,
+      scheduleRepaint,
       syncHistory,
       updateSelection,
       visibleOrigin,
@@ -1791,6 +1824,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
       },
       redo() {
+        if (!historyRef.current.canRedo) return
         // Nothing that is still being dragged out may keep running past this point.
         abortPointerInteraction()
         // Placing a pending shape or freeform shape would clear the redo stack, so redo
@@ -2675,8 +2709,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       acceptPending()
       commitFloating()
       const { width, height } = doc()
-      const source = { layers: currentLayers(), active: activeRef.current }
+      const source: DocSnapshot = { layers: currentLayers(), active: activeRef.current }
       source.layers[source.active] = { ...source.layers[source.active], bitmap: doc().clone() }
+      source.bytes = stackBytes(source.layers)
       event.currentTarget.setPointerCapture?.(event.pointerId)
       canvasResizeRef.current = {
         pointerId: event.pointerId,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Bitmap } from './bitmap'
 import { BLACK, TRANSPARENT, WHITE } from './color'
-import { compositeLayers, moveItem, snapshotBytes, thumbnail } from './layers'
+import { compositeLayers, moveItem, snapshotBytes, stackBytes, thumbnail } from './layers'
 
 describe('compositeLayers', () => {
   it('draws the bottom-most layer first', () => {
@@ -97,5 +97,25 @@ describe('snapshotBytes', () => {
 
   it('returns zero when the active layer is missing', () => {
     expect(snapshotBytes({ layers: [layer(1, 4, 4)], active: 5 })).toBe(0)
+  })
+
+  it('honors an explicit byte override regardless of layer size', () => {
+    expect(snapshotBytes({ layers: [layer(1, 4, 4), layer(2, 2, 2)], active: 1, bytes: 999 })).toBe(999)
+  })
+})
+
+describe('stackBytes', () => {
+  const layer = (id: number, width: number, height: number) => ({
+    id,
+    name: `Layer ${id}`,
+    bitmap: new Bitmap(width, height),
+  })
+
+  it('sums width * height * 4 across all layers', () => {
+    expect(stackBytes([layer(1, 2, 2), layer(2, 3, 1)])).toBe((4 + 3) * 4)
+  })
+
+  it('returns zero for an empty stack', () => {
+    expect(stackBytes([])).toBe(0)
   })
 })

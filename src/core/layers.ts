@@ -16,13 +16,28 @@ export interface LayerInfo {
   thumbnail: Bitmap
 }
 
+export interface SnapshotSize {
+  layers: readonly Layer[]
+  active: number
+  /** Explicit byte cost when the snapshot does not match the active-layer-only estimate. */
+  bytes?: number
+}
+
 /**
  * Estimated bytes a history snapshot adds: only the active layer is cloned per
- * step, the other layer objects are shared with the live stack.
+ * step, the other layer objects are shared with the live stack. A snapshot that
+ * replaces every layer's bitmap (a whole-image operation) supplies `bytes`
+ * directly, since it then retains the whole stack.
  */
-export function snapshotBytes(snapshot: { layers: readonly Layer[]; active: number }): number {
+export function snapshotBytes(snapshot: SnapshotSize): number {
+  if (snapshot.bytes !== undefined) return snapshot.bytes
   const active = snapshot.layers[snapshot.active]
   return active ? active.bitmap.width * active.bitmap.height * 4 : 0
+}
+
+/** Estimated bytes held by every layer's bitmap, for a step that replaces them all. */
+export function stackBytes(layers: readonly Layer[]): number {
+  return layers.reduce((total, layer) => total + layer.bitmap.width * layer.bitmap.height * 4, 0)
 }
 
 /** Largest edge of a layer thumbnail, in pixels. */

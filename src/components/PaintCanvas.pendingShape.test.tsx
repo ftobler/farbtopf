@@ -456,6 +456,24 @@ describe('PaintCanvas document actions accept the pending shape first', () => {
   })
 })
 
+describe('PaintCanvas redo with nothing to redo is a no-op', () => {
+  it('does not drop a pending shape on a redo with nothing to redo', () => {
+    const s = setup()
+    s.drag([2, 2], [8, 8])
+    expect(s.ref.current?.hasPendingShape()).toBe(true)
+    act(() => s.ref.current?.redo())
+    expect(s.ref.current?.hasPendingShape()).toBe(true)
+  })
+
+  it('does not commit a floating selection on a redo with nothing to redo', () => {
+    const s = setup({ tool: 'select' })
+    act(() => s.ref.current?.pasteBitmap(new Bitmap(4, 4, RED)))
+    expect(s.ref.current?.getSelection()).not.toBeNull()
+    act(() => s.ref.current?.redo())
+    expect(s.ref.current?.getSelection()).not.toBeNull()
+  })
+})
+
 describe('PaintCanvas opening the miniature view', () => {
   it('keeps showing a pending shape', () => {
     const { shown, drag, setProps } = setup()
