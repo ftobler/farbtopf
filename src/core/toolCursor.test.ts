@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import css from '../index.css?raw'
 import { TOOLS, type ToolId } from './tools'
 import { FILL_CURSOR, PENCIL_CURSOR } from './cursors'
-import { canvasCursor, workspaceCursor } from './toolCursor'
+import { canvasCursor, shapeHandleCursor, workspaceCursor } from './toolCursor'
 
 describe('canvasCursor', () => {
   it('gives every tool its cursor over the image', () => {
@@ -28,9 +28,66 @@ describe('canvasCursor', () => {
     expect(canvasCursor('brush', 'move')).toBe('crosshair')
   })
 
+  it('lets the Shape tool show a hover cursor over a pending shape\'s handles', () => {
+    expect(canvasCursor('shape', 'nwse-resize')).toBe('nwse-resize')
+    expect(canvasCursor('shape', null)).toBe('crosshair')
+  })
+
   it('hides the pointer for the eraser only while its footprint preview stands in for it', () => {
     expect(canvasCursor('eraser', null, { eraserPreview: true })).toBe('none')
     expect(canvasCursor('eraser', null, { eraserPreview: false })).toBe('crosshair')
+  })
+})
+
+describe('shapeHandleCursor', () => {
+  const box = [
+    { id: 'nw', point: { x: 0, y: 0 } },
+    { id: 'n', point: { x: 10, y: 0 } },
+    { id: 'ne', point: { x: 20, y: 0 } },
+    { id: 'e', point: { x: 20, y: 10 } },
+    { id: 'se', point: { x: 20, y: 20 } },
+    { id: 's', point: { x: 10, y: 20 } },
+    { id: 'sw', point: { x: 0, y: 20 } },
+    { id: 'w', point: { x: 0, y: 10 } },
+    { id: 'rotate', point: { x: 10, y: -8 } },
+  ]
+
+  it.each([
+    ['nw', 'nwse-resize'],
+    ['se', 'nwse-resize'],
+    ['ne', 'nesw-resize'],
+    ['sw', 'nesw-resize'],
+    ['n', 'ns-resize'],
+    ['s', 'ns-resize'],
+    ['e', 'ew-resize'],
+    ['w', 'ew-resize'],
+  ])('points the resize cursor of box handle %s away from the centre', (id, cursor) => {
+    expect(shapeHandleCursor(box, id)).toBe(cursor)
+  })
+
+  it('turns the resize cursor with a rotated box', () => {
+    // The same box turned 45°: the east handle now sits towards the south-east.
+    const turned = [
+      { id: 'n', point: { x: 7, y: -7 } },
+      { id: 'e', point: { x: 7, y: 7 } },
+      { id: 's', point: { x: -7, y: 7 } },
+      { id: 'w', point: { x: -7, y: -7 } },
+    ]
+    expect(shapeHandleCursor(turned, 'e')).toBe('nwse-resize')
+    expect(shapeHandleCursor(turned, 'n')).toBe('nesw-resize')
+  })
+
+  it('shows a grab hand on the rotate handle', () => {
+    expect(shapeHandleCursor(box, 'rotate')).toBe('grab')
+  })
+
+  it('shows the move cursor on free control points', () => {
+    const line = [
+      { id: 'p0', point: { x: 0, y: 0 } },
+      { id: 'p1', point: { x: 20, y: 5 } },
+    ]
+    expect(shapeHandleCursor(line, 'p0')).toBe('move')
+    expect(shapeHandleCursor([{ id: 'tip', point: { x: 3, y: 4 } }], 'tip')).toBe('move')
   })
 })
 

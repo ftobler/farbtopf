@@ -50,7 +50,7 @@ import {
 } from '../core/raster'
 import { MAX_CANVAS } from '../core/palette'
 import { eraserPreviewRect } from '../core/cursorPreview'
-import { canvasCursor } from '../core/toolCursor'
+import { canvasCursor, shapeHandleCursor } from '../core/toolCursor'
 import { blendToward } from '../core/opacity'
 import type { Random } from '../core/random'
 import type { BrushShape } from '../core/raster'
@@ -1380,6 +1380,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const shape = shapeRef.current
     if (!shape) return
     shapeRef.current = null
+    setHoverCursor(null)
     setShape(null)
     // A shape still being inserted (too small to count) leaves the document untouched.
     if (shape.mode === 'insert') {
@@ -1400,6 +1401,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     const shape = shapeRef.current
     if (!shape) return
     shapeRef.current = null
+    setHoverCursor(null)
     setShape(null)
     bitmapRef.current = shape.base
     paint(shape.base)
@@ -2433,6 +2435,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         setHoverCursor(
           handle ? handleCursor(handle) : rect && pointInRect(free, rect) ? 'move' : null,
         )
+      }
+      if (isShapeTool(tool)) {
+        const shape = shapeRef.current
+        if (!shape || shape.mode !== 'tweak') setHoverCursor(null)
+        else if (shape.pointerId === null) {
+          const active = hitShapeHandle(shape.kind, shape.points, point, SHAPE_DOT_HIT / zoom)
+          const onLine =
+            shape.kind === 'line' &&
+            shape.points.length >= 2 &&
+            distanceToSegment(point, shape.points[0], shape.points[1]) <= shape.style.width / 2 + LINE_BODY_HIT / zoom
+          setHoverCursor(
+            active ? shapeHandleCursor(shapeHandles(shape.kind, shape.points), active) : onLine ? 'move' : null,
+          )
+        }
       }
       const place = textPlaceRef.current
       if (place && place.pointerId === event.pointerId) {
