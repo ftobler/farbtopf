@@ -103,6 +103,13 @@ function fitZoom(width: number, height: number): number {
 const WHEEL_ZOOM_STEP = 100
 
 /**
+ * A single wheel event at least this large is one mouse-wheel notch and steps
+ * straight away: notches are not 100px everywhere (Linux browsers report about
+ * 40–60px), while trackpad events stay well below it.
+ */
+const WHEEL_NOTCH_MIN = 40
+
+/**
  * A wheel event's deltaY normalized to the pixel scale `WHEEL_ZOOM_STEP` counts
  * in. A line-mode notch (three lines) and a page both map to one step; pixel
  * deltas pass through so trackpad events keep accumulating.
@@ -701,6 +708,7 @@ function App() {
       if (delta === 0) return
       if (Math.sign(delta) !== Math.sign(wheelAccumRef.current)) wheelAccumRef.current = 0
       wheelAccumRef.current += delta
+      if (Math.abs(delta) >= WHEEL_NOTCH_MIN) wheelAccumRef.current = Math.sign(delta) * WHEEL_ZOOM_STEP
       if (Math.abs(wheelAccumRef.current) < WHEEL_ZOOM_STEP) return
       const direction: 1 | -1 = wheelAccumRef.current < 0 ? 1 : -1
       wheelAccumRef.current %= WHEEL_ZOOM_STEP

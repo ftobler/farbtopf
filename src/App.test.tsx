@@ -599,6 +599,15 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: '200%' })).toBeNull()
   })
 
+  it.each([40, 53, 120])('steps one zoom level per %ipx mouse-wheel notch, as Linux browsers report them', (notch) => {
+    const { container } = render(<App />)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -notch, deltaMode: 0 })
+    expect(screen.getByRole('button', { name: '150%' })).toBeTruthy()
+    fireEvent.wheel(workspace, { ctrlKey: true, deltaY: -notch, deltaMode: 0 })
+    expect(screen.getByRole('button', { name: '200%' })).toBeTruthy()
+  })
+
   it('steps one zoom level per line-mode mouse-wheel notch', () => {
     const { container } = render(<App />)
     const workspace = container.querySelector('.workspace') as HTMLElement
