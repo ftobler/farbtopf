@@ -1277,10 +1277,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (selectionRef.current) updateSelection(null)
   }, [tool, commitFloating, updateSelection])
 
-  useEffect(() => {
-    paint(doc())
-  }, [size, paint, doc, pixelRatio])
-
   // The part of the image currently visible in the workspace, in image pixels.
   useEffect(() => {
     if (!showMiniature) return
@@ -1487,10 +1483,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     }
   }, [paint, previewPolyline, shapeStyle])
 
-  // The miniature only fills in when the canvas is painted, so opening it repaints
-  // what is on screen: a pending shape, curve or lifted selection included.
-  useEffect(() => {
-    if (!showMiniature) return
+  /** Repaints what is on screen: a pending shape, curve or lifted selection included. */
+  const paintShown = useCallback(() => {
     const shape = shapeRef.current
     if (shape) {
       const preview = shape.base.clone()
@@ -1503,7 +1497,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     } else {
       paint(doc())
     }
-  }, [showMiniature, paint, doc, previewPolyline, renderPreview])
+  }, [paint, doc, previewPolyline, renderPreview])
+
+  // A resize (such as a paste that grows the canvas) or a new pixel ratio repaints
+  // the canvas, which must keep showing a paste or pending shape, not just the image.
+  useEffect(() => {
+    paintShown()
+  }, [size, pixelRatio, paintShown])
+
+  // The miniature only fills in when the canvas is painted, so opening it repaints what is on screen.
+  useEffect(() => {
+    if (showMiniature) paintShown()
+  }, [showMiniature, paintShown])
 
   useEffect(() => {
     if (!polylineActive) return

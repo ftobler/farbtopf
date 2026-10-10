@@ -109,6 +109,15 @@ describe('PaintCanvas paste', () => {
     expect(ref.current?.getSize()).toEqual({ width: 35, height: 45 })
   })
 
+  it('shows a paste that enlarges the canvas at once, without another click', () => {
+    const { ref, shown } = setup(20, 20)
+    act(() => ref.current?.pasteBitmap(new Bitmap(30, 5, RED)))
+    // Growing the canvas repaints it; that repaint must keep the floating paste on screen.
+    const pixel = shown()
+    expect(pixel(0, 0)).toEqual([255, 0, 0, 255])
+    expect(pixel(25, 2)).toEqual([255, 0, 0, 255])
+  })
+
   it('fills the new area with white on the bottom layer', () => {
     const { ref, shown } = setup(20, 20)
     const doc = new Bitmap(20, 20, WHITE)
