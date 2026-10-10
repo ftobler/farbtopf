@@ -803,7 +803,7 @@ label {
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 24px;
   max-height: calc(100% - 24px);
   z-index: 6;
   user-select: none;
@@ -818,8 +818,9 @@ label {
   flex-direction: column;
   align-items: center;
   gap: calc(var(--tool-slider-spacing) + 2px);
-  width: 52px;
-  padding: 10px 6px;
+  /* Just wide enough for "100 px"; the side padding is what was trimmed. */
+  width: 44px;
+  padding: 10px 2px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -2338,14 +2339,14 @@ label {
     top: 8px;
     left: 8px;
     transform: none;
-    gap: 6px;
+    gap: 14px;
     max-height: calc(100% - 16px);
   }
 
   .tool-slider {
     --tool-slider-spacing: 4px;
-    width: 40px;
-    padding: 6px 2px;
+    width: 36px;
+    padding: 6px 0;
     gap: 6px;
   }
 
