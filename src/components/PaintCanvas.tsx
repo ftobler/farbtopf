@@ -11,6 +11,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
+import { flushSync } from 'react-dom'
 import { Bitmap } from '../core/bitmap'
 import { blurSelection, gaussianBlur } from '../core/blur'
 import {
@@ -2759,22 +2760,27 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         ...layer,
         bitmap: resizeTo(layer.bitmap, rect, index === 0 ? WHITE : undefined),
       }))
-      setSize({ width: next[0].bitmap.width, height: next[0].bitmap.height })
-      onSizeChangeRef.current(next[0].bitmap.width, next[0].bitmap.height)
+      // Pointer moves are rendered by React later than they are handled, so the new
+      // size and pan are committed right away: otherwise the browser would show a frame
+      // with the resized pixels squeezed into the old box before snapping into place.
+      flushSync(() => {
+        setSize({ width: next[0].bitmap.width, height: next[0].bitmap.height })
+        onSizeChangeRef.current(next[0].bitmap.width, next[0].bitmap.height)
+
+        // Keep the edge opposite the dragged handle pinned on screen.
+        const onPanChange = onPanChangeRef.current
+        if (onPanChange) {
+          let px = drag.startPan.x
+          let py = drag.startPan.y
+          if (drag.handle.includes('w')) px = drag.startPan.x + (left * scale) / 2
+          else if (drag.handle.includes('e')) px = drag.startPan.x + ((right - drag.startWidth) * scale) / 2
+          if (drag.handle.includes('n')) py = drag.startPan.y + (top * scale) / 2
+          else if (drag.handle.includes('s')) py = drag.startPan.y + ((bottom - drag.startHeight) * scale) / 2
+          onPanChange({ x: px, y: py })
+        }
+      })
       // During a drag only the live surface is needed; the thumbnails are rebuilt once on drop.
       setLayers(next, drag.source.active, false)
-
-      // Keep the edge opposite the dragged handle pinned on screen.
-      const onPanChange = onPanChangeRef.current
-      if (onPanChange) {
-        let px = drag.startPan.x
-        let py = drag.startPan.y
-        if (drag.handle.includes('w')) px = drag.startPan.x + (left * scale) / 2
-        else if (drag.handle.includes('e')) px = drag.startPan.x + ((right - drag.startWidth) * scale) / 2
-        if (drag.handle.includes('n')) py = drag.startPan.y + (top * scale) / 2
-        else if (drag.handle.includes('s')) py = drag.startPan.y + ((bottom - drag.startHeight) * scale) / 2
-        onPanChange({ x: px, y: py })
-      }
     },
     [resizeTo, setLayers, syncHistory, zoom],
   )
