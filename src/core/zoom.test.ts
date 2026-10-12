@@ -53,23 +53,20 @@ describe('nearestZoomIndex', () => {
 })
 
 describe('displayZoom', () => {
-  it('leaves every level alone on a whole-number pixel ratio', () => {
-    for (const level of ZOOM_LEVELS) {
-      expect(displayZoom(level, 1)).toBe(level)
-      expect(displayZoom(level, 2)).toBe(level)
-    }
+  it('is the nominal level when the ratio is one', () => {
+    for (const level of ZOOM_LEVELS) expect(displayZoom(level, 1)).toBe(level)
   })
 
-  it('snaps whole-number levels to whole device pixels on a fractional ratio', () => {
-    // Windows at 125%: 100% shows one physical pixel per image pixel.
-    expect(displayZoom(1, 1.25) * 1.25).toBe(1)
-    expect(displayZoom(4, 1.25) * 1.25).toBe(5)
-    expect(displayZoom(2, 1.5) * 1.5).toBe(3)
+  it('divides by the ratio so one image pixel stays one physical pixel', () => {
+    // Browser zoom to 200% on a 1x display: a 100% level lays out half as wide
+    // in CSS pixels so it still covers one physical pixel per image pixel.
+    expect(displayZoom(1, 2)).toBe(0.5)
+    expect(displayZoom(1, 2) * 2).toBe(1)
+    expect(displayZoom(4, 2.5) * 2.5).toBe(4)
   })
 
-  it('keeps fractional levels as they are', () => {
-    expect(displayZoom(1.5, 1.25)).toBe(1.5)
-    expect(displayZoom(0.5, 1.25)).toBe(0.5)
+  it('leaves the level alone for a non-positive ratio', () => {
+    expect(displayZoom(2, 0)).toBe(2)
   })
 })
 

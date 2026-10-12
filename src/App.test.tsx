@@ -565,6 +565,20 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '100%' })).toBeTruthy()
   })
 
+  it('keeps 100% at one physical pixel per image pixel whatever the browser zoom', () => {
+    const original = window.devicePixelRatio
+    Object.defineProperty(window, 'devicePixelRatio', { value: 2.5, configurable: true })
+    try {
+      const { container } = render(<App />)
+      const frame = container.querySelector('.canvas-frame') as HTMLElement
+      expect(parseFloat(frame.style.width) * 2.5).toBe(640)
+      expect(parseFloat(frame.style.height) * 2.5).toBe(400)
+      expect(screen.getByRole('button', { name: '100%' })).toBeTruthy()
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { value: original, configurable: true })
+    }
+  })
+
   it('zooms with ctrl and the mouse wheel', () => {
     const { container } = render(<App />)
     const workspace = container.querySelector('.workspace') as HTMLElement

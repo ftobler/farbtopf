@@ -31,15 +31,13 @@ export function nearestZoomIndex(value: number): number {
 }
 
 /**
- * The zoom actually shown on screen. On a fractional device pixel ratio
- * (e.g. Windows at 125%) a whole-number level would put each image pixel on
- * a fractional number of device pixels, so every n-th row or column showed up
- * one device pixel thicker. Whole-number levels are snapped to whole device
- * pixels instead, like MS Paint does; fractional levels are uneven anyway.
+ * The zoom the canvas is laid out at, in CSS pixels per image pixel. The
+ * device pixel ratio grows both with the display scale and with the browser's
+ * page zoom, so dividing by it keeps the slider in image pixels: at 100% one
+ * image pixel covers one physical pixel, whatever the user's browser zoom.
  */
 export function displayZoom(zoom: number, ratio: number): number {
-  if (!Number.isInteger(zoom) || !(ratio > 0) || Number.isInteger(ratio)) return zoom
-  return Math.max(1, Math.round(zoom * ratio)) / ratio
+  return ratio > 0 ? zoom / ratio : zoom
 }
 
 /**
