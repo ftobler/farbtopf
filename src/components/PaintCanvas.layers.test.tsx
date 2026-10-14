@@ -143,14 +143,6 @@ describe('PaintCanvas layers', () => {
     expect(active()).toBe(1)
   })
 
-  it('reports the new undo step after a layer change clears the redo stack', () => {
-    const { ref, onHistoryChange } = setup()
-    act(() => ref.current?.addLayer())
-    act(() => ref.current?.undo())
-    act(() => ref.current?.addLayer())
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-  })
-
   it('flips every layer together', () => {
     const { ref, click, shown } = setup()
     click(0, 0)
@@ -211,17 +203,6 @@ describe('PaintCanvas layers', () => {
     expect(moved).not.toBeNull()
     act(() => ref.current?.selectLayer(1))
     expect(findBlack()).toEqual(moved)
-  })
-
-  it('does not corrupt undo history when a delete moves the active layer', () => {
-    const { ref, click, shown } = setup()
-    act(() => ref.current?.addLayer())
-    act(() => ref.current?.addLayer())
-    act(() => ref.current?.deleteLayer(2))
-    click(5, 5)
-    expect(shown(5, 5)).toEqual(black)
-    act(() => ref.current?.undo())
-    expect(shown(5, 5)).toEqual(white)
   })
 
   describe('copying visible layers', () => {

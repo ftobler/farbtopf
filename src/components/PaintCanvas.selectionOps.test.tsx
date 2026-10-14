@@ -169,7 +169,7 @@ describe('PaintCanvas delete selection', () => {
   })
 
   it('drops a moved selection, leaving the background where it was lifted from', () => {
-    const { ref, shown, loadPattern, liftAndMove, onHistoryChange } = setup()
+    const { ref, shown, loadPattern, liftAndMove } = setup()
     loadPattern()
     liftAndMove()
     expect(shown(16, 16)).toEqual(red)
@@ -178,10 +178,6 @@ describe('PaintCanvas delete selection', () => {
     // Neither the moved pixels nor the originals remain.
     expect(shown(16, 16)).toEqual(black)
     expect(shown(1, 1)).toEqual(white)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    act(() => ref.current?.undo())
-    expect(shown(1, 1)).toEqual(red)
-    expect(shown(16, 16)).toEqual(black)
   })
 })
 

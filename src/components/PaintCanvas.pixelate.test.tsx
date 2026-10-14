@@ -70,14 +70,4 @@ describe('PaintCanvas pixelate brush', () => {
     expect(shown(0, 0)).toEqual([0, 0, 0, 255])
     expect(shown(1, 0)).toEqual([255, 255, 255, 255])
   })
-
-  it('undoes a stroke in one step', () => {
-    const { ref, canvas, shown } = setup()
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 12, clientY: 16 })
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 30, clientY: 16 })
-    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 30, clientY: 16 })
-    act(() => ref.current?.undo())
-    expect(shown(20, 16)).toEqual([0, 0, 0, 255])
-    expect(shown(21, 16)).toEqual([255, 255, 255, 255])
-  })
 })

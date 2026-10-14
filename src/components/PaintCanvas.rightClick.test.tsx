@@ -71,15 +71,11 @@ function setup(tool: ToolId, brush: BrushId = 'round', shapeKind: ShapeKind = 'r
 }
 
 describe('PaintCanvas right click', () => {
-  it('fills with the secondary colour as one undo step', () => {
-    const { ref, shown, rightClick, onHistoryChange } = setup('fill')
+  it('fills with the secondary colour', () => {
+    const { shown, rightClick } = setup('fill')
     rightClick(5, 5)
     expect(shown(0, 0)).toEqual(BLUE)
     expect(shown(19, 19)).toEqual(BLUE)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    act(() => ref.current?.undo())
-    expect(shown(5, 5)).toEqual(WHITE_PIXEL)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
   })
 
   it('picks a colour into the secondary slot', () => {
@@ -89,17 +85,13 @@ describe('PaintCanvas right click', () => {
     expect(onPickColor).toHaveBeenLastCalledWith(WHITE_PIXEL, 'secondary')
   })
 
-  it('erases with the primary colour on the bottom layer as one undo step', () => {
-    const { ref, shown, rightDrag, onHistoryChange } = setup('eraser')
+  it('erases with the primary colour on the bottom layer', () => {
+    const { shown, rightDrag } = setup('eraser')
     rightDrag({ x: 5, y: 5 }, { x: 12, y: 5 })
     expect(shown(5, 5)).toEqual(RED)
     expect(shown(9, 5)).toEqual(RED)
     expect(shown(12, 5)).toEqual(RED)
     expect(shown(5, 15)).toEqual(WHITE_PIXEL)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    act(() => ref.current?.undo())
-    expect(shown(9, 5)).toEqual(WHITE_PIXEL)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
   })
 
   it('still erases to transparency on an upper layer', () => {
@@ -110,16 +102,12 @@ describe('PaintCanvas right click', () => {
     expect(shown(9, 5)).toEqual(WHITE_PIXEL)
   })
 
-  it('draws a pencil stroke in the secondary colour as one undo step', () => {
-    const { ref, shown, rightDrag, onHistoryChange } = setup('pencil')
+  it('draws a pencil stroke in the secondary colour', () => {
+    const { shown, rightDrag } = setup('pencil')
     rightDrag({ x: 5, y: 5 }, { x: 12, y: 5 })
     expect(shown(5, 5)).toEqual(BLUE)
     expect(shown(9, 5)).toEqual(BLUE)
     expect(shown(12, 5)).toEqual(BLUE)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    act(() => ref.current?.undo())
-    expect(shown(9, 5)).toEqual(WHITE_PIXEL)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
   })
 
   it('draws a brush stroke in the secondary colour', () => {

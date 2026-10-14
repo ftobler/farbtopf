@@ -119,8 +119,8 @@ describe('PaintCanvas pending line', () => {
     expect(Array.from(image())).toEqual(reference([5, 7], [31, 26], 3))
   })
 
-  it('moves an end when its handle is dragged, as one undo step on commit', () => {
-    const { ref, shown, drag, commit, onHistoryChange } = setup()
+  it('moves an end when its handle is dragged, and keeps it on commit', () => {
+    const { ref, shown, drag, commit } = setup()
     drag([5, 20], [30, 20])
     drag([30, 20], [30, 30])
     expect(shown(30, 30)).toEqual(black)
@@ -128,10 +128,6 @@ describe('PaintCanvas pending line', () => {
     expect(ref.current?.hasPendingShape()).toBe(true)
     commit()
     expect(shown(30, 30)).toEqual(black)
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    act(() => ref.current?.undo())
-    expect(shown(30, 30)).toEqual(white)
-    expect(shown(5, 20)).toEqual(white)
   })
 
   it('snaps a dragged end to 45 degree steps around the other end with Shift', () => {

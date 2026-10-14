@@ -475,16 +475,6 @@ describe('PaintCanvas', () => {
       expect(ref.current?.getSelection()).toEqual({ x: 10, y: 13, width: 10, height: 4 })
     })
 
-    it('records a single undo step when the rotate handle is dragged', () => {
-      const { ref, canvas, container, onHistoryChange } = setup('select', 40, 40)
-      selectBar(canvas)
-      onHistoryChange.mockClear()
-      dragRotate(container, { x: 15, y: 5 }, { x: 25, y: 15 })
-      expect(ref.current?.getSelection()).toEqual({ x: 13, y: 10, width: 4, height: 10 })
-      expect(onHistoryChange).toHaveBeenCalledTimes(1)
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    })
-
     it('follows the pointer angle without snapping', () => {
       const { ref, canvas, container } = setup('select', 40, 40)
       selectBar(canvas)

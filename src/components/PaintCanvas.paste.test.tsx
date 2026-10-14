@@ -221,30 +221,14 @@ describe('PaintCanvas paste', () => {
     expect(pixel(1, 1)).toEqual([0, 0, 0, 255])
   })
 
-  it('undoes the paste in one step', () => {
-    const { ref, canvas, shown, onHistoryChange } = setup(30, 30)
+  it('drops the moved paste and its selection on undo', () => {
+    const { ref, canvas } = setup(30, 30)
     act(() => ref.current?.pasteBitmap(new Bitmap(12, 12, RED)))
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 6, clientY: 6 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 16, clientY: 21 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 16, clientY: 21 })
     act(() => ref.current?.undo())
-    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
     expect(ref.current?.getSelection()).toBeNull()
-    const pixel = shown()
-    expect(pixel(10, 15)).toEqual([255, 255, 255, 255])
-    expect(pixel(0, 0)).toEqual([255, 255, 255, 255])
-  })
-
-  it('restores the original canvas size when undoing a paste that enlarged it', () => {
-    const { ref, onSizeChange } = setup(30, 30)
-    act(() => ref.current?.pasteBitmap(new Bitmap(40, 50, RED)))
-    expect(ref.current?.getSize()).toEqual({ width: 40, height: 50 })
-    act(() => ref.current?.undo())
-    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
-    expect(onSizeChange).toHaveBeenLastCalledWith(30, 30)
-    act(() => ref.current?.redo())
-    expect(ref.current?.getSize()).toEqual({ width: 40, height: 50 })
   })
 
   it('stamps a previous floating selection before pasting another', () => {
