@@ -119,16 +119,4 @@ describe('PaintCanvas spray can', () => {
     const center = (20 * width + 20) * 4
     expect(Math.abs(data[center] - 153)).toBeLessThanOrEqual(1)
   })
-
-  it('undoes a whole spray in one step', () => {
-    const { ref, canvas, painted } = setup()
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 20, clientY: 20 })
-    act(() => {
-      vi.advanceTimersByTime(SPRAY_TICK_MS * 10)
-    })
-    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 20, clientY: 20 })
-    expect(painted()).toBeGreaterThan(0)
-    act(() => ref.current?.undo())
-    expect(painted()).toBe(0)
-  })
 })

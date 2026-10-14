@@ -475,16 +475,6 @@ describe('PaintCanvas', () => {
       expect(ref.current?.getSelection()).toEqual({ x: 10, y: 13, width: 10, height: 4 })
     })
 
-    it('records a single undo step when the rotate handle is dragged', () => {
-      const { ref, canvas, container, onHistoryChange } = setup('select', 40, 40)
-      selectBar(canvas)
-      onHistoryChange.mockClear()
-      dragRotate(container, { x: 15, y: 5 }, { x: 25, y: 15 })
-      expect(ref.current?.getSelection()).toEqual({ x: 13, y: 10, width: 4, height: 10 })
-      expect(onHistoryChange).toHaveBeenCalledTimes(1)
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    })
-
     it('follows the pointer angle without snapping', () => {
       const { ref, canvas, container } = setup('select', 40, 40)
       selectBar(canvas)
@@ -846,17 +836,6 @@ describe('PaintCanvas', () => {
       expect(pixel(12, 7)).toEqual(black)
       expect(pixel(7, 7)).toEqual(white)
       expect(onHistoryChange).toHaveBeenCalledTimes(1)
-    })
-
-    it('commits an unfinished freeform shape before undoing', () => {
-      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
-      const pixel = spyPixels(canvas, 20)
-      dragFirstSegment(canvas)
-      act(() => ref.current?.undo())
-      expect(pixel(7, 2)).toEqual(white)
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
-      act(() => ref.current?.redo())
-      expect(pixel(7, 2)).toEqual(black)
     })
 
     it('drops a freeform shape that never got a second vertex', () => {
@@ -1718,21 +1697,5 @@ describe('PaintCanvas pointercancel', () => {
     expect(pixel(0, 0)).toEqual(white)
     expect(pixel(3, 5)).toEqual(white)
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-  })
-})
-
-describe('PaintCanvas undo after a size change', () => {
-  it('keeps a selection through a same-size undo', () => {
-    const { ref, canvas } = setup('select', 30, 30)
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 10, clientY: 9 })
-    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 10, clientY: 9 })
-    const selection = ref.current?.getSelection()
-    expect(selection).not.toBeNull()
-    act(() => ref.current?.invertColors())
-    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
-    act(() => ref.current?.undo())
-    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
-    expect(ref.current?.getSelection()).toEqual(selection)
   })
 })

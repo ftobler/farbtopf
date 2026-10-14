@@ -1,3 +1,6 @@
+// When the App counts the document as unsaved: the title mark and the leave and discard
+// warnings, from edits, pending work, saving and opening. The canvas only reports changes.
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Bitmap } from './core/bitmap'
@@ -326,5 +329,54 @@ describe('App unsaved changes with something pending', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(warnsOnLeave()).toBe(false)
+  })
+})
+
+describe('App unsaved changes with a lifted selection', () => {
+  /** Draws a diagonal, lifts a selection holding it with a move, then saves. */
+  async function liftAndSave() {
+    const { container } = render(<App />)
+    const canvas = container.querySelector('.paint-canvas') as HTMLCanvasElement
+    canvas.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400, toJSON: () => ({}) }) as DOMRect
+    canvas.setPointerCapture = vi.fn()
+    canvas.releasePointerCapture = vi.fn()
+    const drag = (from: [number, number], to: [number, number]) => {
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: from[0], clientY: from[1] })
+      fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: to[0], clientY: to[1] })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: to[0], clientY: to[1] })
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    drag([12, 12], [58, 38])
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    drag([10, 10], [60, 40])
+    drag([20, 20], [80, 70])
+    const handle = fakeHandle('drawing.png')
+    window.showSaveFilePicker = vi.fn(async () => asHandle(handle))
+    await pressSave()
+    await waitFor(() => expect(screen.getByText('Saved drawing.png')).toBeTruthy())
+    expect(warnsOnLeave()).toBe(false)
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    const run = (name: string, submenu?: string) => {
+      fireEvent.contextMenu(workspace, { clientX: 700, clientY: 450 })
+      if (submenu) fireEvent.mouseEnter(screen.getByRole('menuitem', { name: submenu }))
+      fireEvent.click(screen.getByRole('menuitem', { name }))
+    }
+    return { drag, run }
+  }
+
+  // The lift was the one undo step of the whole floating session, but every later
+  // change to the floating pixels still changes the image the save wrote.
+  it.each<[string, (s: Awaited<ReturnType<typeof liftAndSave>>) => void]>([
+    ['moving it again', (s) => s.drag([90, 75], [130, 85])],
+    ['flipping it', (s) => s.run('Flip horizontal', 'Flip')],
+    ['rotating it', (s) => s.run('Rotate right 90°', 'Rotate')],
+    ['inverting it', (s) => s.run('Invert color')],
+    ['deleting it', () => fireEvent.keyDown(window, { key: 'Delete' })],
+  ])('marks the document dirty again after saving, then %s', async (_name, change) => {
+    const s = await liftAndSave()
+    change(s)
+    expect(warnsOnLeave()).toBe(true)
+    expect(document.title).toBe('*drawing.png - Farbtopf')
   })
 })

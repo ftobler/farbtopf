@@ -149,11 +149,4 @@ describe('PaintCanvas opacity', () => {
     expect(gray(half.shown(12, 10))).toBeGreaterThan(strong)
     expect(gray(half.shown(12, 10))).toBeLessThan(255)
   })
-
-  it('undoes a translucent stroke in one step', () => {
-    const { ref, shown, drag } = setup()
-    drag([[5, 10], [20, 10], [5, 12]])
-    act(() => ref.current?.undo())
-    expect(shown(12, 10)).toEqual([255, 255, 255, 255])
-  })
 })

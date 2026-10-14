@@ -1,3 +1,6 @@
+// How the App wires Undo to unplaced work: the button and Ctrl+Z are offered for a
+// pending shape or text box and take it back. What an undo restores is tested on PaintCanvas.
+
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
