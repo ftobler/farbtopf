@@ -2287,6 +2287,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         onPickColorRef.current(flat.get(point.x, point.y), slot)
         return
       }
+      // A selection pasted while another tool is active still floats; it is placed before
+      // that tool edits the layer, as switching tools would, so the edit's undo step holds it.
+      if (floatingRef.current) {
+        commitFloating()
+        updateSelection(null)
+      }
       if (tool === 'fill') {
         const color = colorFor(slot)
         if (colorsEqual(doc().get(point.x, point.y), color)) return

@@ -166,3 +166,17 @@ describe('PaintCanvas opening a document during an interaction', () => {
     expect(onHistoryChange).toHaveBeenLastCalledWith(false, false)
   })
 })
+
+describe('PaintCanvas undo with a floating selection', () => {
+  it('places a floating paste before another tool paints, so undoing the stroke keeps the paste', () => {
+    const { ref, canvas } = setup('pencil')
+    act(() => ref.current?.pasteBitmap(new Bitmap(10, 10, BLACK)))
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 20, clientY: 20 })
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 25, clientY: 25 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 25, clientY: 25 })
+    act(() => ref.current?.undo())
+    const { pixel } = capture(() => ref.current?.toDataUrl())
+    expect(pixel(5, 5)).toEqual([0, 0, 0, 255])
+    expect(pixel(22, 22)).toEqual(white)
+  })
+})
