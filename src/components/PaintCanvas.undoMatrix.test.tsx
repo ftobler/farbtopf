@@ -177,6 +177,8 @@ interface Row {
   given?: (s: Setup) => void
   /** The editing action under test. */
   act: (s: Setup) => void
+  /** How many document changes the action reports; more than one when it edits a selection it lifted itself. */
+  reports?: number
 }
 
 const rows: Record<string, Row> = {
@@ -249,6 +251,7 @@ const rows: Record<string, Row> = {
       s.drag([5, 5], [8, 8])
       s.call((h) => h.invertColors())
     },
+    reports: 2,
   },
   'selection blurred': { given: (s) => s.select([10, 0], [20, 10]), act: (s) => s.call((h) => h.blur(2)) },
   'selection deleted': { given: (s) => s.select([0, 0], [10, 10]), act: (s) => s.call((h) => h.deleteSelection()) },
@@ -307,17 +310,18 @@ describe('PaintCanvas undo matrix', () => {
     const after = s.state()
     expect(after).not.toEqual(before)
     expect(s.history()).toEqual([true, false])
-    expect(s.onDocumentChange).toHaveBeenCalledTimes(1)
+    const reports = row.reports ?? 1
+    expect(s.onDocumentChange).toHaveBeenCalledTimes(reports)
 
     s.call((h) => h.undo())
     expect(s.state()).toEqual(before)
     expect(s.history()).toEqual([historyBefore?.[0] ?? false, true])
-    expect(s.onDocumentChange).toHaveBeenCalledTimes(2)
+    expect(s.onDocumentChange).toHaveBeenCalledTimes(reports + 1)
 
     s.call((h) => h.redo())
     expect(s.state()).toEqual(after)
     expect(s.history()).toEqual([true, false])
-    expect(s.onDocumentChange).toHaveBeenCalledTimes(3)
+    expect(s.onDocumentChange).toHaveBeenCalledTimes(reports + 2)
 
     // Undo again, then a new edit: the redo stack is gone.
     s.call((h) => h.undo())
@@ -496,6 +500,40 @@ describe('PaintCanvas undo and redo with a selection', () => {
     expect(s.history()).toEqual([false, true])
     s.call((h) => h.redo())
     expect(s.history()).toEqual([true, false])
+  })
+
+  // The lift is the one step of the whole floating session, yet each later change to
+  // the floating pixels is a change to the image, reported once per gesture.
+  it.each<[string, (s: Setup) => void]>([
+    ['moved again', (s) => s.drag([16, 8], [20, 10])],
+    [
+      'resized by a handle',
+      (s) => {
+        const rect = s.ref.current?.getSelection()
+        if (!rect) throw new Error('nothing selected')
+        s.drag([rect.x + rect.width, rect.y + rect.height], [rect.x + rect.width + 4, rect.y + rect.height + 3])
+      },
+    ],
+    ['flipped', (s) => s.call((h) => h.flip('horizontal'))],
+    ['rotated', (s) => s.call((h) => h.rotate(90))],
+    ['scaled', (s) => s.call((h) => h.scale(14, 6))],
+    ['inverted', (s) => s.call((h) => h.invertColors())],
+    ['blurred', (s) => s.call((h) => h.blur(2))],
+    ['deleted', (s) => s.call((h) => h.deleteSelection())],
+  ])('reports a lifted selection %s as one document change without a new step', (_name, change) => {
+    const s = setup()
+    // Across the red and green halves, so every edit visibly changes the lifted pixels.
+    s.select([10, 0], [20, 10])
+    const before = s.state()
+    s.drag([15, 5], [17, 8])
+    const lifted = s.state()
+    s.onDocumentChange.mockClear()
+    change(s)
+    expect(s.state()).not.toEqual(lifted)
+    expect(s.onDocumentChange).toHaveBeenCalledTimes(1)
+    s.call((h) => h.undo())
+    expect(s.state()).toEqual(before)
+    expect(s.history()).toEqual([false, true])
   })
 
   it('drops a selection that no longer fits when undo changes the size', () => {

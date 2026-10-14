@@ -195,7 +195,13 @@ export interface PaintCanvasProps {
   onPanChange?: (pan: Point) => void
   /** Reports the layer stack (bottom first) and the index of the active layer. */
   onLayersChange?: (layers: LayerInfo[], active: number) => void
-  /** Called whenever the image is edited, i.e. a change is recorded or undone/redone; not for a new or loaded document. */
+  /**
+   * Called whenever the image changes: once for every undo step recorded, undone or
+   * redone, and once for every later edit of a floating selection (each drag, flip,
+   * rotation, scale, invert, blur or delete), which changes the image without a step
+   * of its own, as the lift's step covers the whole floating session. Not called for
+   * a new or loaded document.
+   */
   onDocumentChange?: () => void
   /**
    * Reports whether unplaced work is on the canvas: a pending shape or curve, or an
@@ -402,6 +408,8 @@ interface SelectDrag {
   handle?: SelectionHandle
   origin?: Rect
   rotation?: RotationStart
+  /** Set once a move or resize drag has changed the floating selection, which is reported once per drag. */
+  edited?: boolean
 }
 
 interface CanvasResizeDrag {
@@ -1275,9 +1283,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     renderPreview()
   }, [renderPreview, transparentSelection, secondary])
 
-  const ensureFloating = useCallback(
-    (rect: Rect): FloatingSelection => {
-      if (floatingRef.current) return floatingRef.current
+  /**
+   * The floating selection, for an edit about to change it. When nothing floats yet,
+   * `rect` is lifted, recording the one undo step that covers the whole floating
+   * session; pass null to edit only a selection that already floats. A later edit
+   * records no step, but it still changes the image, so it is reported.
+   */
+  const editFloating = useCallback(
+    (rect: Rect | null): FloatingSelection | null => {
+      if (floatingRef.current) {
+        reportDocumentChange()
+        return floatingRef.current
+      }
+      if (!rect) return null
       const original = doc()
       const base = original.clone()
       const selectionMask = maskRef.current
@@ -1291,20 +1309,19 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       publishLayers()
       return floating
     },
-    [doc, eraseColor, publishLayers, recordLayerStep],
+    [doc, eraseColor, publishLayers, recordLayerStep, reportDocumentChange],
   )
 
   const beginRotation = useCallback((): RotationStart | null => {
-    const rect = currentRect()
-    if (!rect) return null
-    const floating = ensureFloating(rect)
+    const floating = editFloating(currentRect())
+    if (!floating) return null
     const { width, height } = floating.bitmap
     return {
       bitmap: floating.bitmap,
       shape: shapeBitmap(width, height, maskRef.current),
       center: { x: floating.x + width / 2, y: floating.y + height / 2 },
     }
-  }, [currentRect, ensureFloating])
+  }, [currentRect, editFloating])
 
   const applyRotation = useCallback(
     (start: RotationStart, degrees: number) => {
@@ -1890,9 +1907,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       flip(axis) {
         acceptPending()
         const mirror = axis === 'horizontal' ? flipHorizontal : flipVertical
-        const rect = currentRect()
-        if (rect) {
-          const floating = ensureFloating(rect)
+        const floating = editFloating(currentRect())
+        if (floating) {
           floating.bitmap = mirror(floating.bitmap)
           floating.source = mirror(floating.source)
           renderPreview()
@@ -1927,12 +1943,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       scale(width, height) {
         acceptPending()
-        const rect = currentRect()
-        if (!rect) {
+        const floating = editFloating(currentRect())
+        if (!floating) {
           this.resize(width, height)
           return
         }
-        const floating = ensureFloating(rect)
         floating.bitmap = scale(floating.source, width, height)
         renderPreview()
         updateSelection({ x: floating.x, y: floating.y, width, height }, maskRef.current)
@@ -1942,7 +1957,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       invertColors() {
         acceptPending()
-        const floating = floatingRef.current
+        const floating = editFloating(null)
         if (floating) {
           floating.bitmap = invertBitmap(floating.bitmap)
           floating.source = invertBitmap(floating.source)
@@ -1958,7 +1973,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       blur(radius) {
         acceptPending()
-        const floating = floatingRef.current
+        const floating = editFloating(null)
         if (floating) {
           const { width, height } = floating.bitmap
           const blurred = floating.bitmap.clone()
@@ -2017,7 +2032,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       },
       deleteSelection() {
         acceptPending()
-        const floating = floatingRef.current
+        const floating = editFloating(null)
         if (floating) {
           floatingRef.current = null
           bitmapRef.current = floating.base
@@ -2121,7 +2136,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       commitFloating,
       currentRect,
       doc,
-      ensureFloating,
+      editFloating,
       eraseColor,
       acceptPending,
       cancelPolyline,
@@ -2466,7 +2481,10 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const origin = drag.origin
         if (!origin) return
-        const floating = ensureFloating(origin)
+        if (!drag.edited) editFloating(origin)
+        drag.edited = true
+        const floating = floatingRef.current
+        if (!floating) return
         if (drag.mode === 'move') {
           // A moved selection follows the pointer past the image edge; whatever
           // hangs outside is only cut away once it is placed.
@@ -2533,7 +2551,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       }
       stroke.last = free
     },
-    [brush, brushSize, clientToCanvas, currentRect, doc, ensureFloating, eraseColor, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, toRawPoint, tool, updateSelection, zoom],
+    [brush, brushSize, clientToCanvas, currentRect, doc, editFloating, eraseColor, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, toRawPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerUp = useCallback(
