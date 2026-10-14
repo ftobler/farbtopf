@@ -1141,6 +1141,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     publishLayers()
   }, [history, publishLayers])
 
+  /** Edits the live surface in place as one undo step, then shows the result. */
+  const editActiveLayer = useCallback(
+    (edit: (surface: Bitmap) => void) => {
+      recordHistory()
+      edit(doc())
+      paint(doc())
+      syncHistory()
+    },
+    [doc, paint, recordHistory, syncHistory],
+  )
+
   const updateSelection = useCallback(
     (rect: Rect | null, nextMask: SelectionMask | null = null) => {
       selectionRef.current = rect
@@ -1781,12 +1792,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       clear() {
         acceptPending()
         commitFloating()
-        recordHistory()
-        doc().fill(activeRef.current === 0 ? WHITE : TRANSPARENT)
-        paint(doc())
+        editActiveLayer((surface) => surface.fill(activeRef.current === 0 ? WHITE : TRANSPARENT))
         // The cleared canvas no longer matches any selection mask.
         updateSelection(null)
-        syncHistory()
       },
       undo() {
         // Nothing that is still being dragged out may keep running past this point.
@@ -1912,10 +1920,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (rect) {
-          recordHistory()
-          invertSelectedColors(doc(), rect, maskRef.current)
-          paint(doc())
-          syncHistory()
+          editActiveLayer((surface) => invertSelectedColors(surface, rect, maskRef.current))
           return
         }
         applyToLayers((bitmap) => invertBitmap(bitmap))
@@ -1934,10 +1939,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (rect) {
-          recordHistory()
-          blurSelection(doc(), rect, maskRef.current, radius)
-          paint(doc())
-          syncHistory()
+          editActiveLayer((surface) => blurSelection(surface, rect, maskRef.current, radius))
           return
         }
         applyToLayers((bitmap) => gaussianBlur(bitmap, radius))
@@ -1995,10 +1997,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (!rect) return
-        recordHistory()
-        fillSelection(doc(), rect, maskRef.current, eraseColor())
-        paint(doc())
-        syncHistory()
+        editActiveLayer((surface) => fillSelection(surface, rect, maskRef.current, eraseColor()))
         updateSelection(null)
       },
       getSelectionDataUrl() {
@@ -2040,10 +2039,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
-        recordHistory()
-        fillSelection(doc(), rect, maskRef.current, eraseColor())
-        paint(doc())
-        syncHistory()
+        editActiveLayer((surface) => fillSelection(surface, rect, maskRef.current, eraseColor()))
       },
       addLayer() {
         settle()
@@ -2089,7 +2085,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       restore,
       settle,
       setLayers,
-      recordHistory,
+      editActiveLayer,
       history,
       applyRotation,
       beginRotation,
@@ -2157,18 +2153,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (mode === 'subpixel') {
       const coverage = renderTextSubpixel(current.value, options)
       if (!coverage) return
-      recordHistory()
-      blendSubpixel(doc(), coverage, current.x, current.y, options.color)
-    } else {
-      const rendered = renderText(current.value, { ...options, antialias: mode !== 'aliased' })
-      if (!rendered) return
-      recordHistory()
-      const sampling = mode === 'aliased' ? 'nearest' : 'bilinear'
-      blitAlphaRotated(doc(), rendered, current.x, current.y, rectCentre(current), current.angle, sampling)
+      editActiveLayer((surface) => blendSubpixel(surface, coverage, current.x, current.y, options.color))
+      return
     }
-    paint(doc())
-    syncHistory()
-  }, [colorFor, doc, recordHistory, paint, syncHistory, text])
+    const rendered = renderText(current.value, { ...options, antialias: mode !== 'aliased' })
+    if (!rendered) return
+    const sampling = mode === 'aliased' ? 'nearest' : 'bilinear'
+    editActiveLayer((surface) =>
+      blitAlphaRotated(surface, rendered, current.x, current.y, rectCentre(current), current.angle, sampling),
+    )
+  }, [colorFor, editActiveLayer, text])
   useEffect(() => {
     commitTextRef.current = commitText
   }, [commitText])
@@ -2246,10 +2240,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (tool === 'fill') {
         const color = colorFor(slot)
         if (colorsEqual(doc().get(point.x, point.y), color)) return
-        recordHistory()
-        floodFill(doc(), point, color)
-        paint(doc())
-        syncHistory()
+        editActiveLayer((surface) => floodFill(surface, point, color))
         return
       }
       if (tool === 'text') {
@@ -2399,7 +2390,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [activePointerId, brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [activePointerId, brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, editActiveLayer, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
