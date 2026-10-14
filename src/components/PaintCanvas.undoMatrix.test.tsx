@@ -7,6 +7,7 @@ import { BLACK, WHITE } from '../core/color'
 import type { BrushId } from '../core/brushes'
 import type { LayerInfo } from '../core/layers'
 import { seededRandom } from '../core/random'
+import { SPRAY_TICK_MS } from '../core/brushes'
 import type { ShapeKind } from '../core/shapes'
 import type { ToolId } from '../core/tools'
 import { DEFAULT_TEXT_OPTIONS } from '../render/text'
@@ -46,6 +47,7 @@ interface Props {
   shapeKind: ShapeKind
   secondary: Rgba
   transparentSelection: boolean
+  opacity: number
 }
 
 function setup(initial: Partial<Props> = {}) {
@@ -53,12 +55,14 @@ function setup(initial: Partial<Props> = {}) {
   const onHistoryChange = vi.fn<(canUndo: boolean, canRedo: boolean) => void>()
   const onDocumentChange = vi.fn()
   const onLayersChange = vi.fn<(layers: LayerInfo[], active: number) => void>()
+  const onSizeChange = vi.fn<(width: number, height: number) => void>()
   let props: Props = {
     tool: 'pencil',
     brush: 'round',
     shapeKind: 'rectangle',
     secondary: WHITE,
     transparentSelection: false,
+    opacity: 100,
     ...initial,
   }
   const element = () => (
@@ -73,7 +77,7 @@ function setup(initial: Partial<Props> = {}) {
       primary={BLACK}
       secondary={props.secondary}
       brushSize={3}
-      opacity={100}
+      opacity={props.opacity}
       shapeFill="outline"
       zoom={1}
       showGrid={false}
@@ -82,7 +86,7 @@ function setup(initial: Partial<Props> = {}) {
       onLayersChange={onLayersChange}
       onCursorMove={vi.fn()}
       onPickColor={vi.fn()}
-      onSizeChange={vi.fn()}
+      onSizeChange={onSizeChange}
       transparentSelection={props.transparentSelection}
       selectionShape="rectangle"
       text={DEFAULT_TEXT_OPTIONS}
@@ -103,15 +107,39 @@ function setup(initial: Partial<Props> = {}) {
   canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
   act(() => ref.current?.loadBitmap(baseImage()))
 
-  const drag = (from: [number, number], to: [number, number], pointerId = 1) => {
-    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId, clientX: from[0], clientY: from[1] })
-    fireEvent.pointerMove(canvas, { buttons: 1, pointerId, clientX: (from[0] + to[0]) / 2, clientY: (from[1] + to[1]) / 2 })
-    fireEvent.pointerMove(canvas, { buttons: 1, pointerId, clientX: to[0], clientY: to[1] })
-    fireEvent.pointerUp(canvas, { button: 0, pointerId, clientX: to[0], clientY: to[1] })
+  /** Drags with the left button, or with the right one (`button` 2). */
+  const drag = (from: [number, number], to: [number, number], button: 0 | 2 = 0) => {
+    const buttons = button === 2 ? 2 : 1
+    fireEvent.pointerDown(canvas, { button, buttons, pointerId: 1, clientX: from[0], clientY: from[1] })
+    fireEvent.pointerMove(canvas, { buttons, pointerId: 1, clientX: (from[0] + to[0]) / 2, clientY: (from[1] + to[1]) / 2 })
+    fireEvent.pointerMove(canvas, { buttons, pointerId: 1, clientX: to[0], clientY: to[1] })
+    fireEvent.pointerUp(canvas, { button, pointerId: 1, clientX: to[0], clientY: to[1] })
   }
-  const click = (x: number, y: number) => {
-    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: x, clientY: y })
-    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y })
+  const click = (x: number, y: number, button: 0 | 2 = 0) => {
+    fireEvent.pointerDown(canvas, { button, buttons: button === 2 ? 2 : 1, pointerId: 1, clientX: x, clientY: y })
+    fireEvent.pointerUp(canvas, { button, pointerId: 1, clientX: x, clientY: y })
+  }
+  /** Holds the pointer still at `at` for `ticks` spray timer ticks. */
+  const hold = (at: [number, number], ticks: number) => {
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: at[0], clientY: at[1] })
+      act(() => {
+        vi.advanceTimersByTime(SPRAY_TICK_MS * ticks)
+      })
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: at[0], clientY: at[1] })
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+  /** Drags the selection's rotate handle, in canvas pixels. */
+  const rotateByHandle = (from: [number, number], to: [number, number]) => {
+    const handle = container.querySelector<HTMLElement>('.selection-rotate-handle')
+    if (!handle) throw new Error('rotate handle not rendered')
+    handle.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 5, clientX: from[0], clientY: from[1] })
+    fireEvent.pointerMove(handle, { pointerId: 5, clientX: to[0], clientY: to[1] })
+    fireEvent.pointerUp(handle, { pointerId: 5, clientX: to[0], clientY: to[1] })
   }
   const enter = () => act(() => fireEvent.keyDown(window, { key: 'Enter' }))
   const editor = () => container.querySelector<HTMLTextAreaElement>('.text-editor')
@@ -141,12 +169,13 @@ function setup(initial: Partial<Props> = {}) {
     fireEvent.pointerUp(handle, { pointerId: 9, clientX: SIZE + dx, clientY: SIZE + dy })
   }
 
-  /** Everything an undo step must bring back: the shown pixels, the size and the layer stack. */
+  /** Everything an undo step must bring back: the shown pixels, the size (as reported too) and the layer stack. */
   const state = () => {
     const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray; width: number; height: number }
     const layers = onLayersChange.mock.calls.at(-1)
     return {
       size: ref.current?.getSize(),
+      reportedSize: onSizeChange.mock.calls.at(-1),
       shown: { width: image.width, height: image.height, data: Array.from(image.data) },
       layers: layers?.[0].map((layer) => `${layer.id}:${layer.name}`),
       active: layers?.[1],
@@ -163,9 +192,12 @@ function setup(initial: Partial<Props> = {}) {
     call,
     container,
     canvas,
+    props: () => props,
     setProps,
     drag,
     click,
+    hold,
+    rotateByHandle,
     enter,
     editor,
     typeText,
@@ -305,6 +337,55 @@ const rows: Record<string, Row> = {
     },
     act: (s) => s.drag([2, 2], [25, 20]),
   },
+  'translucent brush stroke': {
+    given: (s) => s.setProps({ tool: 'brush', brush: 'round', opacity: 50 }),
+    act: (s) => s.drag([2, 2], [25, 20]),
+  },
+  'spray held still over several ticks': {
+    given: (s) => s.setProps({ tool: 'brush', brush: 'spray' }),
+    act: (s) => s.hold([15, 15], 6),
+  },
+  'pixelate brush stroke': {
+    given: (s) => s.setProps({ tool: 'brush', brush: 'pixelate' }),
+    act: (s) => s.drag([10, 10], [20, 12]),
+  },
+  'right-button fill': { given: (s) => s.setProps({ tool: 'fill' }), act: (s) => s.click(3, 3, 2) },
+  'right-button eraser stroke': {
+    given: (s) => s.setProps({ tool: 'eraser' }),
+    act: (s) => s.drag([2, 2], [25, 20], 2),
+  },
+  'right-button pencil stroke': {
+    given: (s) => s.setProps({ tool: 'pencil' }),
+    act: (s) => s.drag([2, 2], [25, 20], 2),
+  },
+  'line with its end handle dragged, then placed': {
+    given: (s) => s.setProps({ tool: 'shape', shapeKind: 'line' }),
+    act: (s) => {
+      s.drag([3, 15], [20, 15])
+      s.drag([20, 15], [25, 25])
+      s.enter()
+    },
+  },
+  'selection rotated by its handle': {
+    given: (s) => s.select([10, 4], [20, 10]),
+    act: (s) => s.rotateByHandle([15, 0], [22, 7]),
+  },
+  'moved selection deleted': {
+    given: (s) => s.select([0, 0], [10, 10]),
+    act: (s) => {
+      s.drag([5, 5], [20, 20])
+      s.call((h) => h.deleteSelection())
+    },
+    reports: 2,
+  },
+  'paste dragged into place': {
+    given: (s) => s.setProps({ tool: 'select' }),
+    act: (s) => {
+      s.call((h) => h.pasteBitmap(new Bitmap(6, 6, BLACK)))
+      s.drag([3, 3], [15, 15])
+    },
+    reports: 2,
+  },
 }
 
 describe('PaintCanvas undo matrix', () => {
@@ -332,13 +413,28 @@ describe('PaintCanvas undo matrix', () => {
     expect(s.history()).toEqual([true, false])
     expect(s.onDocumentChange).toHaveBeenCalledTimes(reports + 2)
 
-    // Undo again, then a new edit: the redo stack is gone.
+    // Doing the action again, from its own starting point, is a new edit: the redo
+    // stack is gone. An undo may keep the selection, so it is dropped first.
+    const props = s.props()
     s.call((h) => h.undo())
-    s.call((h) => h.clear())
+    s.call((h) => h.clearSelection())
+    s.setProps(props)
+    row.given?.(s)
+    const beforeAgain = s.state()
+    row.act(s)
     expect(s.history()).toEqual([true, false])
-    const cleared = s.state()
+    const again = s.state()
     s.call((h) => h.redo())
-    expect(s.state()).toEqual(cleared)
+    expect(s.state()).toEqual(again)
+
+    // A stroke straight on top, undone, leaves the result as it was: no undo step
+    // shares the surface the stroke painted. The step still undoes in full after that.
+    s.setProps({ tool: 'pencil', opacity: 100 })
+    s.drag([1, 28], [28, 1])
+    s.call((h) => h.undo())
+    expect(s.state()).toEqual(again)
+    s.call((h) => h.undo())
+    expect(s.state()).toEqual(beforeAgain)
   })
 })
 
