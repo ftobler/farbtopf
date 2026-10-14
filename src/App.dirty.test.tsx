@@ -1,3 +1,6 @@
+// When the App counts the document as unsaved: the title mark and the leave and discard
+// warnings, from edits, pending work, saving and opening. The canvas only reports changes.
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Bitmap } from './core/bitmap'
