@@ -1,18 +1,15 @@
-import { createRef } from 'react'
-import { act, fireEvent, render } from '@testing-library/react'
+// The undo matrix: every document-editing action is exactly one undo step that
+// restores pixels, canvas size, layer stack and active layer, reports one document
+// change, is redone in full, leaves no undo step sharing the live surface, and a new
+// edit clears the redo stack. Undo while something is still in progress is
+// PaintCanvas.undoInteraction.test.tsx.
+
+import { fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Bitmap } from '../core/bitmap'
-import type { Rgba } from '../core/color'
-import { BLACK, WHITE } from '../core/color'
-import type { BrushId } from '../core/brushes'
-import type { LayerInfo } from '../core/layers'
-import { seededRandom } from '../core/random'
-import { SPRAY_TICK_MS } from '../core/brushes'
-import type { ShapeKind } from '../core/shapes'
-import type { ToolId } from '../core/tools'
-import { DEFAULT_TEXT_OPTIONS } from '../render/text'
-import { PaintCanvas } from './PaintCanvas'
-import type { PaintCanvasHandle } from './PaintCanvas'
+import { BLACK } from '../core/color'
+import { RED, setup } from '../test/undoHarness'
+import type { Setup } from '../test/undoHarness'
 
 // The test canvas cannot draw glyphs; stand in a solid block so placed text changes pixels.
 vi.mock('../render/text', async (importOriginal) => {
@@ -23,195 +20,6 @@ vi.mock('../render/text', async (importOriginal) => {
     renderTextSubpixel: vi.fn(() => ({ width: 10, height: 4, data: new Float32Array(10 * 4 * 3).fill(1) })),
   }
 })
-
-/**
- * One deliberate behavioural matrix for undo and redo: every document-editing
- * action is exactly one undo step that restores pixels, canvas size, layer stack
- * and active layer; redo re-applies it; and a new edit clears the redo stack.
- */
-
-const SIZE = 30
-const RED: Rgba = { r: 255, g: 0, b: 0, a: 255 }
-const GREEN: Rgba = { r: 0, g: 255, b: 0, a: 255 }
-
-/** Left half red, right half green: blurring, filling and inverting all visibly change it. */
-function baseImage(): Bitmap {
-  const bitmap = new Bitmap(SIZE, SIZE, RED)
-  for (let y = 0; y < SIZE; y += 1) for (let x = SIZE / 2; x < SIZE; x += 1) bitmap.set(x, y, GREEN)
-  return bitmap
-}
-
-interface Props {
-  tool: ToolId
-  brush: BrushId
-  shapeKind: ShapeKind
-  secondary: Rgba
-  transparentSelection: boolean
-  opacity: number
-}
-
-function setup(initial: Partial<Props> = {}) {
-  const ref = createRef<PaintCanvasHandle>()
-  const onHistoryChange = vi.fn<(canUndo: boolean, canRedo: boolean) => void>()
-  const onDocumentChange = vi.fn()
-  const onLayersChange = vi.fn<(layers: LayerInfo[], active: number) => void>()
-  const onSizeChange = vi.fn<(width: number, height: number) => void>()
-  let props: Props = {
-    tool: 'pencil',
-    brush: 'round',
-    shapeKind: 'rectangle',
-    secondary: WHITE,
-    transparentSelection: false,
-    opacity: 100,
-    ...initial,
-  }
-  const element = () => (
-    <PaintCanvas
-      ref={ref}
-      initialWidth={SIZE}
-      initialHeight={SIZE}
-      tool={props.tool}
-      brush={props.brush}
-      shapeKind={props.shapeKind}
-      random={seededRandom(7)}
-      primary={BLACK}
-      secondary={props.secondary}
-      brushSize={3}
-      opacity={props.opacity}
-      shapeFill="outline"
-      zoom={1}
-      showGrid={false}
-      onHistoryChange={onHistoryChange}
-      onDocumentChange={onDocumentChange}
-      onLayersChange={onLayersChange}
-      onCursorMove={vi.fn()}
-      onPickColor={vi.fn()}
-      onSizeChange={onSizeChange}
-      transparentSelection={props.transparentSelection}
-      selectionShape="rectangle"
-      text={DEFAULT_TEXT_OPTIONS}
-    />
-  )
-  const { container, rerender } = render(element())
-  const setProps = (next: Partial<Props>) => {
-    props = { ...props, ...next }
-    rerender(element())
-  }
-  const canvas = container.querySelector('canvas')
-  if (!canvas) throw new Error('canvas not rendered')
-  canvas.getBoundingClientRect = () =>
-    ({ x: 0, y: 0, left: 0, top: 0, right: SIZE, bottom: SIZE, width: SIZE, height: SIZE, toJSON: () => ({}) }) as DOMRect
-  canvas.setPointerCapture = vi.fn()
-  canvas.releasePointerCapture = vi.fn()
-  const context = { putImageData: vi.fn() }
-  canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
-  act(() => ref.current?.loadBitmap(baseImage()))
-
-  /** Drags with the left button, or with the right one (`button` 2). */
-  const drag = (from: [number, number], to: [number, number], button: 0 | 2 = 0) => {
-    const buttons = button === 2 ? 2 : 1
-    fireEvent.pointerDown(canvas, { button, buttons, pointerId: 1, clientX: from[0], clientY: from[1] })
-    fireEvent.pointerMove(canvas, { buttons, pointerId: 1, clientX: (from[0] + to[0]) / 2, clientY: (from[1] + to[1]) / 2 })
-    fireEvent.pointerMove(canvas, { buttons, pointerId: 1, clientX: to[0], clientY: to[1] })
-    fireEvent.pointerUp(canvas, { button, pointerId: 1, clientX: to[0], clientY: to[1] })
-  }
-  const click = (x: number, y: number, button: 0 | 2 = 0) => {
-    fireEvent.pointerDown(canvas, { button, buttons: button === 2 ? 2 : 1, pointerId: 1, clientX: x, clientY: y })
-    fireEvent.pointerUp(canvas, { button, pointerId: 1, clientX: x, clientY: y })
-  }
-  /** Holds the pointer still at `at` for `ticks` spray timer ticks. */
-  const hold = (at: [number, number], ticks: number) => {
-    vi.useFakeTimers()
-    try {
-      fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: at[0], clientY: at[1] })
-      act(() => {
-        vi.advanceTimersByTime(SPRAY_TICK_MS * ticks)
-      })
-      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: at[0], clientY: at[1] })
-    } finally {
-      vi.useRealTimers()
-    }
-  }
-  /** Drags the selection's rotate handle, in canvas pixels. */
-  const rotateByHandle = (from: [number, number], to: [number, number]) => {
-    const handle = container.querySelector<HTMLElement>('.selection-rotate-handle')
-    if (!handle) throw new Error('rotate handle not rendered')
-    handle.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(handle, { button: 0, pointerId: 5, clientX: from[0], clientY: from[1] })
-    fireEvent.pointerMove(handle, { pointerId: 5, clientX: to[0], clientY: to[1] })
-    fireEvent.pointerUp(handle, { pointerId: 5, clientX: to[0], clientY: to[1] })
-  }
-  const enter = () => act(() => fireEvent.keyDown(window, { key: 'Enter' }))
-  const editor = () => container.querySelector<HTMLTextAreaElement>('.text-editor')
-  /** Opens a text box with a click and types into it. */
-  const typeText = (value: string, at: [number, number] = [4, 4]) => {
-    click(at[0], at[1])
-    const textarea = editor()
-    if (!textarea) throw new Error('text box did not open')
-    fireEvent.change(textarea, { target: { value } })
-    return textarea
-  }
-  /** Selects a rectangle with the Select tool. */
-  const select = (from: [number, number], to: [number, number]) => {
-    setProps({ tool: 'select' })
-    drag(from, to)
-  }
-  const resizeByHandle = (dx: number, dy = 0) => {
-    const frame = container.querySelector<HTMLElement>('.canvas-frame')
-    const handle = container.querySelector<HTMLElement>('.canvas-resize-handle-se')
-    if (!frame || !handle) throw new Error('resize handle not rendered')
-    frame.getBoundingClientRect = () =>
-      ({ x: 0, y: 0, left: 0, top: 0, right: SIZE, bottom: SIZE, width: SIZE, height: SIZE, toJSON: () => ({}) }) as DOMRect
-    handle.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(handle, { button: 0, pointerId: 9, clientX: SIZE, clientY: SIZE })
-    fireEvent.pointerMove(handle, { pointerId: 9, clientX: SIZE + dx / 2, clientY: SIZE + dy / 2 })
-    fireEvent.pointerMove(handle, { pointerId: 9, clientX: SIZE + dx, clientY: SIZE + dy })
-    fireEvent.pointerUp(handle, { pointerId: 9, clientX: SIZE + dx, clientY: SIZE + dy })
-  }
-
-  /** Everything an undo step must bring back: the shown pixels, the size (as reported too) and the layer stack. */
-  const state = () => {
-    const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray; width: number; height: number }
-    const layers = onLayersChange.mock.calls.at(-1)
-    return {
-      size: ref.current?.getSize(),
-      reportedSize: onSizeChange.mock.calls.at(-1),
-      shown: { width: image.width, height: image.height, data: Array.from(image.data) },
-      layers: layers?.[0].map((layer) => `${layer.id}:${layer.name}`),
-      active: layers?.[1],
-    }
-  }
-  /** Runs a handle method as its own React update. */
-  const call = (run: (handle: PaintCanvasHandle) => void) =>
-    act(() => {
-      if (ref.current) run(ref.current)
-    })
-  const history = () => onHistoryChange.mock.calls.at(-1)
-  return {
-    ref,
-    call,
-    container,
-    canvas,
-    props: () => props,
-    setProps,
-    drag,
-    click,
-    hold,
-    rotateByHandle,
-    enter,
-    editor,
-    typeText,
-    select,
-    resizeByHandle,
-    state,
-    history,
-    onHistoryChange,
-    onDocumentChange,
-    onLayersChange,
-  }
-}
-
-type Setup = ReturnType<typeof setup>
 
 interface Row {
   /** Brings the canvas to where the action starts; may record history of its own. */
@@ -517,103 +325,7 @@ describe('PaintCanvas history without an edit', () => {
   })
 })
 
-describe('PaintCanvas undo and redo with an open text box', () => {
-  // Like a pending shape: undo takes back the text box itself (placed, then undone,
-  // so redo brings it back), and redo drops it.
-  it('takes back only the typed text on undo, and redo brings it back', () => {
-    const s = setup()
-    s.drag([2, 2], [25, 20])
-    const stroked = s.state()
-    s.setProps({ tool: 'text' })
-    s.typeText('hi')
-    s.call((h) => h.undo())
-    expect(s.editor()).toBeNull()
-    expect(s.state()).toEqual(stroked)
-    expect(s.history()).toEqual([true, true])
-    s.call((h) => h.redo())
-    const withText = s.state()
-    expect(withText).not.toEqual(stroked)
-    expect(s.history()).toEqual([true, false])
-    // The text is a step of its own on top of the stroke.
-    s.call((h) => h.undo())
-    expect(s.state()).toEqual(stroked)
-    s.call((h) => h.undo())
-    expect(s.history()).toEqual([false, true])
-  })
-
-  it('reports the text undo as an edit', () => {
-    const s = setup({ tool: 'text' })
-    s.typeText('hi')
-    s.onDocumentChange.mockClear()
-    s.call((h) => h.undo())
-    // Placing the text, then taking it back.
-    expect(s.onDocumentChange).toHaveBeenCalledTimes(2)
-  })
-
-  it('only closes an empty text box on undo', () => {
-    const s = setup()
-    s.drag([2, 2], [25, 20])
-    const stroked = s.state()
-    s.setProps({ tool: 'text' })
-    s.typeText('   ')
-    s.call((h) => h.undo())
-    expect(s.editor()).toBeNull()
-    expect(s.state()).toEqual(stroked)
-    expect(s.history()).toEqual([true, false])
-  })
-
-  it('drops the text box on redo, and redoes', () => {
-    const s = setup()
-    s.drag([2, 2], [25, 20])
-    const stroked = s.state()
-    s.call((h) => h.undo())
-    s.setProps({ tool: 'text' })
-    s.typeText('hi')
-    s.call((h) => h.redo())
-    expect(s.editor()).toBeNull()
-    expect(s.state()).toEqual(stroked)
-    expect(s.history()).toEqual([true, false])
-  })
-
-  it('keeps the text box on a redo with nothing to redo', () => {
-    const s = setup({ tool: 'text' })
-    s.typeText('hi')
-    s.call((h) => h.redo())
-    expect(s.editor()?.value).toBe('hi')
-  })
-
-  it('takes back the text, then the resize, when undoing past a size change', () => {
-    const s = setup()
-    s.call((h) => h.resizeCanvas({ x: 0, y: 0, width: 40, height: 40 }))
-    const resized = s.state()
-    s.setProps({ tool: 'text' })
-    s.typeText('hi', [32, 32])
-    s.call((h) => h.undo())
-    expect(s.editor()).toBeNull()
-    expect(s.state()).toEqual(resized)
-    s.call((h) => h.undo())
-    expect(s.state().size).toEqual({ width: SIZE, height: SIZE })
-    expect(s.editor()).toBeNull()
-  })
-})
-
-describe('PaintCanvas undo and redo with a selection', () => {
-  it('takes back a lifted selection rotated and scaled in several goes as one step', () => {
-    const s = setup()
-    s.select([0, 0], [10, 10])
-    const before = s.state()
-    s.drag([5, 5], [12, 12])
-    s.call((h) => h.rotate(90))
-    s.call((h) => h.scale(14, 6))
-    s.call((h) => h.flip('vertical'))
-    s.call((h) => h.undo())
-    expect(s.state()).toEqual(before)
-    expect(s.ref.current?.getSelection()).toBeNull()
-    expect(s.history()).toEqual([false, true])
-    s.call((h) => h.redo())
-    expect(s.history()).toEqual([true, false])
-  })
-
+describe('PaintCanvas edits of a floating selection', () => {
   // The lift is the one step of the whole floating session, yet each later change to
   // the floating pixels is a change to the image, reported once per gesture.
   it.each<[string, (s: Setup) => void]>([
@@ -647,26 +359,5 @@ describe('PaintCanvas undo and redo with a selection', () => {
     s.call((h) => h.undo())
     expect(s.state()).toEqual(before)
     expect(s.history()).toEqual([false, true])
-  })
-
-  it('drops a selection that no longer fits when undo changes the size', () => {
-    const s = setup()
-    s.call((h) => h.resize(60, 60))
-    // The 30px canvas box now shows 60 image pixels: this selects 40..56.
-    s.select([20, 20], [28, 28])
-    expect(s.ref.current?.getSelection()).not.toBeNull()
-    s.call((h) => h.undo())
-    expect(s.state().size).toEqual({ width: SIZE, height: SIZE })
-    expect(s.ref.current?.getSelection()).toBeNull()
-  })
-
-  it('drops a selection that no longer fits when redo changes the size', () => {
-    const s = setup()
-    s.call((h) => h.resize(10, 10))
-    s.call((h) => h.undo())
-    s.select([15, 15], [28, 28])
-    s.call((h) => h.redo())
-    expect(s.state().size).toEqual({ width: 10, height: 10 })
-    expect(s.ref.current?.getSelection()).toBeNull()
   })
 })
