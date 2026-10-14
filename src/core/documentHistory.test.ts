@@ -59,6 +59,12 @@ describe('stackBytes', () => {
   })
 })
 
+/**
+ * What an undo step of the document is: the snapshot contents, the active layer
+ * it restores, its byte cost per step type and the aliasing invariant. The stack
+ * itself (order, limit, eviction) is covered in history.test.ts; here it is only
+ * checked that the options reach it.
+ */
 describe('DocumentHistory', () => {
   it('uses the editor limits by default', () => {
     expect(HISTORY_LIMIT).toBeGreaterThan(0)
@@ -113,13 +119,16 @@ describe('DocumentHistory', () => {
     expect(history.canUndo).toBe(true)
   })
 
-  it('drops the redo states after a new record', () => {
+  it('stops retaining the bitmaps of redo states a new record drops', () => {
     const history = new DocumentHistory()
-    const live = [layer(1)]
+    const live = [layer(1, 2, 2, 10)]
     history.record(live, 0)
-    history.undo(live, 0)
-    history.record(live, 0)
+    const undone = live[0].bitmap
+    const previous = history.undo(live, 0)!
+    expect(history.retains(undone)).toBe(true)
+    history.record(previous.layers, 0)
     expect(history.canRedo).toBe(false)
+    expect(history.retains(undone)).toBe(false)
   })
 
   it('restores which layer was active', () => {
@@ -217,6 +226,39 @@ describe('DocumentHistory', () => {
       expect(seen).toEqual([5, 4, 3])
     })
 
+    it('charges the redo state only for the bitmaps the restored step does not hold', () => {
+      const history = new DocumentHistory()
+      const live = [layer(1, 10, 10), layer(2, 4, 4)]
+      history.record(live, 1)
+      const added = history.isolate([...live, layer(3, 3, 3)], 2)
+      // The restored step shares the bottom layer and holds its own copy of layer 2.
+      history.undo(added, 2)
+      expect(history.bytes).toBe((4 * 4 + 3 * 3) * 4)
+    })
+
+    it('charges nothing for a redo state whose bitmaps the restored step all holds', () => {
+      const history = new DocumentHistory()
+      const live = [layer(1, 4, 4), layer(2, 4, 4)]
+      history.recordStack(live, 0)
+      history.undo(live, 0)
+      expect(history.bytes).toBe(0)
+      expect(history.canRedo).toBe(true)
+    })
+
+    it('leaves the bytes alone on an undo or redo with nothing to take back', () => {
+      const history = new DocumentHistory()
+      const live = [layer(1, 4, 4)]
+      history.record(live, 0)
+      const recorded = history.bytes
+      expect(history.redo(live, 0)).toBeUndefined()
+      expect(history.bytes).toBe(recorded)
+      const previous = history.undo(live, 0)!
+      const undone = history.bytes
+      expect(history.undo(previous.layers, 0)).toBeUndefined()
+      expect(history.bytes).toBe(undone)
+      expect(history.canRedo).toBe(true)
+    })
+
     it('honours a custom step limit', () => {
       const history = new DocumentHistory({ limit: 2 })
       for (let i = 0; i < 5; i += 1) history.record([layer(1)], 0)
@@ -264,6 +306,31 @@ describe('DocumentHistory', () => {
       expect(valueOf(selected[0].bitmap)).toBe(10)
       expect(selected[1].bitmap).toBe(live[1].bitmap)
       expect(selected).not.toBe(live)
+    })
+
+    it('retains the live bitmaps undo moves into the redo state, and hands them back uncopied on redo', () => {
+      const history = new DocumentHistory()
+      const live = [layer(1, 2, 2, 10), layer(2, 2, 2, 20)]
+      history.record(live, 1)
+      paint(live[1].bitmap, 30)
+      const previous = history.undo(live, 1)!
+      expect(history.retains(live[1].bitmap)).toBe(true)
+      expect(history.retains(previous.layers[1].bitmap)).toBe(false)
+      const next = history.redo(previous.layers, previous.active)!
+      // Once redone no state holds that bitmap any more, so it needs no copy.
+      expect(next.layers[1].bitmap).toBe(live[1].bitmap)
+      expect(history.retains(next.layers[1].bitmap)).toBe(false)
+      expect(values(next)).toEqual([10, 30])
+    })
+
+    it('hands back the layers unchanged when the active index is out of range', () => {
+      const history = new DocumentHistory()
+      const live = [layer(1), layer(2)]
+      history.record(live, 0)
+      const isolated = history.isolate(live, 5)
+      expect(isolated).not.toBe(live)
+      expect(isolated).toEqual(live)
+      expect(isolated[0]).toBe(live[0])
     })
 
     it('does not copy a layer that becomes active while no step holds it', () => {

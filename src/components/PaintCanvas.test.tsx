@@ -1,3 +1,7 @@
+// PaintCanvas feature behaviour: tools, selections, shapes and image operations.
+// Undo appears here only where a feature has undo semantics of its own; that every
+// action is one undo step, restored and redone in full, is PaintCanvas.undoMatrix.test.tsx.
+
 import { createRef } from 'react'
 import { act, render, within } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
@@ -111,27 +115,8 @@ describe('PaintCanvas', () => {
     expect(onHistoryChange).not.toHaveBeenCalledWith(true, false)
   })
 
-  it('records history when a freehand stroke is drawn', () => {
-    const { canvas, onHistoryChange } = setup('brush')
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 5, clientY: 5 })
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 9, clientY: 5 })
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 9, clientY: 5 })
-    expect(onHistoryChange).toHaveBeenCalled()
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-  })
-
-  it('supports undo after drawing', () => {
-    const { ref, canvas, onHistoryChange } = setup('brush')
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 2, clientY: 2 })
-    act(() => ref.current?.undo())
-    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
-    act(() => ref.current?.redo())
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-  })
-
-  it('places a dragged shape on Enter as one undo step', () => {
-    const { ref, canvas, onHistoryChange } = setup('shape')
+  it('keeps a dragged shape pending until Enter places it', () => {
+    const { canvas, onHistoryChange } = setup('shape')
     onHistoryChange.mockClear()
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 10, clientY: 10 })
@@ -140,8 +125,6 @@ describe('PaintCanvas', () => {
     expect(onHistoryChange).not.toHaveBeenCalled()
     fireEvent.keyDown(window, { key: 'Enter' })
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-    act(() => ref.current?.undo())
-    expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
   })
 
   it('reports the document size', () => {
@@ -192,11 +175,10 @@ describe('PaintCanvas', () => {
     expect(ref.current?.getSize()).toEqual({ width: 10, height: 20 })
   })
 
-  it('flips horizontally without changing the size and records history', () => {
-    const { ref, onHistoryChange } = setup('brush')
+  it('flips horizontally without changing the size', () => {
+    const { ref } = setup('brush')
     act(() => ref.current?.flip('horizontal'))
     expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
   })
 
   it('tracks a rectangular selection drag', () => {
@@ -225,7 +207,7 @@ describe('PaintCanvas', () => {
   })
 
   it('moves a selection when dragged from inside', () => {
-    const { ref, canvas, onHistoryChange } = setup('select', 30, 30)
+    const { ref, canvas } = setup('select', 30, 30)
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
@@ -233,7 +215,6 @@ describe('PaintCanvas', () => {
     fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
     fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
     expect(ref.current?.getSelection()).toEqual({ x: 7, y: 7, width: 18, height: 18 })
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
   })
 
   it('moves pixels and fills the vacated area with the secondary colour', () => {
@@ -316,27 +297,6 @@ describe('PaintCanvas', () => {
     expect(pixel(21, 21)).toEqual([255, 0, 0, 255])
   })
 
-  it('bakes a moved selection for undo and redo', () => {
-    const { ref, canvas } = setup('select', 30, 30)
-    const context = { putImageData: vi.fn() }
-    canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
-    const doc = new Bitmap(30, 30, WHITE)
-    doc.set(5, 5, BLACK)
-    act(() => ref.current?.loadBitmap(doc))
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 19, clientY: 19 })
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 2, clientX: 10, clientY: 10 })
-    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
-    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 15, clientY: 15 })
-    act(() => ref.current?.undo())
-    act(() => ref.current?.redo())
-    const image = context.putImageData.mock.calls.at(-1)?.[0] as { data: Uint8ClampedArray }
-    const pixel = (x: number, y: number) => Array.from(image.data.slice((y * 30 + x) * 4, (y * 30 + x) * 4 + 4))
-    expect(pixel(10, 10)).toEqual([0, 0, 0, 255])
-    expect(pixel(5, 5)).toEqual([255, 255, 255, 255])
-  })
-
   it('selects everything', () => {
     const { ref, onSelectionChange } = setup('select', 12, 9)
     act(() => ref.current?.selectAll())
@@ -379,17 +339,6 @@ describe('PaintCanvas', () => {
     expect(onSizeChange).toHaveBeenLastCalledWith(15, 10)
   })
 
-  it('undoes a selection scale in one step', () => {
-    const { ref, canvas } = setup('select', 30, 30)
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 3 })
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 11, clientY: 7 })
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 11, clientY: 7 })
-    act(() => ref.current?.scale(20, 10))
-    act(() => ref.current?.undo())
-    expect(ref.current?.getSize()).toEqual({ width: 30, height: 30 })
-    expect(ref.current?.getSelection()).toBeNull()
-  })
-
   it('drops the selection when the canvas is cleared', () => {
     const { ref } = setup('select', 30, 30)
     act(() => ref.current?.selectAll())
@@ -408,7 +357,7 @@ describe('PaintCanvas', () => {
   })
 
   it('clears the selected pixels with the secondary colour', () => {
-    const { ref, canvas, onHistoryChange } = setup('select', 10, 10)
+    const { ref, canvas } = setup('select', 10, 10)
     const context = { putImageData: vi.fn() }
     canvas.getContext = vi.fn(() => context) as unknown as typeof canvas.getContext
     act(() => ref.current?.loadBitmap(new Bitmap(10, 10, BLACK)))
@@ -421,7 +370,6 @@ describe('PaintCanvas', () => {
     expect(pixel(3, 3)).toEqual([255, 255, 255, 255])
     expect(pixel(8, 8)).toEqual([0, 0, 0, 255])
     expect(ref.current?.getSelection()).toBeNull()
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
   })
 
   it('makes a free-form selection and only clears inside the outline', () => {
@@ -611,8 +559,8 @@ describe('PaintCanvas', () => {
       expect(pixel(2, 6)).toEqual([0, 0, 0, 255])
     })
 
-    it('inverts only the selected pixels and undoes in one step', () => {
-      const { ref, canvas, onHistoryChange } = setup('select', 20, 20)
+    it('inverts only the selected pixels', () => {
+      const { ref, canvas } = setup('select', 20, 20)
       const pixel = spyPixels(canvas, 20)
       const doc = new Bitmap(20, 20, WHITE)
       doc.set(3, 3, BLACK)
@@ -629,11 +577,6 @@ describe('PaintCanvas', () => {
       expect(pixel(15, 15)).toEqual([0, 0, 0, 255])
       expect(pixel(0, 0)).toEqual([255, 255, 255, 255])
       expect(ref.current?.getSelection()).toEqual({ x: 2, y: 2, width: 4, height: 4 })
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-      act(() => ref.current?.undo())
-      expect(pixel(3, 3)).toEqual([0, 0, 0, 255])
-      expect(pixel(2, 2)).toEqual([255, 255, 255, 255])
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
     })
 
     it('inverts the whole image without a selection', () => {
@@ -661,8 +604,8 @@ describe('PaintCanvas', () => {
       expect(pixel(6, 6)).toEqual([0, 0, 0, 255])
     })
 
-    it('blurs only the selected pixels and undoes in one step', () => {
-      const { ref, canvas, onHistoryChange } = setup('select', 20, 20)
+    it('blurs only the selected pixels', () => {
+      const { ref, canvas } = setup('select', 20, 20)
       const pixel = spyPixels(canvas, 20)
       const doc = new Bitmap(20, 20, WHITE)
       for (let y = 2; y < 12; y += 1) doc.set(6, y, BLACK)
@@ -680,11 +623,6 @@ describe('PaintCanvas', () => {
       expect(pixel(6, 12)).toEqual([255, 255, 255, 255])
       expect(pixel(15, 15)).toEqual([0, 0, 0, 255])
       expect(ref.current?.getSelection()).toEqual({ x: 2, y: 2, width: 10, height: 10 })
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-      act(() => ref.current?.undo())
-      expect(pixel(6, 6)).toEqual([0, 0, 0, 255])
-      expect(pixel(5, 6)).toEqual([255, 255, 255, 255])
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
     })
 
     it('blurs the whole image without a selection', () => {
@@ -817,8 +755,8 @@ describe('PaintCanvas', () => {
       up(canvas, 1, 12, 2)
     }
 
-    it('adds freeform vertices on click and finishes with Enter as one undo step', () => {
-      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
+    it('adds freeform vertices on click and places them once on Enter', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'freeform')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       vi.mocked(renderShape).mockClear()
@@ -835,10 +773,6 @@ describe('PaintCanvas', () => {
       expect(pixel(7, 7)).toEqual(white)
       expect(onHistoryChange).toHaveBeenCalledTimes(1)
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-      act(() => ref.current?.undo())
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
-      expect(pixel(7, 2)).toEqual(white)
-      expect(pixel(12, 7)).toEqual(white)
     })
 
     it('finishes a freeform shape on double-click', () => {
@@ -970,8 +904,8 @@ describe('PaintCanvas', () => {
       up(canvas, 1, 12, 2)
     }
 
-    it('commits a dragged curve on Enter as one undo step and undo removes it', () => {
-      const { ref, canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
+    it('keeps a dragged curve pending until Enter commits it', () => {
+      const { canvas, onHistoryChange } = setup('shape', 20, 20, false, 'rectangle', 'polyline')
       const pixel = spyPixels(canvas, 20)
       onHistoryChange.mockClear()
       dragLine(canvas)
@@ -979,9 +913,6 @@ describe('PaintCanvas', () => {
       fireEvent.keyDown(window, { key: 'Enter' })
       expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
       expect(pixel(7, 2)).toEqual(black)
-      act(() => ref.current?.undo())
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
-      expect(pixel(7, 2)).toEqual(white)
     })
 
     it('places the curve when clicking outside its control points', () => {
@@ -1540,18 +1471,6 @@ describe('PaintCanvas', () => {
       expect(ref.current?.getSize()).toEqual({ width: 1, height: 20 })
     })
 
-    it('makes a canvas resize undoable', () => {
-      const { ref, container, onHistoryChange } = setup('brush', 20, 20)
-      mockFrame(container, 20, 20)
-      onHistoryChange.mockClear()
-      dragHandle(container, 'se', 9, 40, 40)
-      expect(ref.current?.getSize()).toEqual({ width: 40, height: 40 })
-      expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-      act(() => ref.current?.undo())
-      expect(ref.current?.getSize()).toEqual({ width: 20, height: 20 })
-      expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
-    })
-
     it('resizeCanvas extends the canvas keeping content at its image position', () => {
       const { ref, canvas } = setup('brush', 10, 10)
       const context = { putImageData: vi.fn() }
@@ -1803,26 +1722,6 @@ describe('PaintCanvas pointercancel', () => {
 })
 
 describe('PaintCanvas undo after a size change', () => {
-  it('clears a selection left outside the image after undoing a rotation', () => {
-    const { ref } = setup('select', 40, 20)
-    act(() => ref.current?.rotate(90))
-    act(() => ref.current?.selectAll())
-    expect(ref.current?.getSelection()).toEqual({ x: 0, y: 0, width: 20, height: 40 })
-    act(() => ref.current?.undo())
-    expect(ref.current?.getSize()).toEqual({ width: 40, height: 20 })
-    expect(ref.current?.getSelection()).toBeNull()
-  })
-
-  it('clears a selection left outside the image after redoing a rotation', () => {
-    const { ref } = setup('select', 40, 20)
-    act(() => ref.current?.rotate(90))
-    act(() => ref.current?.selectAll())
-    act(() => ref.current?.undo())
-    act(() => ref.current?.redo())
-    expect(ref.current?.getSize()).toEqual({ width: 20, height: 40 })
-    expect(ref.current?.getSelection()).toBeNull()
-  })
-
   it('keeps a selection through a same-size undo', () => {
     const { ref, canvas } = setup('select', 30, 30)
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 2, clientY: 2 })
