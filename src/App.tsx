@@ -1024,7 +1024,8 @@ function App() {
   return (
     <div className={`app${dropTarget ? ' app--drop-target' : ''}${busyShown ? ' app--busy' : ''}`}>
       <MenuBar
-        canUndo={canUndo}
+        // Unplaced work (a pending shape, a text box with text) is what Undo takes back first.
+        canUndo={canUndo || pending}
         canRedo={canRedo}
         theme={theme}
         zoom={zoom}
