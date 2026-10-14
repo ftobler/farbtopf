@@ -420,21 +420,28 @@ describe('PaintCanvas undo matrix', () => {
     s.call((h) => h.clearSelection())
     s.setProps(props)
     row.given?.(s)
-    const beforeAgain = s.state()
     row.act(s)
     expect(s.history()).toEqual([true, false])
     const again = s.state()
     s.call((h) => h.redo())
     expect(s.state()).toEqual(again)
+  })
 
-    // A stroke straight on top, undone, leaves the result as it was: no undo step
-    // shares the surface the stroke painted. The step still undoes in full after that.
+  // A stroke straight after the action paints the live surface in place; if an undo
+  // step still shared that bitmap, undoing the stroke and then the action would not
+  // bring back what was there before.
+  it.each(Object.entries(rows))('%s leaves no undo step sharing the surface painted next', (_name, row) => {
+    const s = setup()
+    row.given?.(s)
+    const before = s.state()
+    row.act(s)
+    const after = s.state()
     s.setProps({ tool: 'pencil', opacity: 100 })
     s.drag([1, 28], [28, 1])
     s.call((h) => h.undo())
-    expect(s.state()).toEqual(again)
+    expect(s.state()).toEqual(after)
     s.call((h) => h.undo())
-    expect(s.state()).toEqual(beforeAgain)
+    expect(s.state()).toEqual(before)
   })
 })
 
