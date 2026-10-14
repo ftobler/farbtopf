@@ -400,3 +400,122 @@ describe('PaintCanvas history without an edit', () => {
     expect(s.history()).toEqual([false, false])
   })
 })
+
+describe('PaintCanvas undo and redo with an open text box', () => {
+  // Like a pending shape: undo takes back the text box itself (placed, then undone,
+  // so redo brings it back), and redo drops it.
+  it('takes back only the typed text on undo, and redo brings it back', () => {
+    const s = setup()
+    s.drag([2, 2], [25, 20])
+    const stroked = s.state()
+    s.setProps({ tool: 'text' })
+    s.typeText('hi')
+    s.call((h) => h.undo())
+    expect(s.editor()).toBeNull()
+    expect(s.state()).toEqual(stroked)
+    expect(s.history()).toEqual([true, true])
+    s.call((h) => h.redo())
+    const withText = s.state()
+    expect(withText).not.toEqual(stroked)
+    expect(s.history()).toEqual([true, false])
+    // The text is a step of its own on top of the stroke.
+    s.call((h) => h.undo())
+    expect(s.state()).toEqual(stroked)
+    s.call((h) => h.undo())
+    expect(s.history()).toEqual([false, true])
+  })
+
+  it('reports the text undo as an edit', () => {
+    const s = setup({ tool: 'text' })
+    s.typeText('hi')
+    s.onDocumentChange.mockClear()
+    s.call((h) => h.undo())
+    // Placing the text, then taking it back.
+    expect(s.onDocumentChange).toHaveBeenCalledTimes(2)
+  })
+
+  it('only closes an empty text box on undo', () => {
+    const s = setup()
+    s.drag([2, 2], [25, 20])
+    const stroked = s.state()
+    s.setProps({ tool: 'text' })
+    s.typeText('   ')
+    s.call((h) => h.undo())
+    expect(s.editor()).toBeNull()
+    expect(s.state()).toEqual(stroked)
+    expect(s.history()).toEqual([true, false])
+  })
+
+  it('drops the text box on redo, and redoes', () => {
+    const s = setup()
+    s.drag([2, 2], [25, 20])
+    const stroked = s.state()
+    s.call((h) => h.undo())
+    s.setProps({ tool: 'text' })
+    s.typeText('hi')
+    s.call((h) => h.redo())
+    expect(s.editor()).toBeNull()
+    expect(s.state()).toEqual(stroked)
+    expect(s.history()).toEqual([true, false])
+  })
+
+  it('keeps the text box on a redo with nothing to redo', () => {
+    const s = setup({ tool: 'text' })
+    s.typeText('hi')
+    s.call((h) => h.redo())
+    expect(s.editor()?.value).toBe('hi')
+  })
+
+  it('takes back the text, then the resize, when undoing past a size change', () => {
+    const s = setup()
+    s.call((h) => h.resizeCanvas({ x: 0, y: 0, width: 40, height: 40 }))
+    const resized = s.state()
+    s.setProps({ tool: 'text' })
+    s.typeText('hi', [32, 32])
+    s.call((h) => h.undo())
+    expect(s.editor()).toBeNull()
+    expect(s.state()).toEqual(resized)
+    s.call((h) => h.undo())
+    expect(s.state().size).toEqual({ width: SIZE, height: SIZE })
+    expect(s.editor()).toBeNull()
+  })
+})
+
+describe('PaintCanvas undo and redo with a selection', () => {
+  it('takes back a lifted selection rotated and scaled in several goes as one step', () => {
+    const s = setup()
+    s.select([0, 0], [10, 10])
+    const before = s.state()
+    s.drag([5, 5], [12, 12])
+    s.call((h) => h.rotate(90))
+    s.call((h) => h.scale(14, 6))
+    s.call((h) => h.flip('vertical'))
+    s.call((h) => h.undo())
+    expect(s.state()).toEqual(before)
+    expect(s.ref.current?.getSelection()).toBeNull()
+    expect(s.history()).toEqual([false, true])
+    s.call((h) => h.redo())
+    expect(s.history()).toEqual([true, false])
+  })
+
+  it('drops a selection that no longer fits when undo changes the size', () => {
+    const s = setup()
+    s.call((h) => h.resize(60, 60))
+    // The 30px canvas box now shows 60 image pixels: this selects 40..56.
+    s.select([20, 20], [28, 28])
+    expect(s.ref.current?.getSelection()).not.toBeNull()
+    s.call((h) => h.undo())
+    expect(s.state().size).toEqual({ width: SIZE, height: SIZE })
+    expect(s.ref.current?.getSelection()).toBeNull()
+  })
+
+  it('drops a selection that no longer fits when redo changes the size', () => {
+    const s = setup()
+    s.call((h) => h.resize(10, 10))
+    s.call((h) => h.undo())
+    s.select([15, 15], [28, 28])
+    s.call((h) => h.redo())
+    expect(s.state().size).toEqual({ width: 10, height: 10 })
+    expect(s.ref.current?.getSelection()).toBeNull()
+  })
+})

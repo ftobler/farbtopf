@@ -1807,14 +1807,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       undo() {
         // Nothing that is still being dragged out may keep running past this point.
         abortPointerInteraction()
-        // Undo takes back the pending shape or curve itself, as in Paint: it is placed
-        // and then undone, so the step before it survives and redo brings it back.
-        // One too small to place (still being dragged out, a lone freeform vertex) is
-        // simply dropped, and that is all this undo does.
+        // Undo takes back the pending shape, curve or text box itself, as in Paint: it
+        // is placed and then undone, so the step before it survives and redo brings it
+        // back. One too small to place (still being dragged out, a lone freeform
+        // vertex, an empty text box) is simply dropped, and that is all this undo does.
+        const editing = editorRef.current
         const unplaced =
-          shapeRef.current?.mode === 'insert' || (polylineRef.current !== null && polylineRef.current.points.length < 2)
+          shapeRef.current?.mode === 'insert' ||
+          (polylineRef.current !== null && polylineRef.current.points.length < 2) ||
+          (editing !== null && editing.value.trim().length === 0)
         commitShapeRef.current()
         finishPolyline()
+        commitTextRef.current()
         if (unplaced) return
         if (floatingRef.current) {
           commitFloating()
@@ -1830,10 +1834,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         if (!historyRef.current.canRedo) return
         // Nothing that is still being dragged out may keep running past this point.
         abortPointerInteraction()
-        // Placing a pending shape or freeform shape would clear the redo stack, so redo
-        // drops it instead.
+        // Placing a pending shape, freeform shape or text box would clear the redo
+        // stack, so redo drops it instead.
         cancelShapeRef.current()
         cancelPolyline()
+        editorRef.current = null
+        setEditor(null)
         if (floatingRef.current) {
           commitFloating()
           updateSelection(null)
