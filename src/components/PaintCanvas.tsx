@@ -29,8 +29,9 @@ import type { Rgba } from '../core/color'
 import { TRANSPARENT, WHITE, colorsEqual, toCss } from '../core/color'
 import type { Point, Rect } from '../core/geometry'
 import { clamp, clampPoint, distance, distanceToSegment, floorPoint, normalizeRect, pointInRect, pointsEqual } from '../core/geometry'
-import { History } from '../core/history'
-import { compositeLayers, drawOver, moveItem, snapshotBytes, stackBytes, thumbnail } from '../core/layers'
+import { DocumentHistory } from '../core/documentHistory'
+import type { DocSnapshot } from '../core/documentHistory'
+import { compositeLayers, drawOver, moveItem, thumbnail } from '../core/layers'
 import type { Layer, LayerInfo } from '../core/layers'
 import {
   blit,
@@ -201,14 +202,6 @@ export interface PaintCanvasProps {
    * open text box with text in it. Placing it is reported by `onDocumentChange`.
    */
   onPendingChange?: (pending: boolean) => void
-}
-
-/** An undo step: the whole layer stack and which layer was active. */
-interface DocSnapshot {
-  layers: Layer[]
-  active: number
-  /** Set when every layer's bitmap is replaced, so the snapshot retains the whole stack. */
-  bytes?: number
 }
 
 interface StrokeState {
@@ -426,9 +419,6 @@ interface CanvasResizeDrag {
   /** The pre-resize snapshot is pushed once, on the first move. */
   recorded: boolean
 }
-
-const HISTORY_LIMIT = 80
-const HISTORY_MAX_BYTES = 256 * 1024 * 1024
 
 const SELECTION_HANDLES: SelectionHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const HANDLE_HIT = 4
@@ -877,9 +867,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const offscreenRef = useRef<HTMLCanvasElement | null>(null)
   const miniatureRef = useRef<HTMLCanvasElement | null>(null)
   const bitmapRef = useRef<Bitmap | null>(null)
-  const historyRef = useRef(
-    new History<DocSnapshot>(HISTORY_LIMIT, { maxBytes: HISTORY_MAX_BYTES, sizeOf: snapshotBytes }),
-  )
+  /** What an undo step is lives in the core; this component only decides when one is recorded. */
+  const [history] = useState(() => new DocumentHistory())
   /** The layer stack, bottom first. The active entry's bitmap may be stale: `bitmapRef` holds the live one. */
   const layersRef = useRef<Layer[]>([])
   const activeRef = useRef(0)
@@ -1095,14 +1084,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [doc, layers],
   )
 
-  /** Records an undo step; `before` is the active layer's bitmap as it was before the change. */
+  /**
+   * Records an undo step for a change to the active layer. `before` is its bitmap as
+   * it was before the change; leave it out when the live surface is about to be
+   * edited in place, and the step copies it.
+   */
   const recordHistory = useCallback(
-    (before: Bitmap, bytes?: number) => {
-      const stack = layers().map((layer, index) => (index === activeRef.current ? { ...layer, bitmap: before } : layer))
-      historyRef.current.record({ layers: stack, active: activeRef.current, bytes })
+    (before?: Bitmap) => {
+      history.record(currentLayers(), activeRef.current, before)
       onDocumentChangeRef.current?.()
     },
-    [layers],
+    [currentLayers, history],
   )
 
   /**
@@ -1145,10 +1137,20 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   }, [publishLayers])
 
   const syncHistory = useCallback(() => {
-    const history = historyRef.current
     onHistoryChangeRef.current(history.canUndo, history.canRedo)
     publishLayers()
-  }, [publishLayers])
+  }, [history, publishLayers])
+
+  /** Edits the live surface in place as one undo step, then shows the result. */
+  const editActiveLayer = useCallback(
+    (edit: (surface: Bitmap) => void) => {
+      recordHistory()
+      edit(doc())
+      paint(doc())
+      syncHistory()
+    },
+    [doc, paint, recordHistory, syncHistory],
+  )
 
   const updateSelection = useCallback(
     (rect: Rect | null, nextMask: SelectionMask | null = null) => {
@@ -1221,7 +1223,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       const selectionMask = maskRef.current
       const region = crop(original, rect)
       const bitmap = selectionMask ? applyMask(region, selectionMask) : region
-      recordHistory(original.clone())
+      recordHistory()
       fillSelection(base, rect, selectionMask, eraseColor())
       bitmapRef.current = base
       const floating: FloatingSelection = { source: bitmap, bitmap, x: rect.x, y: rect.y, base }
@@ -1614,10 +1616,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       setPolylineActive(false)
       shapeRef.current = null
       setShape(null)
-      historyRef.current = new History<DocSnapshot>(HISTORY_LIMIT, {
-        maxBytes: HISTORY_MAX_BYTES,
-        sizeOf: snapshotBytes,
-      })
+      history.reset()
       editorRef.current = null
       floatingRef.current = null
       setEditor(null)
@@ -1629,7 +1628,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       syncHistory()
       scheduleRepaint()
     },
-    [scheduleRepaint, setLayers, syncHistory, updateSelection],
+    [history, scheduleRepaint, setLayers, syncHistory, updateSelection],
   )
 
   const restore = useCallback(
@@ -1654,15 +1653,15 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** Applies a whole-image operation to every layer as one undo step. */
   const applyToLayers = useCallback(
     (transform: (bitmap: Bitmap, bottom: boolean) => Bitmap) => {
-      recordHistory(doc().clone(), stackBytes(layers()))
-      const next = currentLayers().map((layer, index) => ({ ...layer, bitmap: transform(layer.bitmap, index === 0) }))
+      const next = history.transformStack(currentLayers(), activeRef.current, transform)
+      onDocumentChangeRef.current?.()
       const { width, height } = next[0].bitmap
       setSize({ width, height })
       onSizeChangeRef.current(width, height)
       setLayers(next, activeRef.current)
       syncHistory()
     },
-    [currentLayers, doc, layers, recordHistory, setLayers, syncHistory],
+    [currentLayers, history, setLayers, syncHistory],
   )
 
   /**
@@ -1686,17 +1685,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** Changes the layer stack as one undo step. */
   const changeLayers = useCallback(
     (next: Layer[], active: number) => {
-      recordHistory(doc().clone())
-      // `next` reuses layer objects that the snapshot just recorded by
-      // reference; give the live active surface its own copy so painting it
-      // later cannot reach back into the undo history.
-      const isolated = next.map((layer, index) =>
-        index === active ? { ...layer, bitmap: layer.bitmap.clone() } : layer,
-      )
-      setLayers(isolated, active)
+      recordHistory()
+      // `next` reuses layers the step just recorded; the newly active one is
+      // copied if the history still holds it, as it is painted in place.
+      setLayers(history.isolate(next, active), active)
       syncHistory()
     },
-    [doc, recordHistory, setLayers, syncHistory],
+    [history, recordHistory, setLayers, syncHistory],
   )
 
   /** Builds the document described by `rect`, keeping content at its image position. */
@@ -1749,7 +1744,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         // taken by applyToLayers is the only one recorded.
         applyToLayers((bitmap, bottom) => resizeTo(bitmap, { x: 0, y: 0, width, height }, bottom ? WHITE : undefined))
       } else {
-        recordHistory(current.clone())
+        recordHistory()
       }
       const base = doc()
       const bitmap = pasted.clone()
@@ -1797,12 +1792,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       clear() {
         acceptPending()
         commitFloating()
-        recordHistory(doc().clone())
-        doc().fill(activeRef.current === 0 ? WHITE : TRANSPARENT)
-        paint(doc())
+        editActiveLayer((surface) => surface.fill(activeRef.current === 0 ? WHITE : TRANSPARENT))
         // The cleared canvas no longer matches any selection mask.
         updateSelection(null)
-        syncHistory()
       },
       undo() {
         // Nothing that is still being dragged out may keep running past this point.
@@ -1824,14 +1816,14 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           commitFloating()
           updateSelection(null)
         }
-        const previous = historyRef.current.undo({ layers: currentLayers(), active: activeRef.current })
+        const previous = history.undo(currentLayers(), activeRef.current)
         if (previous) {
           restore(previous)
           onDocumentChangeRef.current?.()
         }
       },
       redo() {
-        if (!historyRef.current.canRedo) return
+        if (!history.canRedo) return
         // Nothing that is still being dragged out may keep running past this point.
         abortPointerInteraction()
         // Placing a pending shape, freeform shape or text box would clear the redo
@@ -1844,7 +1836,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           commitFloating()
           updateSelection(null)
         }
-        const next = historyRef.current.redo({ layers: currentLayers(), active: activeRef.current })
+        const next = history.redo(currentLayers(), activeRef.current)
         if (next) {
           restore(next)
           onDocumentChangeRef.current?.()
@@ -1934,10 +1926,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (rect) {
-          recordHistory(doc().clone())
-          invertSelectedColors(doc(), rect, maskRef.current)
-          paint(doc())
-          syncHistory()
+          editActiveLayer((surface) => invertSelectedColors(surface, rect, maskRef.current))
           return
         }
         applyToLayers((bitmap) => invertBitmap(bitmap))
@@ -1956,10 +1945,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (rect) {
-          recordHistory(doc().clone())
-          blurSelection(doc(), rect, maskRef.current, radius)
-          paint(doc())
-          syncHistory()
+          editActiveLayer((surface) => blurSelection(surface, rect, maskRef.current, radius))
           return
         }
         applyToLayers((bitmap) => gaussianBlur(bitmap, radius))
@@ -2017,10 +2003,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         }
         const rect = selectionRef.current
         if (!rect) return
-        recordHistory(doc().clone())
-        fillSelection(doc(), rect, maskRef.current, eraseColor())
-        paint(doc())
-        syncHistory()
+        editActiveLayer((surface) => fillSelection(surface, rect, maskRef.current, eraseColor()))
         updateSelection(null)
       },
       getSelectionDataUrl() {
@@ -2062,10 +2045,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         commitFloating()
         const rect = selectionRef.current
         if (!rect) return
-        recordHistory(doc().clone())
-        fillSelection(doc(), rect, maskRef.current, eraseColor())
-        paint(doc())
-        syncHistory()
+        editActiveLayer((surface) => fillSelection(surface, rect, maskRef.current, eraseColor()))
       },
       addLayer() {
         settle()
@@ -2098,9 +2078,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         settle()
         const stack = currentLayers()
         if (!stack[index] || index === activeRef.current) return
-        // The newly active bitmap is painted in place, so it must not be shared with any undo step.
-        stack[index] = { ...stack[index], bitmap: stack[index].bitmap.clone() }
-        setLayers(stack, index)
+        // The newly active bitmap is painted in place, so it is copied if an undo step shares it.
+        setLayers(history.isolate(stack, index), index)
       },
     }),
     [
@@ -2112,7 +2091,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       restore,
       settle,
       setLayers,
-      recordHistory,
+      editActiveLayer,
+      history,
       applyRotation,
       beginRotation,
       blitFloating,
@@ -2179,18 +2159,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (mode === 'subpixel') {
       const coverage = renderTextSubpixel(current.value, options)
       if (!coverage) return
-      recordHistory(doc().clone())
-      blendSubpixel(doc(), coverage, current.x, current.y, options.color)
-    } else {
-      const rendered = renderText(current.value, { ...options, antialias: mode !== 'aliased' })
-      if (!rendered) return
-      recordHistory(doc().clone())
-      const sampling = mode === 'aliased' ? 'nearest' : 'bilinear'
-      blitAlphaRotated(doc(), rendered, current.x, current.y, rectCentre(current), current.angle, sampling)
+      editActiveLayer((surface) => blendSubpixel(surface, coverage, current.x, current.y, options.color))
+      return
     }
-    paint(doc())
-    syncHistory()
-  }, [colorFor, doc, recordHistory, paint, syncHistory, text])
+    const rendered = renderText(current.value, { ...options, antialias: mode !== 'aliased' })
+    if (!rendered) return
+    const sampling = mode === 'aliased' ? 'nearest' : 'bilinear'
+    editActiveLayer((surface) =>
+      blitAlphaRotated(surface, rendered, current.x, current.y, rectCentre(current), current.angle, sampling),
+    )
+  }, [colorFor, editActiveLayer, text])
   useEffect(() => {
     commitTextRef.current = commitText
   }, [commitText])
@@ -2268,10 +2246,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (tool === 'fill') {
         const color = colorFor(slot)
         if (colorsEqual(doc().get(point.x, point.y), color)) return
-        recordHistory(doc().clone())
-        floodFill(doc(), point, color)
-        paint(doc())
-        syncHistory()
+        editActiveLayer((surface) => floodFill(surface, point, color))
         return
       }
       if (tool === 'text') {
@@ -2421,7 +2396,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         syncHistory()
       }
     },
-    [activePointerId, brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
+    [activePointerId, brush, brushSize, cancelStrokeFrame, colorFor, commitShape, commitFloating, commitText, currentLayers, currentRect, doc, editActiveLayer, eraseColor, finishPolyline, paint, paintStrokeSurface, previewPolyline, primary, random, recordHistory, secondary, selectionShape, shapeKind, shapeStyle, size.height, size.width, stopSpraying, strength, syncHistory, toFreePoint, toPoint, tool, updateSelection, zoom],
   )
 
   const handlePointerMove = useCallback(
@@ -2732,9 +2707,11 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       acceptPending()
       commitFloating()
       const { width, height } = doc()
-      const source: DocSnapshot = { layers: currentLayers(), active: activeRef.current }
-      source.layers[source.active] = { ...source.layers[source.active], bitmap: doc().clone() }
-      source.bytes = stackBytes(source.layers)
+      // The stack as it is now, with its own copy of the live surface: every preview
+      // is rebuilt from it, and the first move records it as one whole-stack step.
+      const stack = currentLayers()
+      stack[activeRef.current] = { ...stack[activeRef.current], bitmap: doc().clone() }
+      const source: DocSnapshot = { layers: stack, active: activeRef.current }
       event.currentTarget.setPointerCapture?.(event.pointerId)
       canvasResizeRef.current = {
         pointerId: event.pointerId,
@@ -2771,17 +2748,18 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       else if (drag.handle.includes('s')) bottom = clamp(bottom, top + 1, top + MAX_CANVAS)
 
       if (!drag.recorded) {
-        historyRef.current.record(drag.source)
+        history.recordStack(drag.source.layers, drag.source.active)
         onDocumentChangeRef.current?.()
         drag.recorded = true
         syncHistory()
       }
 
       const rect = { x: left, y: top, width: right - left, height: bottom - top }
-      const next = drag.source.layers.map((layer, index) => ({
+      const resized = drag.source.layers.map((layer, index) => ({
         ...layer,
         bitmap: resizeTo(layer.bitmap, rect, index === 0 ? WHITE : undefined),
       }))
+      const next = history.isolate(resized, drag.source.active)
       // Pointer moves are rendered by React later than they are handled, so the new
       // size and pan are committed right away: otherwise the browser would show a frame
       // with the resized pixels squeezed into the old box before snapping into place.
@@ -2804,7 +2782,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       // During a drag only the live surface is needed; the thumbnails are rebuilt once on drop.
       setLayers(next, drag.source.active, false)
     },
-    [resizeTo, setLayers, syncHistory, zoom],
+    [history, resizeTo, setLayers, syncHistory, zoom],
   )
 
   const handleCanvasResizeUp = useCallback(
