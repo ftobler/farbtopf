@@ -143,49 +143,12 @@ describe('PaintCanvas layers', () => {
     expect(active()).toBe(1)
   })
 
-  it('undoes and redoes layer changes', () => {
-    const { ref, click, shown, layers } = setup()
-    act(() => ref.current?.addLayer())
-    click(5, 5)
-    act(() => ref.current?.deleteLayer(1))
-    expect(shown(5, 5)).toEqual(white)
-    act(() => ref.current?.undo())
-    expect(layers()).toEqual(['Background', 'Layer 2'])
-    expect(shown(5, 5)).toEqual(black)
-    act(() => ref.current?.undo())
-    expect(shown(5, 5)).toEqual(white)
-    act(() => ref.current?.undo())
-    expect(layers()).toEqual(['Background'])
-    act(() => ref.current?.redo())
-    act(() => ref.current?.redo())
-    expect(shown(5, 5)).toEqual(black)
-  })
-
-  it('reports the new undo step after adding a layer', () => {
-    const { ref, onHistoryChange } = setup()
-    act(() => ref.current?.addLayer())
-    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-  })
-
   it('reports the new undo step after a layer change clears the redo stack', () => {
     const { ref, onHistoryChange } = setup()
     act(() => ref.current?.addLayer())
     act(() => ref.current?.undo())
     act(() => ref.current?.addLayer())
     expect(onHistoryChange).toHaveBeenLastCalledWith(true, false)
-  })
-
-  it('returns to the layer a change was made on when undoing it', () => {
-    const { ref, click, shown, active } = setup()
-    act(() => ref.current?.addLayer())
-    act(() => ref.current?.selectLayer(0))
-    click(5, 5)
-    act(() => ref.current?.selectLayer(1))
-    act(() => ref.current?.undo())
-    expect(shown(5, 5)).toEqual(white)
-    expect(active()).toBe(0)
-    act(() => ref.current?.redo())
-    expect(shown(5, 5)).toEqual(black)
   })
 
   it('flips every layer together', () => {

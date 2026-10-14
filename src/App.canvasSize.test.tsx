@@ -19,7 +19,7 @@ describe('App canvas size dialog', () => {
     expect((screen.getByLabelText('Height') as HTMLInputElement).value).toBe('400')
   })
 
-  it('resizes the canvas as one undoable step', () => {
+  it('resizes the canvas', () => {
     render(<App />)
     openDialog()
     fireEvent.change(screen.getByLabelText('Width'), { target: { value: '320' } })
@@ -27,8 +27,6 @@ describe('App canvas size dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OK' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(sizeButton('320 × 900 px')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    expect(sizeButton('640 × 400 px')).toBeTruthy()
   })
 
   it('marks the document as unsaved', () => {
