@@ -1,3 +1,7 @@
+// PaintCanvas feature behaviour: tools, selections, shapes and image operations.
+// Undo appears here only where a feature has undo semantics of its own; that every
+// action is one undo step, restored and redone in full, is PaintCanvas.undoMatrix.test.tsx.
+
 import { createRef } from 'react'
 import { act, render, within } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'

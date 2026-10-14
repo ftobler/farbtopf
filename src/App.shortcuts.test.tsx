@@ -1,3 +1,6 @@
+// Keyboard shortcut dispatch: which key does what, and when shortcuts stay quiet.
+// Undo and redo are checked only as reaching the canvas, not for what they restore.
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'

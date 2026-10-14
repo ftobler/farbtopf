@@ -1,3 +1,6 @@
+// App layout and wiring of the toolbar, menus and panels. Undo and Redo show up only
+// as buttons being enabled or disabled; what an undo restores is tested on PaintCanvas.
+
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'

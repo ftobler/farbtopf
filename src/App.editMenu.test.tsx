@@ -1,3 +1,6 @@
+// Edit context menu wiring: each entry reaches the right canvas action or dialog.
+// Whether that action undoes in one step is PaintCanvas.undoMatrix.test.tsx.
+
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Bitmap } from './core/bitmap'
