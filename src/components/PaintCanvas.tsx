@@ -1277,12 +1277,6 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     setOverflow(floatingOverflow(floatingPixels(floating), floating.x, floating.y, preview.width, preview.height))
   }, [blitFloating, floatingPixels, paint])
 
-  // Toggling transparent selection (or changing the background colour) restyles a lifted selection at once.
-  useEffect(() => {
-    selectionKeyRef.current = transparentSelection ? secondary : null
-    renderPreview()
-  }, [renderPreview, transparentSelection, secondary])
-
   /**
    * The floating selection, for an edit about to change it. When nothing floats yet,
    * `rect` is lifted, recording the one undo step that covers the whole floating
@@ -1311,6 +1305,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     },
     [doc, eraseColor, publishLayers, recordLayerStep, reportDocumentChange],
   )
+
+  // Toggling transparent selection (or changing the background colour) restyles a lifted selection at once.
+  // That changes the image like any other edit of the floating selection, so it is reported too.
+  useEffect(() => {
+    const previous = selectionKeyRef.current
+    const key = transparentSelection ? secondary : null
+    selectionKeyRef.current = key
+    renderPreview()
+    const restyled = previous === null || key === null ? previous !== key : !colorsEqual(previous, key)
+    if (restyled) editFloating(null)
+  }, [editFloating, renderPreview, transparentSelection, secondary])
 
   const beginRotation = useCallback((): RotationStart | null => {
     const floating = editFloating(currentRect())

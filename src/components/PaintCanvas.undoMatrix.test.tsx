@@ -44,6 +44,8 @@ interface Props {
   tool: ToolId
   brush: BrushId
   shapeKind: ShapeKind
+  secondary: Rgba
+  transparentSelection: boolean
 }
 
 function setup(initial: Partial<Props> = {}) {
@@ -51,7 +53,14 @@ function setup(initial: Partial<Props> = {}) {
   const onHistoryChange = vi.fn<(canUndo: boolean, canRedo: boolean) => void>()
   const onDocumentChange = vi.fn()
   const onLayersChange = vi.fn<(layers: LayerInfo[], active: number) => void>()
-  let props: Props = { tool: 'pencil', brush: 'round', shapeKind: 'rectangle', ...initial }
+  let props: Props = {
+    tool: 'pencil',
+    brush: 'round',
+    shapeKind: 'rectangle',
+    secondary: WHITE,
+    transparentSelection: false,
+    ...initial,
+  }
   const element = () => (
     <PaintCanvas
       ref={ref}
@@ -62,7 +71,7 @@ function setup(initial: Partial<Props> = {}) {
       shapeKind={props.shapeKind}
       random={seededRandom(7)}
       primary={BLACK}
-      secondary={WHITE}
+      secondary={props.secondary}
       brushSize={3}
       opacity={100}
       shapeFill="outline"
@@ -74,7 +83,7 @@ function setup(initial: Partial<Props> = {}) {
       onCursorMove={vi.fn()}
       onPickColor={vi.fn()}
       onSizeChange={vi.fn()}
-      transparentSelection={false}
+      transparentSelection={props.transparentSelection}
       selectionShape="rectangle"
       text={DEFAULT_TEXT_OPTIONS}
     />
@@ -520,6 +529,7 @@ describe('PaintCanvas undo and redo with a selection', () => {
     ['inverted', (s) => s.call((h) => h.invertColors())],
     ['blurred', (s) => s.call((h) => h.blur(2))],
     ['deleted', (s) => s.call((h) => h.deleteSelection())],
+    ['made transparent', (s) => s.setProps({ transparentSelection: true, secondary: RED })],
   ])('reports a lifted selection %s as one document change without a new step', (_name, change) => {
     const s = setup()
     // Across the red and green halves, so every edit visibly changes the lifted pixels.
