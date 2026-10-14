@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { History } from './history'
 
+/**
+ * The generic bounded undo/redo stack: stack order, the step limit and the byte
+ * budget with its eviction order. What an undo step of the document holds is
+ * covered in documentHistory.test.ts, not here.
+ */
 describe('History', () => {
   it('starts empty', () => {
     const history = new History<string>()
     expect(history.canUndo).toBe(false)
     expect(history.canRedo).toBe(false)
+    expect(history.depth).toBe(0)
+    expect(history.bytes).toBe(0)
   })
 
   it('undoes back to the initial state', () => {
@@ -36,6 +43,68 @@ describe('History', () => {
     const history = new History<string>()
     expect(history.undo('a')).toBeUndefined()
     expect(history.redo('a')).toBeUndefined()
+  })
+
+  it('keeps neither the current state nor its bytes when there is nothing to undo', () => {
+    const history = new History<number>(10, { sizeOf: (state) => state })
+    history.record(10)
+    history.undo(5)
+    expect(history.undo(7)).toBeUndefined()
+    expect(history.bytes).toBe(5)
+    expect(history.some((state) => state === 7)).toBe(false)
+    expect(history.peekRedo()).toBe(5)
+  })
+
+  it('keeps neither the current state nor its bytes when there is nothing to redo', () => {
+    const history = new History<number>(10, { sizeOf: (state) => state })
+    history.record(10)
+    expect(history.redo(7)).toBeUndefined()
+    expect(history.bytes).toBe(10)
+    expect(history.some((state) => state === 7)).toBe(false)
+    expect(history.depth).toBe(1)
+  })
+
+  it('forgets every redo state on a new record', () => {
+    const history = new History<string>()
+    history.record('a')
+    history.record('b')
+    history.undo('c')
+    history.undo('d')
+    history.record('e')
+    expect(history.peekRedo()).toBeUndefined()
+    expect(history.some((state) => state === 'c' || state === 'd')).toBe(false)
+    expect(history.peekUndo()).toBe('e')
+  })
+
+  it('keeps only the latest step with a limit of one', () => {
+    const history = new History<number>(1)
+    history.record(1)
+    history.record(2)
+    expect(history.depth).toBe(1)
+    expect(history.undo(3)).toBe(2)
+    expect(history.canUndo).toBe(false)
+  })
+
+  it.each([0, -5])('treats a limit of %i as a limit of one', (limit) => {
+    const history = new History<number>(limit)
+    history.record(1)
+    expect(history.canUndo).toBe(true)
+    history.record(2)
+    expect(history.depth).toBe(1)
+    expect(history.undo(3)).toBe(2)
+  })
+
+  it('evicts the oldest step past the limit even when it was redone', () => {
+    const history = new History<number>(2, { sizeOf: (state) => state })
+    history.record(1)
+    history.record(2)
+    history.undo(30)
+    history.redo(2)
+    history.record(40)
+    // The limit drops step 1; its bytes go with it.
+    expect(history.depth).toBe(2)
+    expect(history.bytes).toBe(2 + 40)
+    expect(history.some((state) => state === 1)).toBe(false)
   })
 
   it('honours the limit', () => {
