@@ -429,6 +429,8 @@ describe('App', () => {
     expect(fireEvent.contextMenu(canvas, { clientX: 60, clientY: 60 })).toBe(false)
     fireEvent.pointerUp(canvas, { button: 2, pointerId: 1, clientX: 60, clientY: 60 })
     expect(screen.queryByRole('menu')).toBeNull()
+    // The shape is still pending, not placed: discarding it leaves nothing to undo.
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.getByRole('button', { name: 'Undo' }).hasAttribute('disabled')).toBe(true)
   })
 
