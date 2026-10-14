@@ -123,3 +123,46 @@ describe('PaintCanvas undo and redo during an interaction', () => {
     expect(onHistoryChange).toHaveBeenLastCalledWith(false, true)
   })
 })
+
+describe('PaintCanvas opening a document during an interaction', () => {
+  it('aborts a held stroke so a later move cannot paint the new document', () => {
+    const { ref, canvas, onHistoryChange } = setup('pencil')
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 5, clientY: 5 })
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 15, clientY: 15 })
+    act(() => ref.current?.loadBitmap(new Bitmap(SIZE, SIZE, WHITE)))
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 25, clientY: 25 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 25, clientY: 25 })
+    const { pixel } = capture(() => ref.current?.toDataUrl())
+    expect(pixel(20, 20)).toEqual(white)
+    expect(onHistoryChange).toHaveBeenLastCalledWith(false, false)
+  })
+
+  it('aborts a held selection move so a later move lifts nothing from the new document', () => {
+    const { ref, canvas, onHistoryChange } = setup('select')
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 1, clientX: 9, clientY: 9 })
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: 9, clientY: 9 })
+    fireEvent.pointerDown(canvas, { button: 0, buttons: 1, pointerId: 2, clientX: 5, clientY: 5 })
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 2, clientX: 8, clientY: 8 })
+    act(() => ref.current?.newDocument(SIZE, SIZE))
+    fireEvent.pointerMove(canvas, { buttons: 1, pointerId: 2, clientX: 25, clientY: 25 })
+    expect(onHistoryChange).toHaveBeenLastCalledWith(false, false)
+    expect(ref.current?.getSelection()).toBeNull()
+  })
+
+  it('aborts a held canvas resize so a later move cannot resize the new document', () => {
+    const { ref, container, onHistoryChange } = setup('pencil', 2)
+    const frame = container.querySelector<HTMLElement>('.canvas-frame')
+    const handle = container.querySelector<HTMLElement>('.canvas-resize-handle-e')
+    if (!frame || !handle) throw new Error('resize handle not rendered')
+    frame.getBoundingClientRect = () =>
+      ({ x: 100, y: 50, left: 100, top: 50, right: 140, bottom: 90, width: 40, height: 40, toJSON: () => ({}) }) as DOMRect
+    handle.setPointerCapture = vi.fn()
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 7, clientX: 160, clientY: 70 })
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 150, clientY: 70 })
+    act(() => ref.current?.newDocument(SIZE, SIZE))
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 170, clientY: 70 })
+    expect(ref.current?.getSize()).toEqual({ width: SIZE, height: SIZE })
+    expect(onHistoryChange).toHaveBeenLastCalledWith(false, false)
+  })
+})

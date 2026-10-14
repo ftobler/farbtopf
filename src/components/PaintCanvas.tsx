@@ -1063,9 +1063,9 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   useEffect(() => cancelStrokeFrame, [cancelStrokeFrame])
 
   /**
-   * Stops whatever pointer drag is in progress so an undo or redo cannot be
-   * silently overwritten by it: a stroke (and its spray timer), a selection drag
-   * or a canvas resize. Pending shapes and polylines are deliberately left alone;
+   * Stops whatever pointer drag is in progress so an undo, a redo or a new document
+   * cannot be silently overwritten by it: a stroke (and its spray timer), a selection
+   * drag or a canvas resize. Pending shapes and polylines are deliberately left alone;
    * undo and redo finish or drop those themselves.
    */
   const abortPointerInteraction = useCallback(() => {
@@ -1689,6 +1689,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
 
   const resetDocument = useCallback(
     (bitmap: Bitmap) => {
+      // An image that finishes loading mid-drag must not be painted or resized by it.
+      abortPointerInteraction()
       polylineRef.current = null
       setPolylineActive(false)
       shapeRef.current = null
@@ -1704,7 +1706,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       updateSelection(null)
       scheduleRepaint()
     },
-    [resetHistory, scheduleRepaint, setLayers, updateSelection],
+    [abortPointerInteraction, resetHistory, scheduleRepaint, setLayers, updateSelection],
   )
 
   /** Applies a whole-image operation to every layer as one undo step. */
