@@ -148,6 +148,24 @@ export interface PaintCanvasHandle {
   moveLayer: (from: number, to: number) => void
   /** Makes a layer the one the tools draw on. */
   selectLayer: (index: number) => void
+  /** Merges the layer at `index` into the one below it and removes it; index 0 cannot merge down. */
+  mergeDown: (index?: number) => void
+  /** Alias for `mergeDown`. */
+  mergeLayer: (index?: number) => void
+  /** Flattens the whole stack into a single layer. */
+  flattenLayers: () => void
+  /** Alias for `flattenLayers`. */
+  flatten: () => void
+  /** Alias for `flattenLayers`. */
+  flattenImage: () => void
+  /** Alias for `flattenLayers`. */
+  mergeLayers: () => void
+  /** Alias for `flattenLayers`. */
+  mergeVisible: () => void
+  /** Alias for `flattenLayers`. */
+  mergeAll: () => void
+  /** Duplicates the layer at `index` (the active layer by default) above itself. */
+  duplicateLayer: (index?: number) => void
 }
 
 export interface PaintCanvasProps {
@@ -2125,6 +2143,55 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         const stack = currentLayers()
         if (!stack[index] || index === activeRef.current) return
         setLayers(stack, index)
+      },
+      mergeDown(index = activeRef.current) {
+        settle()
+        const stack = currentLayers()
+        if (index <= 0 || index >= stack.length) return
+        const mergedBitmap = stack[index - 1].bitmap.clone()
+        drawOver(mergedBitmap, stack[index].bitmap)
+        const next = stack
+          .map((layer, i) => (i === index - 1 ? { ...layer, bitmap: mergedBitmap } : layer))
+          .filter((_, i) => i !== index)
+        changeLayers(next, index - 1)
+      },
+      mergeLayer(index = activeRef.current) {
+        this.mergeDown(index)
+      },
+      flattenLayers() {
+        settle()
+        const stack = currentLayers()
+        if (stack.length <= 1) return
+        const flat = compositeLayers(stack.map((layer) => layer.bitmap))
+        if (!flat) return
+        const bottom = stack[0]
+        changeLayers([{ ...bottom, bitmap: flat }], 0)
+      },
+      flatten() {
+        this.flattenLayers()
+      },
+      flattenImage() {
+        this.flattenLayers()
+      },
+      mergeLayers() {
+        this.flattenLayers()
+      },
+      mergeVisible() {
+        this.flattenLayers()
+      },
+      mergeAll() {
+        this.flattenLayers()
+      },
+      duplicateLayer(index = activeRef.current) {
+        settle()
+        const stack = currentLayers()
+        const source = stack[index]
+        if (!source) return
+        layerCountRef.current += 1
+        const copy = { id: layerCountRef.current, name: `${source.name} copy`, bitmap: source.bitmap.clone() }
+        const next = [...stack]
+        next.splice(index + 1, 0, copy)
+        changeLayers(next, index + 1)
       },
     }),
     [

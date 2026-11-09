@@ -1044,6 +1044,8 @@ function App() {
         onCopy={handleCopyFromCanvas}
         onPaste={handlePasteFromClipboard}
         onCopyVisible={handleCopyVisible}
+        onMergeDown={() => canvasRef.current?.mergeDown()}
+        onFlatten={() => canvasRef.current?.flattenLayers()}
         onZoomChange={setZoom}
         onZoomFit={handleZoomFit}
         onToggleGrid={() => setShowGrid((value) => !value)}
@@ -1140,6 +1142,9 @@ function App() {
             onAdd={() => canvasRef.current?.addLayer()}
             onDelete={(index) => canvasRef.current?.deleteLayer(index)}
             onMove={(from, to) => canvasRef.current?.moveLayer(from, to)}
+            onMergeDown={(index) => canvasRef.current?.mergeDown(index)}
+            onFlatten={() => canvasRef.current?.flattenLayers()}
+            onCopyVisible={handleCopyVisible}
           />
         ) : null}
       </div>

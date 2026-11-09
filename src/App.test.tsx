@@ -305,6 +305,9 @@ describe('App', () => {
       'Copy',
       'Paste',
       'Copy visible layers',
+      'Merge down',
+      'Flatten image',
+      'Merge visible layers',
     ])
     expect(editItems.every((item) => item.querySelector('svg'))).toBe(true)
   })

@@ -178,4 +178,50 @@ describe('LayersPanel', () => {
     setup()
     expect(rows()[0].getAttribute('aria-keyshortcuts')).toBe('ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown')
   })
+
+  it('merges a layer down from its right-click menu', () => {
+    const onMergeDown = vi.fn()
+    const handlers = { onSelect: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn(), onMove: vi.fn(), onMergeDown }
+    render(<LayersPanel layers={LAYERS} active={1} {...handlers} />)
+    fireEvent.contextMenu(rows()[1], { clientX: 40, clientY: 50 })
+    fireEvent.click(screen.getByRole('menuitem', { name: /Merge down/ }))
+    expect(onMergeDown).toHaveBeenCalledWith(1)
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('disables Merge down on the bottom layer', () => {
+    const onMergeDown = vi.fn()
+    const handlers = { onSelect: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn(), onMove: vi.fn(), onMergeDown }
+    render(<LayersPanel layers={LAYERS} active={1} {...handlers} />)
+    fireEvent.contextMenu(rows()[2])
+    expect(screen.getByRole('menuitem', { name: /Merge down/ }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('flattens layers from the right-click menu', () => {
+    const onFlatten = vi.fn()
+    const handlers = { onSelect: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn(), onMove: vi.fn(), onFlatten }
+    render(<LayersPanel layers={LAYERS} active={1} {...handlers} />)
+    fireEvent.contextMenu(rows()[0], { clientX: 40, clientY: 50 })
+    fireEvent.click(screen.getByRole('menuitem', { name: /Flatten image/ }))
+    expect(onFlatten).toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('copies visible layers from the right-click menu', () => {
+    const onCopyVisible = vi.fn()
+    const handlers = { onSelect: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn(), onMove: vi.fn(), onCopyVisible }
+    render(<LayersPanel layers={LAYERS} active={1} {...handlers} />)
+    fireEvent.contextMenu(rows()[0], { clientX: 40, clientY: 50 })
+    fireEvent.click(screen.getByRole('menuitem', { name: /Copy visible layers/ }))
+    expect(onCopyVisible).toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('does not render merge items without handlers', () => {
+    setup()
+    fireEvent.contextMenu(rows()[0])
+    expect(screen.queryByRole('menuitem', { name: /Merge down/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Flatten image/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Copy visible layers/ })).toBeNull()
+  })
 })

@@ -4,7 +4,7 @@ import type { Bitmap } from '../core/bitmap'
 import { THUMBNAIL_SIZE } from '../core/layers'
 import type { LayerInfo } from '../core/layers'
 import { ContextMenu } from './ContextMenu'
-import { MenuItem } from './Dropdown'
+import { MenuDivider, MenuItem } from './Dropdown'
 import { PlusIcon, TrashIcon } from './icons'
 
 export interface LayersPanelProps {
@@ -15,6 +15,28 @@ export interface LayersPanelProps {
   onAdd: () => void
   onDelete: (index: number) => void
   onMove: (from: number, to: number) => void
+  /** Merges the layer at `index` into the one below it. */
+  onMergeDown?: (index: number) => void
+  /** Alias for `onMergeDown`. */
+  onMerge?: (index: number) => void
+  /** Flattens every layer into one. */
+  onFlatten?: () => void
+  /** Alias for `onFlatten`. */
+  onFlattenImage?: () => void
+  /** Alias for `onFlatten`. */
+  onFlattenLayers?: () => void
+  /** Alias for `onFlatten`. */
+  onMergeVisible?: () => void
+  /** Alias for `onFlatten`. */
+  onMergeLayers?: () => void
+  /** Alias for `onFlatten`. */
+  onMergeAll?: () => void
+  /** Duplicates the layer at `index`. */
+  onDuplicate?: (index: number) => void
+  /** Alias for `onDuplicate`. */
+  onDuplicateLayer?: (index: number) => void
+  /** Copies the flattened visible image to the clipboard. */
+  onCopyVisible?: () => void
 }
 
 /** The on-screen size of a layer tile: its longer edge at the thumbnail size. */
@@ -47,7 +69,28 @@ function Thumbnail({ bitmap }: { bitmap: Bitmap }) {
  * A translucent sidebar over the workspace listing the layers, top-most first. Layers are
  * re-ordered by dragging and deleted with the Delete key or from their right-click menu.
  */
-export function LayersPanel({ layers, active, onSelect, onAdd, onDelete, onMove }: LayersPanelProps) {
+export function LayersPanel({
+  layers,
+  active,
+  onSelect,
+  onAdd,
+  onDelete,
+  onMove,
+  onMergeDown,
+  onMerge,
+  onFlatten,
+  onFlattenImage,
+  onFlattenLayers,
+  onMergeVisible,
+  onMergeLayers,
+  onMergeAll,
+  onDuplicate,
+  onDuplicateLayer,
+  onCopyVisible,
+}: LayersPanelProps) {
+  const mergeDownHandler = onMergeDown ?? onMerge
+  const flattenHandler = onFlatten ?? onFlattenImage ?? onFlattenLayers ?? onMergeVisible ?? onMergeLayers ?? onMergeAll
+  const duplicateHandler = onDuplicate ?? onDuplicateLayer
   const [dragging, setDragging] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; index: number } | null>(null)
   const canDelete = layers.length > 1
@@ -154,17 +197,73 @@ export function LayersPanel({ layers, active, onSelect, onAdd, onDelete, onMove 
           createPortal(
             <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
               {(close) => (
-                <MenuItem
-                  icon={<TrashIcon size={16} />}
-                  shortcut="Del"
-                  disabled={!canDelete}
-                  onClick={() => {
-                    onDelete(menu.index)
-                    close()
-                  }}
-                >
-                  Delete layer
-                </MenuItem>
+                <>
+                  <MenuItem
+                    icon={<TrashIcon size={16} />}
+                    shortcut="Del"
+                    disabled={!canDelete}
+                    onClick={() => {
+                      onDelete(menu.index)
+                      close()
+                    }}
+                  >
+                    Delete layer
+                  </MenuItem>
+                  {mergeDownHandler ? (
+                    <MenuItem
+                      disabled={menu.index === 0 || layers.length < 2}
+                      onClick={() => {
+                        mergeDownHandler(menu.index)
+                        close()
+                      }}
+                    >
+                      Merge down
+                    </MenuItem>
+                  ) : null}
+                  {duplicateHandler ? (
+                    <MenuItem
+                      onClick={() => {
+                        duplicateHandler(menu.index)
+                        close()
+                      }}
+                    >
+                      Duplicate layer
+                    </MenuItem>
+                  ) : null}
+                  {(flattenHandler || onCopyVisible) && <MenuDivider />}
+                  {onCopyVisible ? (
+                    <MenuItem
+                      onClick={() => {
+                        onCopyVisible()
+                        close()
+                      }}
+                    >
+                      Copy visible layers
+                    </MenuItem>
+                  ) : null}
+                  {flattenHandler ? (
+                    <MenuItem
+                      disabled={layers.length < 2}
+                      onClick={() => {
+                        flattenHandler()
+                        close()
+                      }}
+                    >
+                      Merge visible layers
+                    </MenuItem>
+                  ) : null}
+                  {flattenHandler ? (
+                    <MenuItem
+                      disabled={layers.length < 2}
+                      onClick={() => {
+                        flattenHandler()
+                        close()
+                      }}
+                    >
+                      Flatten image
+                    </MenuItem>
+                  ) : null}
+                </>
               )}
             </ContextMenu>,
             document.body,

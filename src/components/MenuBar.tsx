@@ -9,6 +9,7 @@ import {
   FullscreenIcon,
   GitHubIcon,
   GridIcon,
+  LayersIcon,
   MagnifierIcon,
   MenuIcon,
   MiniatureIcon,
@@ -47,6 +48,11 @@ export interface MenuBarProps {
   onCopy: () => void
   onPaste: () => void
   onCopyVisible: () => void
+  onMergeDown?: () => void
+  onFlatten?: () => void
+  onMergeVisible?: () => void
+  onFlattenImage?: () => void
+  onFlattenLayers?: () => void
   onZoomChange: (zoom: number) => void
   onZoomFit: () => void
   onToggleGrid: () => void
@@ -79,6 +85,11 @@ export function MenuBar({
   onCopy,
   onPaste,
   onCopyVisible,
+  onMergeDown,
+  onFlatten,
+  onMergeVisible,
+  onFlattenImage,
+  onFlattenLayers,
   onZoomChange,
   onZoomFit,
   onToggleGrid,
@@ -216,6 +227,40 @@ export function MenuBar({
       >
         Copy visible layers
       </MenuItem>
+      {(onMergeDown || onFlatten || onMergeVisible || onFlattenImage || onFlattenLayers) && <MenuDivider />}
+      {onMergeDown ? (
+        <MenuItem
+          icon={<LayersIcon size={16} />}
+          onClick={() => {
+            onMergeDown()
+            close()
+          }}
+        >
+          Merge down
+        </MenuItem>
+      ) : null}
+      {onFlatten || onMergeVisible || onFlattenImage || onFlattenLayers ? (
+        <MenuItem
+          icon={<LayersIcon size={16} />}
+          onClick={() => {
+            ;(onFlatten ?? onMergeVisible ?? onFlattenImage ?? onFlattenLayers)?.()
+            close()
+          }}
+        >
+          Flatten image
+        </MenuItem>
+      ) : null}
+      {onFlatten || onMergeVisible || onFlattenImage || onFlattenLayers ? (
+        <MenuItem
+          icon={<LayersIcon size={16} />}
+          onClick={() => {
+            ;(onFlatten ?? onMergeVisible ?? onFlattenImage ?? onFlattenLayers)?.()
+            close()
+          }}
+        >
+          Merge visible layers
+        </MenuItem>
+      ) : null}
     </>
   )
 

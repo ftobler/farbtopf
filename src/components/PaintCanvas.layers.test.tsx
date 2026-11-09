@@ -252,4 +252,62 @@ describe('PaintCanvas layers', () => {
       expect([image.width, image.height]).toEqual([SIZE, SIZE])
     })
   })
+
+  describe('merging layers', () => {
+    it('merges the active layer into the one below it', () => {
+      const { ref, click, shown, layers } = setup()
+      click(5, 5)
+      act(() => ref.current?.addLayer())
+      click(6, 6)
+      act(() => ref.current?.mergeDown(1))
+      expect(layers()).toEqual(['Background'])
+      expect(shown(5, 5)).toEqual(black)
+      expect(shown(6, 6)).toEqual(black)
+    })
+
+    it('merges the active layer by default', () => {
+      const { ref, click, layers } = setup()
+      click(5, 5)
+      act(() => ref.current?.addLayer())
+      click(6, 6)
+      act(() => ref.current?.mergeDown())
+      expect(layers()).toEqual(['Background'])
+    })
+
+    it('does not merge the bottom layer', () => {
+      const { ref, layers } = setup()
+      act(() => ref.current?.addLayer())
+      act(() => ref.current?.mergeDown(0))
+      expect(layers()).toEqual(['Background', 'Layer 2'])
+    })
+
+    it('flattens the stack into a single layer', () => {
+      const { ref, click, shown, layers } = setup()
+      click(5, 5)
+      act(() => ref.current?.addLayer())
+      click(6, 6)
+      act(() => ref.current?.flattenLayers())
+      expect(layers()).toEqual(['Background'])
+      expect(shown(5, 5)).toEqual(black)
+      expect(shown(6, 6)).toEqual(black)
+    })
+
+    it('supports merge aliases', () => {
+      const { ref, layers } = setup()
+      act(() => ref.current?.addLayer())
+      act(() => ref.current?.mergeLayers())
+      expect(layers()).toEqual(['Background'])
+    })
+
+    it('can undo a merge down', () => {
+      const { ref, click, layers } = setup()
+      click(5, 5)
+      act(() => ref.current?.addLayer())
+      click(6, 6)
+      act(() => ref.current?.mergeDown(1))
+      expect(layers()).toEqual(['Background'])
+      act(() => ref.current?.undo())
+      expect(layers()).toEqual(['Background', 'Layer 2'])
+    })
+  })
 })
