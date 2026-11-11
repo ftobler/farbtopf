@@ -1122,6 +1122,7 @@ function App() {
             onSizeChange={setBrushSize}
             onOpacityChange={setOpacity}
             onSlidingChange={setSliding}
+            showOpacity={tool !== 'remove'}
           />
         ) : null}
         {sliding && isSizedTool(tool) ? (

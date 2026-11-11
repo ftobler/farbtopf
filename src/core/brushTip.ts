@@ -23,6 +23,9 @@ export function tipKind(tool: SizedTool, brush: BrushId): TipKind {
       return 'square'
     case 'shape':
       return 'round'
+    case 'remove':
+      // Paints a hole to fill, not colour: shown as the outline of the area it covers.
+      return 'area'
     case 'airbrush':
       return 'spray'
     case 'brush':

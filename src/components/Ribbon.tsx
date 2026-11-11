@@ -51,6 +51,7 @@ import {
   StrokeSizePreview,
   FreeformSelectIcon,
   ObjectSelectIcon,
+  RemoveIcon,
   HighlighterIcon,
   LiquifyIcon,
   TextIcon,
@@ -64,6 +65,7 @@ const TOOL_ICONS: Record<ToolId, ComponentType<IconProps>> = {
   brush: BrushIcon,
   airbrush: AirbrushIcon,
   eraser: EraserIcon,
+  remove: RemoveIcon,
   fill: FillIcon,
   picker: PickerIcon,
   text: TextIcon,
@@ -85,8 +87,8 @@ const BRUSH_ICONS: Record<BrushId, ComponentType<IconProps>> = {
   liquify: LiquifyIcon,
 }
 
-/** Tools group, in reading order: two rows of three. */
-const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'eraser', 'picker', 'zoom']
+/** Tools group, in reading order: two rows of four (Remove has the top row's last cell to itself). */
+const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'remove', 'eraser', 'picker', 'zoom']
 
 const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
   outline: 'Outline',

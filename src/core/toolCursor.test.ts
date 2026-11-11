@@ -12,6 +12,7 @@ describe('canvasCursor', () => {
       brush: 'crosshair',
       airbrush: 'crosshair',
       eraser: 'none',
+      remove: 'crosshair',
       fill: FILL_CURSOR,
       picker: 'copy',
       shape: 'crosshair',

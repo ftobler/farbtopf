@@ -82,3 +82,29 @@ fn the_exported_interface_round_trips_an_image() {
     assert_eq!((result_width(), result_height()), (0, 0));
     assert_eq!(select_rect(0, 0, -5, 10), 0);
 }
+
+#[test]
+fn the_exported_remove_interface_round_trips_a_stroke() {
+    let (w, h) = (120usize, 90usize);
+    let data = square_image(w, h, 50, 40, 10);
+    assert!(!image_buffer(w as u32, h as u32).is_null());
+    STATE.with_borrow_mut(|s| s.image.copy_from_slice(&data));
+    assert_eq!(remove_stroke(1), 2, "no stroke buffer yet");
+    assert!(!stroke_buffer().is_null());
+    assert_eq!(remove_stroke(1), 3, "an empty stroke");
+    STATE.with_borrow_mut(|s| {
+        for y in 38..52 {
+            for x in 48..62 {
+                s.stroke[y * w + x] = 1;
+            }
+        }
+    });
+    assert_eq!(remove_stroke(1), 1);
+    let (rw, rh) = (result_width() as usize, result_height() as usize);
+    assert!(result_x() <= 46 && result_y() <= 36 && rw > 14 && rh > 14);
+    assert_eq!(STATE.with_borrow(|s| s.pixels.len()), rw * rh * 4);
+    assert!(!result_pixels().is_null());
+    // A selection afterwards drops the removal's pixels.
+    assert_eq!(select_point(5.0, 5.0), 0);
+    assert_eq!(STATE.with_borrow(|s| s.pixels.len()), 0);
+}

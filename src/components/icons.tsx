@@ -610,6 +610,17 @@ export function FreeformSelectIcon(props: IconProps) {
   )
 }
 
+/** A brush tip leaving sparkles: what it paints over disappears. */
+export function RemoveIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.5 4.5 19.5 9.5 11 18H6v-5Z" />
+      <path d="m11.5 7.5 5 5" />
+      <path d="M5 4v3M3.5 5.5h3M19 16v3M17.5 17.5h3" />
+    </Svg>
+  )
+}
+
 /** A dashed box around a solid shape: the selection snaps to the object inside. */
 export function ObjectSelectIcon(props: IconProps) {
   return (

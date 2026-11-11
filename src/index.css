@@ -340,7 +340,7 @@ label {
 }
 
 .tool-grid {
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, auto);
 }
 
 .icon-button-large {
@@ -1098,6 +1098,24 @@ label {
   stroke: rgba(0, 0, 0, 0.85);
   stroke-width: 1;
   stroke-dasharray: 4 3;
+}
+
+/* The Remove Tool's stroke: what will be filled, shown until the fill arrives. */
+.remove-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+  /* On the whole layer, so overlapping parts of the stroke stay one even tint. */
+  opacity: 0.5;
+}
+
+.remove-overlay polyline {
+  fill: none;
+  stroke: #e8336d;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .shape-overlay {

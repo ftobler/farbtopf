@@ -65,9 +65,10 @@ import {
   polygonSelection,
 } from '../core/selection'
 import type { Selection, SelectionMask, SelectionShape } from '../core/selection'
-import type { ObjectTarget } from '../core/objectSelect'
-import { objectSelect as defaultObjectSelect } from '../render/objectSelect'
-import type { ObjectSelectFn } from '../render/objectSelect'
+import type { ObjectTarget, Removal } from '../core/algorithms'
+import { regionUnchanged, stampStroke, writeRegion } from '../core/removeStroke'
+import { objectSelect as defaultObjectSelect, removeObject as defaultRemoveObject } from '../render/algorithms'
+import type { ObjectSelectFn, RemoveFn } from '../render/algorithms'
 import { shapeById } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
@@ -204,6 +205,8 @@ export interface PaintCanvasProps {
   selectionShape?: SelectionShape
   /** Finds the object for Object selection (`selectionShape` 'object'); the app's worker by default. */
   objectSelect?: ObjectSelectFn
+  /** Fills what a Remove Tool stroke painted over; the app's worker by default. */
+  removeObject?: RemoveFn
   /** Freehand brush style used by the brush tool. */
   brush?: BrushId
   /** Random source for the airbrush and spray can; Math.random by default (seeded in tests). */
@@ -882,6 +885,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     transparentSelection,
     selectionShape = 'rectangle',
     objectSelect = defaultObjectSelect,
+    removeObject = defaultRemoveObject,
     brush = 'round',
     random = Math.random,
     text = DEFAULT_TEXT_OPTIONS,
@@ -944,6 +948,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   /** The part of a floating selection dragged past the image edge, drawn over the workspace. */
   const [overflow, setOverflow] = useState<FloatingOverflow | null>(null)
   const [lasso, setLasso] = useState<Point[] | null>(null)
+  /** The Remove Tool stroke being painted: its pointer, its points and the pixels it covers. */
+  const removeRef = useRef<{ pointerId: number; points: Point[]; mask: Uint8Array } | null>(null)
+  /** The points of the Remove Tool stroke on screen: while it is painted and until its fill arrives. */
+  const [removeTrail, setRemoveTrail] = useState<Point[] | null>(null)
+  /** True while a removal is being worked out; new Remove strokes wait for it. */
+  const removePendingRef = useRef(false)
+  const [removePending, setRemovePending] = useState(false)
   /** The dashed outline of a text box being dragged out. */
   const [textDraft, setTextDraft] = useState<Rect | null>(null)
   const [hoverCursor, setHoverCursor] = useState<string | null>(null)
@@ -964,6 +975,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const onSizeChangeRef = useRef(onSizeChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
   const objectSelectRef = useRef(objectSelect)
+  const removeObjectRef = useRef(removeObject)
   const onSelectionSizeChangeRef = useRef(onSelectionSizeChange)
   const onZoomClickRef = useRef(onZoomClick)
   const onTextChangeRef = useRef(onTextChange)
@@ -980,6 +992,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onSizeChangeRef.current = onSizeChange
     onSelectionChangeRef.current = onSelectionChange
     objectSelectRef.current = objectSelect
+    removeObjectRef.current = removeObject
     onSelectionSizeChangeRef.current = onSelectionSizeChange
     onZoomClickRef.current = onZoomClick
     onTextChangeRef.current = onTextChange
@@ -1100,6 +1113,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     strokeRef.current = null
     selectRef.current = null
     canvasResizeRef.current = null
+    removeRef.current = null
+    if (!removePendingRef.current) setRemoveTrail(null)
     setLasso(null)
     setHoverCursor(null)
     setEraserHover(null)
@@ -2306,6 +2321,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     if (selectRef.current) return selectRef.current.pointerId
     if (canvasResizeRef.current) return canvasResizeRef.current.pointerId
     if (textPlaceRef.current) return textPlaceRef.current.pointerId
+    if (removeRef.current) return removeRef.current.pointerId
     const shape = shapeRef.current
     if (shape && shape.pointerId !== null) return shape.pointerId
     const polyline = polylineRef.current
@@ -2375,6 +2391,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (floatingRef.current) {
         commitFloating()
         updateSelection(null)
+      }
+      if (tool === 'remove') {
+        // One removal at a time: the next stroke starts once the last one's fill is in.
+        if (removePendingRef.current) return
+        event.currentTarget.setPointerCapture?.(event.pointerId)
+        const mask = new Uint8Array(size.width * size.height)
+        stampStroke(mask, size.width, size.height, point, point, brushSize)
+        removeRef.current = { pointerId: event.pointerId, points: [point], mask }
+        setRemoveTrail([point])
+        return
       }
       if (tool === 'fill') {
         const color = colorFor(slot)
@@ -2559,6 +2585,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
           )
         }
       }
+      const removal = removeRef.current
+      if (removal && removal.pointerId === event.pointerId) {
+        const last = removal.points[removal.points.length - 1]
+        if (!pointsEqual(last, point)) {
+          stampStroke(removal.mask, size.width, size.height, last, point, brushSize)
+          removal.points.push(point)
+          setRemoveTrail([...removal.points])
+        }
+        return
+      }
       const place = textPlaceRef.current
       if (place && place.pointerId === event.pointerId) {
         setTextDraft(clampRect(normalizeRect(place.start, point), size.width, size.height))
@@ -2671,6 +2707,36 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [currentLayers, doc, updateSelection],
   )
 
+  /**
+   * The Remove Tool: fills what `mask` (one byte per pixel) covers on the active
+   * layer from its surroundings, as one undo step. The fill arrives later; it is
+   * dropped when the active layer changed meanwhile where it would go (another
+   * layer, another size, or other pixels there). Nothing to remove, or a failure,
+   * changes nothing.
+   */
+  const runRemoval = useCallback(
+    (mask: Uint8Array) => {
+      const layerId = layers()[activeRef.current]?.id
+      const before = doc().clone()
+      removePendingRef.current = true
+      setRemovePending(true)
+      const apply = (removal: Removal | null) => {
+        if (!removal || layers()[activeRef.current]?.id !== layerId) return
+        if (!regionUnchanged(doc(), before, removal.rect)) return
+        editActiveLayer((surface) => writeRegion(surface, removal.rect, removal.pixels))
+      }
+      removeObjectRef
+        .current(before.width, before.height, before.data, mask)
+        .then(apply, () => {})
+        .finally(() => {
+          removePendingRef.current = false
+          setRemovePending(false)
+          setRemoveTrail(null)
+        })
+    },
+    [doc, editActiveLayer, layers],
+  )
+
   const handlePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       // A cancelled pointer (a system gesture, palm rejection) has no usable position,
@@ -2678,6 +2744,13 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       // only use the positions of earlier moves (strokes, moving or resizing a selection
       // or a shape handle) keep what they did.
       const cancelled = event.type === 'pointercancel'
+      const removal = removeRef.current
+      if (removal && removal.pointerId === event.pointerId) {
+        removeRef.current = null
+        if (cancelled) setRemoveTrail(null)
+        else runRemoval(removal.mask)
+        return
+      }
       const place = textPlaceRef.current
       if (place && place.pointerId === event.pointerId) {
         textPlaceRef.current = null
@@ -2760,7 +2833,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       strokeRef.current = null
       if (stroke.tool === 'eraser') setEraserSlot('primary')
     },
-    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, selectObject, selectionShape, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, toRawPoint, updateSelection, zoom],
+    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, runRemoval, selectObject, selectionShape, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, toRawPoint, updateSelection, zoom],
   )
 
   // Clicking the workspace background settles pending edits and deselects, but
@@ -3067,7 +3140,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       : 'down'
 
   const cursor =
-    objectPending > 0 ? 'progress' : canvasCursor(tool, hoverCursor, { eraserPreview: eraserHover !== null })
+    objectPending > 0 || removePending ? 'progress' : canvasCursor(tool, hoverCursor, { eraserPreview: eraserHover !== null })
 
   return (
     <>
@@ -3165,6 +3238,17 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         >
           <polyline
             points={lasso.map((point) => `${(point.x + 0.5) * zoom},${(point.y + 0.5) * zoom}`).join(' ')}
+          />
+        </svg>
+      ) : null}
+      {removeTrail ? (
+        <svg className="remove-overlay" aria-hidden="true" width={size.width * zoom} height={size.height * zoom}>
+          <polyline
+            // A lone point is drawn as a zero-length line, which the round caps make a dot.
+            points={(removeTrail.length > 1 ? removeTrail : [removeTrail[0], removeTrail[0]])
+              .map((point) => `${(point.x + 0.5) * zoom},${(point.y + 0.5) * zoom}`)
+              .join(' ')}
+            strokeWidth={Math.max(1, brushSize) * zoom}
           />
         </svg>
       ) : null}

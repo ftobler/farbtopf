@@ -29,6 +29,12 @@ function setup(size = 12, opacity = 80) {
 }
 
 describe('ToolSliders', () => {
+  it('shows only the size slider for a tool without opacity', () => {
+    render(<ToolSliders size={20} opacity={100} onSizeChange={vi.fn()} onOpacityChange={vi.fn()} showOpacity={false} />)
+    expect(screen.getByRole('slider', { name: 'Size' })).toBeTruthy()
+    expect(screen.queryByRole('slider', { name: 'Opacity' })).toBeNull()
+  })
+
   it('is a floating panel with vertical size and opacity sliders', () => {
     const { sizeSlider, opacitySlider } = setup()
     const panel = screen.getByRole('group', { name: 'Tool size and opacity' })

@@ -98,13 +98,15 @@ export interface ToolSlidersProps {
   onOpacityChange: (opacity: number) => void
   /** True while either slider is being dragged. */
   onSlidingChange?: (sliding: boolean) => void
+  /** False for a tool whose strokes have no opacity (the Remove Tool): only the size slider shows. */
+  showOpacity?: boolean
 }
 
 /**
  * Floating size and opacity sliders for the sized tools, stacked on the left of the workspace.
  * The size slider is logarithmic so 1-10 px are as easy to pick as the big sizes.
  */
-export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSlidingChange }: ToolSlidersProps) {
+export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSlidingChange, showOpacity = true }: ToolSlidersProps) {
   return (
     <div
       className="tool-sliders"
@@ -129,19 +131,21 @@ export function ToolSliders({ size, opacity, onSizeChange, onOpacityChange, onSl
         onChange={onSizeChange}
         onSlidingChange={onSlidingChange}
       />
-      <ToolSlider
-        label="Opacity"
-        icon={<OpacityIcon size={16} className="tool-slider-icon" />}
-        value={opacity}
-        min={MIN_OPACITY}
-        max={MAX_OPACITY}
-        valueText={`${opacity}%`}
-        position={opacityToSlider(opacity)}
-        fromPosition={sliderToOpacity}
-        keyStep={opacityKeyStep}
-        onChange={onOpacityChange}
-        onSlidingChange={onSlidingChange}
-      />
+      {showOpacity ? (
+        <ToolSlider
+          label="Opacity"
+          icon={<OpacityIcon size={16} className="tool-slider-icon" />}
+          value={opacity}
+          min={MIN_OPACITY}
+          max={MAX_OPACITY}
+          valueText={`${opacity}%`}
+          position={opacityToSlider(opacity)}
+          fromPosition={sliderToOpacity}
+          keyStep={opacityKeyStep}
+          onChange={onOpacityChange}
+          onSlidingChange={onSlidingChange}
+        />
+      ) : null}
     </div>
   )
 }

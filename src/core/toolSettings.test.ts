@@ -18,8 +18,8 @@ import {
 import { BRUSH_SIZES, TOOLS } from './tools'
 
 describe('sized tools', () => {
-  it('covers the pencil, brushes, airbrush, eraser and shapes', () => {
-    expect([...SIZED_TOOLS].sort()).toEqual(['airbrush', 'brush', 'eraser', 'pencil', 'shape'])
+  it('covers the pencil, brushes, airbrush, eraser, remove and shapes', () => {
+    expect([...SIZED_TOOLS].sort()).toEqual(['airbrush', 'brush', 'eraser', 'pencil', 'remove', 'shape'])
     for (const tool of TOOLS) expect(isSizedTool(tool.id)).toBe(SIZED_TOOLS.includes(tool.id as never))
   })
 

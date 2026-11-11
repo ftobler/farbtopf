@@ -12,6 +12,7 @@ Built with React + TypeScript and Vite, deployed to GitHub Pages.
 - Shapes: line, rectangle, ellipse (outline, filled, or outline + fill)
 - Flood fill and color picker
 - Rectangular, free-form and object selection (drag a box around an object, or click it)
+- Remove tool: paint over something and it is filled in from its surroundings (a loop drawn around an object removes what it encloses)
 - Text tool with multi-line support
 - Primary/secondary colors, swatch palette, custom color picker, swap
 - Undo/redo, clear canvas, pixel grid, zoom (25%–800%)
@@ -21,7 +22,7 @@ Built with React + TypeScript and Vite, deployed to GitHub Pages.
 
 ## Getting started
 
-Object selection runs as WebAssembly built from `wasm/`, so building and testing also need
+Object selection and the Remove tool run as WebAssembly built from `wasm/`, so building and testing also need
 [Rust](https://rustup.rs) with the WebAssembly target:
 
 ```bash
@@ -54,6 +55,7 @@ just wasm-test   # run its Rust tests
 | Key | Action |
 | --- | --- |
 | `P` `B` `A` `E` | Pencil, Brush, Airbrush, Eraser |
+| `J` | Remove |
 | `F` `K` `T` | Fill, Color picker, Text |
 | `L` `R` `O` | Line, Rectangle, Ellipse |
 | `[` `]` | Decrease / increase brush size |
@@ -77,12 +79,13 @@ src/
   components/   React UI (menu, toolbar, canvas, palette, dialogs)
   hooks/        theme
   wasm/         the built WebAssembly module (generated, not committed)
-wasm/           Rust image algorithms compiled to WebAssembly (object selection)
+wasm/           Rust image algorithms compiled to WebAssembly (object selection, Remove tool)
 ```
 
-The object selection algorithm (GrabCut with Boykov–Kolmogorov graph cuts) is adapted from
+Object selection (GrabCut with Boykov–Kolmogorov graph cuts) and the Remove tool (non-local
+patch-based inpainting with Poisson seam blending) are adapted from
 [PhotoCraft](https://github.com/storytold/photocraft), MIT licensed; its licence is in
-`wasm/LICENSE-photocraft`. It runs in a Web Worker (`src/render/objectSelect.worker.ts`).
+`wasm/LICENSE-photocraft`. They run in a Web Worker (`src/render/algorithms.worker.ts`).
 
 ## Deployment
 

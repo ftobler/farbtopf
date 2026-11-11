@@ -10,6 +10,7 @@ const CANVAS_CURSORS: Record<ToolId, string> = {
   airbrush: 'crosshair',
   // The eraser's footprint preview stands in for the pointer (see canvasCursor).
   eraser: 'none',
+  remove: 'crosshair',
   fill: FILL_CURSOR,
   picker: 'copy',
   shape: 'crosshair',

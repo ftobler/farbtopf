@@ -150,9 +150,9 @@ describe('App', () => {
     expect(cells.map((cell) => [...grid!.children].indexOf(cell!))).toEqual([0, 1, 2, 3])
   })
 
-  it('arranges the tools in two rows of three', () => {
+  it('arranges the tools in two rows of four, Remove ending the first', () => {
     render(<App />)
-    const names = ['Pencil', 'Fill with color', 'Text', 'Eraser', 'Color picker', 'Zoom']
+    const names = ['Pencil', 'Fill with color', 'Text', 'Remove', 'Eraser', 'Color picker', 'Zoom']
     const buttons = names.map((name) => screen.getByRole('button', { name }))
     const grid = buttons[0].closest('.tool-grid')
     expect(grid).toBeTruthy()

@@ -6,6 +6,7 @@ export type ToolId =
   | 'brush'
   | 'airbrush'
   | 'eraser'
+  | 'remove'
   | 'fill'
   | 'picker'
   | 'shape'
@@ -29,6 +30,7 @@ export const TOOLS: readonly ToolDef[] = [
   { id: 'brush', label: 'Brush', shortcut: 'B', group: 'freehand' },
   { id: 'airbrush', label: 'Airbrush', shortcut: 'A', group: 'freehand' },
   { id: 'eraser', label: 'Eraser', shortcut: 'E', group: 'freehand' },
+  { id: 'remove', label: 'Remove', shortcut: 'J', group: 'freehand' },
   { id: 'fill', label: 'Fill with color', shortcut: 'F', group: 'utility' },
   { id: 'picker', label: 'Color picker', shortcut: 'K', group: 'utility' },
   { id: 'text', label: 'Text', shortcut: 'T', group: 'utility' },

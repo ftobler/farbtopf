@@ -1,6 +1,6 @@
 //! Image algorithms for Farbtopf, compiled to WebAssembly.
 //!
-//! The segmentation code is adapted from PhotoCraft (<https://github.com/storytold/photocraft>),
+//! The segmentation and Remove Tool code is adapted from PhotoCraft (<https://github.com/storytold/photocraft>),
 //! Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors, MIT licensed; see
 //! `LICENSE-photocraft`.
 //!
@@ -11,12 +11,19 @@
 //! calls [`select_rect`] or [`select_point`]. On success (`1`) the selection is
 //! [`result_width`] × [`result_height`] coverage bytes at [`result_mask`], placed at
 //! ([`result_x`], [`result_y`]) on the image. The image stays loaded, so several selections on
-//! the same pixels need one copy. Memory may grow during a call: views into it must be made
-//! afresh after each call.
+//! the same pixels need one copy.
+//!
+//! The Remove Tool also needs the stroke: after loading the image, JavaScript writes
+//! `width` × `height` flags (non-zero where the brush painted) to [`stroke_buffer`] and calls
+//! [`remove_stroke`]. On success the result is the changed rectangle ([`result_x`] …) with its
+//! new RGBA bytes at [`result_pixels`].
+//!
+//! Memory may grow during a call: views into it must be made afresh after each call.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod geom;
+pub mod remove;
 pub mod segment;
 
 use std::cell::RefCell;
@@ -35,6 +42,9 @@ struct State {
     width: usize,
     height: usize,
     result: Region,
+    stroke: Vec<u8>,
+    /// The Remove Tool's result: RGBA bytes over `result.bbox`.
+    pixels: Vec<u8>,
 }
 
 thread_local! {
@@ -75,6 +85,8 @@ pub extern "C" fn image_buffer(width: u32, height: u32) -> *mut u8 {
         s.width = width;
         s.height = height;
         s.result = Region::default();
+        s.stroke = Vec::new();
+        s.pixels = Vec::new();
         s.image.as_mut_ptr()
     })
 }
@@ -103,7 +115,53 @@ pub extern "C" fn select_point(x: f32, y: f32) -> u32 {
 fn store(s: &mut State, found: Option<Region>) -> u32 {
     let ok = found.is_some();
     s.result = found.unwrap_or_default();
+    s.pixels = Vec::new();
     u32::from(ok)
+}
+
+/// Makes room for the stroke over the loaded image (one byte per pixel, cleared) and returns
+/// where to write it, or null when no image is loaded.
+#[unsafe(no_mangle)]
+pub extern "C" fn stroke_buffer() -> *mut u8 {
+    STATE.with_borrow_mut(|s| {
+        if s.image.is_empty() {
+            return std::ptr::null_mut();
+        }
+        s.stroke.clear();
+        s.stroke.resize(s.width * s.height, 0);
+        s.stroke.as_mut_ptr()
+    })
+}
+
+/// Fills what the stroke covers from its surroundings (with `close_loops` non-zero, also what
+/// the stroke encloses). Returns 1 when pixels changed, else a [`remove::Refusal`] code: 2 bad
+/// input, 3 an empty stroke, 4 a stroke too large, 5 nothing left around it, 6 all transparent.
+#[unsafe(no_mangle)]
+pub extern "C" fn remove_stroke(close_loops: u32) -> u32 {
+    STATE.with_borrow_mut(|s| {
+        s.result = Region::default();
+        s.pixels = Vec::new();
+        match remove::remove_rgba8(&s.image, s.width, s.height, &s.stroke, close_loops != 0) {
+            Ok((rect, pixels)) => {
+                s.result.bbox = rect;
+                s.pixels = pixels;
+                1
+            }
+            Err(why) => match why {
+                remove::Refusal::BadInput => 2,
+                remove::Refusal::NoStroke => 3,
+                remove::Refusal::TooLarge => 4,
+                remove::Refusal::NothingAround => 5,
+                remove::Refusal::Transparent => 6,
+            },
+        }
+    })
+}
+
+/// The Remove Tool result's RGBA bytes (row-major over the result rectangle).
+#[unsafe(no_mangle)]
+pub extern "C" fn result_pixels() -> *const u8 {
+    STATE.with_borrow(|s| s.pixels.as_ptr())
 }
 
 #[unsafe(no_mangle)]

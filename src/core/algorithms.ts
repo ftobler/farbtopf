@@ -5,17 +5,26 @@ import type { Selection } from './selection'
 /** What to select: the object inside a dragged rectangle, or the one under a clicked point. */
 export type ObjectTarget = { kind: 'rect'; rect: Rect } | { kind: 'point'; point: Point }
 
+/** What a removal changed: new RGBA bytes over `rect` (pixels outside the hole keep their values). */
+export interface Removal {
+  rect: Rect
+  pixels: Uint8ClampedArray
+}
+
 /** The functions the WebAssembly module (wasm/src/lib.rs) exports. */
-interface ObjectSelectExports {
+interface AlgorithmExports {
   memory: WebAssembly.Memory
   image_buffer(width: number, height: number): number
   select_rect(x: number, y: number, width: number, height: number): number
   select_point(x: number, y: number): number
+  stroke_buffer(): number
+  remove_stroke(closeLoops: number): number
   result_x(): number
   result_y(): number
   result_width(): number
   result_height(): number
   result_mask(): number
+  result_pixels(): number
 }
 
 /** Coverage at or above this (of 255) counts as selected; selections here are all-or-nothing. */
@@ -46,23 +55,24 @@ export function coverageToSelection(rect: Rect, coverage: Uint8Array, width: num
 }
 
 /**
- * Object Selection, run by the WebAssembly module: GrabCut graph cuts seeded by a
- * rectangle or a point. Holds one image at a time, so several selections on the
- * same pixels copy them once.
+ * The image algorithms of the WebAssembly module: Object Selection (GrabCut graph
+ * cuts seeded by a rectangle or a point) and the Remove Tool (patch-based
+ * completion). Holds one image at a time, so several calls on the same pixels
+ * copy them once.
  */
-export class ObjectSelector {
-  private readonly exports: ObjectSelectExports
+export class Algorithms {
+  private readonly exports: AlgorithmExports
   private width = 0
   private height = 0
 
-  private constructor(exports: ObjectSelectExports) {
+  private constructor(exports: AlgorithmExports) {
     this.exports = exports
   }
 
-  static async create(module: BufferSource | WebAssembly.Module): Promise<ObjectSelector> {
+  static async create(module: BufferSource | WebAssembly.Module): Promise<Algorithms> {
     const compiled = module instanceof WebAssembly.Module ? module : await WebAssembly.compile(module)
     const instance = await WebAssembly.instantiate(compiled, {})
-    return new ObjectSelector(instance.exports as unknown as ObjectSelectExports)
+    return new Algorithms(instance.exports as unknown as AlgorithmExports)
   }
 
   /** Copies a `width`×`height` image of straight RGBA bytes (`ImageData.data`) into the module. */
@@ -84,8 +94,31 @@ export class ObjectSelector {
         ? e.select_rect(target.rect.x, target.rect.y, target.rect.width, target.rect.height)
         : e.select_point(target.point.x, target.point.y)
     if (!found) return null
-    const rect = { x: e.result_x(), y: e.result_y(), width: e.result_width(), height: e.result_height() }
+    const rect = this.resultRect()
     const coverage = new Uint8Array(e.memory.buffer, e.result_mask(), rect.width * rect.height)
     return coverageToSelection(rect, coverage, this.width, this.height)
+  }
+
+  /**
+   * Fills what `stroke` (one byte per pixel of the loaded image, non-zero where
+   * the brush painted) covers from its surroundings; with `closeLoops`, also what
+   * the stroke encloses. Null when nothing changes (an empty or fully transparent
+   * area, or no pixels left around the stroke to fill it from).
+   */
+  remove(stroke: Uint8Array, closeLoops = true): Removal | null {
+    const e = this.exports
+    if (stroke.length !== this.width * this.height) throw new Error(`Expected a ${this.width}×${this.height} stroke`)
+    const address = e.stroke_buffer()
+    if (address === 0) throw new Error('No image is loaded')
+    new Uint8Array(e.memory.buffer, address, stroke.length).set(stroke)
+    if (e.remove_stroke(closeLoops ? 1 : 0) !== 1) return null
+    const rect = this.resultRect()
+    const pixels = new Uint8ClampedArray(e.memory.buffer, e.result_pixels(), rect.width * rect.height * 4).slice()
+    return { rect, pixels }
+  }
+
+  private resultRect(): Rect {
+    const e = this.exports
+    return { x: e.result_x(), y: e.result_y(), width: e.result_width(), height: e.result_height() }
   }
 }

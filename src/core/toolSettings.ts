@@ -10,7 +10,7 @@ import type { ToolId } from './tools'
  * fine 1 px line while the eraser or a shape outline is wider, and switching tools never
  * silently changes another tool's stroke. Brush variants share the brush's settings.
  */
-export const SIZED_TOOLS = ['pencil', 'brush', 'airbrush', 'eraser', 'shape'] as const
+export const SIZED_TOOLS = ['pencil', 'brush', 'airbrush', 'eraser', 'remove', 'shape'] as const
 
 export type SizedTool = (typeof SIZED_TOOLS)[number]
 
@@ -37,6 +37,8 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettingsMap = {
   brush: { size: 4, opacity: 100 },
   airbrush: { size: 8, opacity: 100 },
   eraser: { size: 4, opacity: 100 },
+  // Paints over what to remove: wide enough to cover an object in a stroke or two.
+  remove: { size: 20, opacity: 100 },
   shape: { size: 4, opacity: 100 },
 }
 
