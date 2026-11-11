@@ -22,6 +22,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The image algorithms in wasm/ are built to WebAssembly by `npm test` and `npm run build`.
+      - run: rustup target add wasm32-unknown-unknown
       - run: npm run lint
       - run: npm run test
       - name: Build

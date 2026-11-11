@@ -610,6 +610,16 @@ export function FreeformSelectIcon(props: IconProps) {
   )
 }
 
+/** A dashed box around a solid shape: the selection snaps to the object inside. */
+export function ObjectSelectIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="1" strokeDasharray="3 3" />
+      <path d="M9 16.5c-1.8 0-2.5-1.6-1.8-3.2.6-1.4 1.2-3 2.3-4.3 1.4-1.6 3.6-1.5 4.9.1 1 1.3 1.6 2.9 2.1 4.4.5 1.7-.4 3-2.1 3Z" />
+    </Svg>
+  )
+}
+
 export function SelectIcon(props: IconProps) {
   return (
     <Svg {...props}>

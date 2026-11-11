@@ -83,6 +83,7 @@ describe('App', () => {
     expect(items).toEqual([
       'Rectangular selection',
       'Free-form selection',
+      'Object selection',
       'Select all',
       'Invert selection',
       'Transparent selection',

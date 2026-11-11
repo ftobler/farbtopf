@@ -71,6 +71,24 @@ describe('Ribbon select menu', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('switches to object selection with the select tool and closes the menu', () => {
+    const onSelectionShapeChange = vi.fn()
+    const onToolChange = vi.fn()
+    renderRibbon({ onSelectionShapeChange, onToolChange })
+    openMenu('Select')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Object selection' }))
+    expect(onSelectionShapeChange).toHaveBeenCalledWith('object')
+    expect(onToolChange).toHaveBeenCalledWith('select')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('checks object selection while it is the selection shape', () => {
+    renderRibbon({ tool: 'select', selectionShape: 'object' })
+    openMenu('Select')
+    expect(isChecked(screen.getByRole('menuitem', { name: 'Object selection' }))).toBe(true)
+    expect(isChecked(screen.getByRole('menuitem', { name: 'Rectangular selection' }))).toBe(false)
+  })
+
   it('checks the selection shape only while the select tool is active', () => {
     const { unmount } = renderRibbon({ tool: 'select', selectionShape: 'rectangle' })
     openMenu('Select')

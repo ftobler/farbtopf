@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
+  // The WebAssembly module (wasm/) is a plain asset: fetched by its worker, inlined in tests.
+  assetsInclude: ['**/*.wasm'],
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],

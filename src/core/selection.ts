@@ -12,7 +12,7 @@ export interface SelectionMask {
   data: Uint8Array
 }
 
-export type SelectionShape = 'rectangle' | 'freeform'
+export type SelectionShape = 'rectangle' | 'freeform' | 'object'
 
 export interface Selection {
   rect: Rect
@@ -23,7 +23,7 @@ export interface Selection {
  * Shrinks a canvas-sized selection flag array to its tight bounds. Returns null
  * when nothing is selected and drops the mask when the bounds are fully selected.
  */
-function tighten(flags: Uint8Array, width: number, height: number): Selection | null {
+export function tighten(flags: Uint8Array, width: number, height: number): Selection | null {
   let left = width
   let top = height
   let right = -1

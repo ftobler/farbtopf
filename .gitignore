@@ -31,3 +31,6 @@ coverage/
 temp/
 feature/
 scratch/
+
+# Built by `just wasm` (scripts/build-wasm.mjs)
+src/wasm/

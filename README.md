@@ -11,6 +11,7 @@ Built with React + TypeScript and Vite, deployed to GitHub Pages.
 - Freehand tools: pencil, brush, airbrush, eraser
 - Shapes: line, rectangle, ellipse (outline, filled, or outline + fill)
 - Flood fill and color picker
+- Rectangular, free-form and object selection (drag a box around an object, or click it)
 - Text tool with multi-line support
 - Primary/secondary colors, swatch palette, custom color picker, swap
 - Undo/redo, clear canvas, pixel grid, zoom (25%–800%)
@@ -20,12 +21,20 @@ Built with React + TypeScript and Vite, deployed to GitHub Pages.
 
 ## Getting started
 
+Object selection runs as WebAssembly built from `wasm/`, so building and testing also need
+[Rust](https://rustup.rs) with the WebAssembly target:
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
 ```bash
 npm install
 npm run dev      # start the dev server
 npm test         # run the unit tests
 npm run lint     # lint
 npm run build    # type-check and build for production
+npm run wasm     # build only the WebAssembly module (npm test, dev and build do it first)
 ```
 
 With [just](https://github.com/casey/just):
@@ -36,6 +45,8 @@ just dev
 just test
 just lint
 just build
+just wasm        # build the WebAssembly module
+just wasm-test   # run its Rust tests
 ```
 
 ## Keyboard shortcuts
@@ -65,7 +76,13 @@ src/
   render/       DOM canvas helpers (text rasterisation, image loading)
   components/   React UI (menu, toolbar, canvas, palette, dialogs)
   hooks/        theme
+  wasm/         the built WebAssembly module (generated, not committed)
+wasm/           Rust image algorithms compiled to WebAssembly (object selection)
 ```
+
+The object selection algorithm (GrabCut with Boykov–Kolmogorov graph cuts) is adapted from
+[PhotoCraft](https://github.com/storytold/photocraft), MIT licensed; its licence is in
+`wasm/LICENSE-photocraft`. It runs in a Web Worker (`src/render/objectSelect.worker.ts`).
 
 ## Deployment
 

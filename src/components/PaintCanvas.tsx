@@ -64,7 +64,10 @@ import {
   isSelected,
   polygonSelection,
 } from '../core/selection'
-import type { SelectionMask, SelectionShape } from '../core/selection'
+import type { Selection, SelectionMask, SelectionShape } from '../core/selection'
+import type { ObjectTarget } from '../core/objectSelect'
+import { objectSelect as defaultObjectSelect } from '../render/objectSelect'
+import type { ObjectSelectFn } from '../render/objectSelect'
 import { shapeById } from '../core/shapes'
 import type { ShapeKind } from '../core/shapes'
 import type { ShapeFill, ToolId } from '../core/tools'
@@ -199,6 +202,8 @@ export interface PaintCanvasProps {
   onZoomClick?: (direction: 1 | -1) => void
   transparentSelection: boolean
   selectionShape?: SelectionShape
+  /** Finds the object for Object selection (`selectionShape` 'object'); the app's worker by default. */
+  objectSelect?: ObjectSelectFn
   /** Freehand brush style used by the brush tool. */
   brush?: BrushId
   /** Random source for the airbrush and spray can; Math.random by default (seeded in tests). */
@@ -876,6 +881,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onZoomClick = () => {},
     transparentSelection,
     selectionShape = 'rectangle',
+    objectSelect = defaultObjectSelect,
     brush = 'round',
     random = Math.random,
     text = DEFAULT_TEXT_OPTIONS,
@@ -957,6 +963,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
   const onPickColorRef = useRef(onPickColor)
   const onSizeChangeRef = useRef(onSizeChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
+  const objectSelectRef = useRef(objectSelect)
   const onSelectionSizeChangeRef = useRef(onSelectionSizeChange)
   const onZoomClickRef = useRef(onZoomClick)
   const onTextChangeRef = useRef(onTextChange)
@@ -972,6 +979,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     onPickColorRef.current = onPickColor
     onSizeChangeRef.current = onSizeChange
     onSelectionChangeRef.current = onSelectionChange
+    objectSelectRef.current = objectSelect
     onSelectionSizeChangeRef.current = onSelectionSizeChange
     onZoomClickRef.current = onZoomClick
     onTextChangeRef.current = onTextChange
@@ -1150,8 +1158,16 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     publishLayers()
   }, [publishLayers])
 
+  /**
+   * Counts selection changes, so an Object selection answer that arrives after
+   * the selection changed some other way (or after a newer request) is dropped.
+   */
+  const selectionVersionRef = useRef(0)
+  /** Object selections still being found; the cursor shows progress meanwhile. */
+  const [objectPending, setObjectPending] = useState(0)
   const updateSelection = useCallback(
     (rect: Rect | null, nextMask: SelectionMask | null = null) => {
+      selectionVersionRef.current += 1
       selectionRef.current = rect
       maskRef.current = rect ? nextMask : null
       setSelection(rect)
@@ -2634,6 +2650,27 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
     [brush, brushSize, clientToCanvas, currentRect, doc, editFloating, eraseColor, paintStrokeSurface, previewShape, previewPolyline, primary, random, renderPreview, secondary, size.height, size.width, toFreePoint, toPoint, toRawPoint, tool, updateSelection, zoom],
   )
 
+  /**
+   * Object selection: finds the object `target` picks on the visible image (every
+   * layer flattened) and selects it. The answer arrives later; it is dropped when
+   * the selection has changed meanwhile. Nothing found, or a failure, selects nothing.
+   */
+  const selectObject = useCallback(
+    (target: ObjectTarget) => {
+      const version = selectionVersionRef.current
+      const flat = compositeLayers(currentLayers().map((layer) => layer.bitmap)) ?? doc()
+      setObjectPending((count) => count + 1)
+      const apply = (found: Selection | null) => {
+        if (selectionVersionRef.current === version) updateSelection(found?.rect ?? null, found?.mask ?? null)
+      }
+      objectSelectRef
+        .current(flat.width, flat.height, flat.data, target)
+        .then(apply, () => apply(null))
+        .finally(() => setObjectPending((count) => count - 1))
+    },
+    [currentLayers, doc, updateSelection],
+  )
+
   const handlePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
       // A cancelled pointer (a system gesture, palm rejection) has no usable position,
@@ -2657,8 +2694,12 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       if (drag && drag.pointerId === event.pointerId) {
         if (drag.mode === 'marquee') {
           const rect = marqueeRect(drag.start, toRawPoint(event), size.width, size.height)
-          if (cancelled || !rect || (rect.width < 2 && rect.height < 2)) updateSelection(null)
+          const click = !rect || (rect.width < 2 && rect.height < 2)
+          if (cancelled || click) updateSelection(null)
           else updateSelection(rect)
+          if (selectionShape === 'object' && !cancelled) {
+            selectObject(click || !rect ? { kind: 'point', point: drag.start } : { kind: 'rect', rect })
+          }
         }
         if (drag.mode === 'lasso') {
           const traced = cancelled ? null : polygonSelection(drag.points ?? [], size.width, size.height)
@@ -2719,7 +2760,7 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
       strokeRef.current = null
       if (stroke.tool === 'eraser') setEraserSlot('primary')
     },
-    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, toRawPoint, updateSelection, zoom],
+    [cancelPolyline, cancelShape, flushStrokeSurface, previewShape, previewPolyline, publishLayers, selectObject, selectionShape, size.height, size.width, stopSpraying, text.fontSize, toFreePoint, toPoint, toRawPoint, updateSelection, zoom],
   )
 
   // Clicking the workspace background settles pending edits and deselects, but
@@ -3025,7 +3066,8 @@ export const PaintCanvas = forwardRef<PaintCanvasHandle, PaintCanvasProps>(funct
         })()
       : 'down'
 
-  const cursor = canvasCursor(tool, hoverCursor, { eraserPreview: eraserHover !== null })
+  const cursor =
+    objectPending > 0 ? 'progress' : canvasCursor(tool, hoverCursor, { eraserPreview: eraserHover !== null })
 
   return (
     <>

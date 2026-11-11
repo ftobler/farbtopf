@@ -50,6 +50,7 @@ import {
   StrokeSizeIcon,
   StrokeSizePreview,
   FreeformSelectIcon,
+  ObjectSelectIcon,
   HighlighterIcon,
   LiquifyIcon,
   TextIcon,
@@ -263,7 +264,15 @@ export function Ribbon({
       ariaLabel="Select"
       active={tool === 'select'}
       triggerClassName={bigTrigger}
-      trigger={selectionShape === 'freeform' ? <FreeformSelectIcon size={bigIcon} /> : <SelectIcon size={bigIcon} />}
+      trigger={
+        selectionShape === 'freeform' ? (
+          <FreeformSelectIcon size={bigIcon} />
+        ) : selectionShape === 'object' ? (
+          <ObjectSelectIcon size={bigIcon} />
+        ) : (
+          <SelectIcon size={bigIcon} />
+        )
+      }
       onAction={() => onToolChange('select')}
     >
       {(close) => (
@@ -289,6 +298,17 @@ export function Ribbon({
             }}
           >
             Free-form selection
+          </MenuItem>
+          <MenuItem
+            icon={<ObjectSelectIcon size={16} />}
+            checked={tool === 'select' && selectionShape === 'object'}
+            onClick={() => {
+              onSelectionShapeChange('object')
+              onToolChange('select')
+              close()
+            }}
+          >
+            Object selection
           </MenuItem>
           <MenuDivider />
           <MenuItem
