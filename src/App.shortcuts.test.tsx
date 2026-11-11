@@ -87,6 +87,14 @@ describe('App keyboard shortcuts', () => {
     expect(pixel(0, 0)).toEqual(BLACK)
   })
 
+  it('switches to object selection with W', () => {
+    setup()
+    press('w')
+    expect(screen.getByRole('button', { name: 'Object selection' }).getAttribute('aria-pressed')).toBe('true')
+    press('p')
+    expect(screen.getByRole('button', { name: 'Object selection' }).getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('takes Cmd as well as Ctrl', () => {
     const { pixel, paintBlack } = setup()
     paintBlack()

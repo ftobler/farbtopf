@@ -56,6 +56,7 @@ just wasm-test   # run its Rust tests
 | --- | --- |
 | `P` `B` `A` `E` | Pencil, Brush, Airbrush, Eraser |
 | `J` | Remove |
+| `W` | Object selection |
 | `F` `K` `T` | Fill, Color picker, Text |
 | `L` `R` `O` | Line, Rectangle, Ellipse |
 | `[` `]` | Decrease / increase brush size |

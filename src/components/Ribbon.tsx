@@ -87,7 +87,7 @@ const BRUSH_ICONS: Record<BrushId, ComponentType<IconProps>> = {
   liquify: LiquifyIcon,
 }
 
-/** Tools group, in reading order: two rows of four (Remove has the top row's last cell to itself). */
+/** Tools group, in reading order: two rows of four, the last cell being Object selection (see `objectSelectButton`). */
 const TOOL_GRID: ToolId[] = ['pencil', 'fill', 'text', 'remove', 'eraser', 'picker', 'zoom']
 
 const SHAPE_FILL_LABELS: Record<ShapeFill, string> = {
@@ -259,6 +259,26 @@ export function Ribbon({
       </button>
     )
   }
+
+  const objectSelectActive = tool === 'select' && selectionShape === 'object'
+  const chooseObjectSelect = () => {
+    onSelectionShapeChange('object')
+    onToolChange('select')
+  }
+  /** Object selection in the Tools group: the Select tool with its object shape, one click away. */
+  const objectSelectButton = (
+    <button
+      key="object-select"
+      type="button"
+      className="icon-button"
+      title="Object selection (W)"
+      aria-label="Object selection"
+      aria-pressed={objectSelectActive}
+      onClick={chooseObjectSelect}
+    >
+      <ObjectSelectIcon size={18} />
+    </button>
+  )
 
   const selectDropdown = (
     <Dropdown
@@ -702,11 +722,24 @@ export function Ribbon({
                     </MenuItem>
                   )
                 })}
+                <MenuItem
+                  icon={<ObjectSelectIcon size={16} />}
+                  checked={objectSelectActive}
+                  onClick={() => {
+                    chooseObjectSelect()
+                    close()
+                  }}
+                >
+                  Object selection
+                </MenuItem>
               </>
             )}
           </Dropdown>
         ) : (
-          <div className="ribbon-tools">{utilityTools.map(renderTool)}</div>
+          <div className="ribbon-tools">
+            {utilityTools.map(renderTool)}
+            {objectSelectButton}
+          </div>
         )}
         {brushDropdown}
         {shapesPopover(!phone)}
@@ -777,6 +810,7 @@ export function Ribbon({
 
       <RibbonGroup label="Tools" itemsClassName="button-grid tool-grid">
         {utilityTools.map(renderTool)}
+        {objectSelectButton}
       </RibbonGroup>
 
       <div className="ribbon-separator" />

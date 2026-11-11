@@ -878,6 +878,12 @@ function App() {
         setTool('shape')
         return
       }
+      if (lower === 'w') {
+        // Object selection: the Select tool with its object shape.
+        setSelectionShape('object')
+        setTool('select')
+        return
+      }
       const match = TOOLS.find((definition) => definition.shortcut.toLowerCase() === lower)
       if (match) setTool(match.id)
     }

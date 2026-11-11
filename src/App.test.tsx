@@ -150,14 +150,24 @@ describe('App', () => {
     expect(cells.map((cell) => [...grid!.children].indexOf(cell!))).toEqual([0, 1, 2, 3])
   })
 
-  it('arranges the tools in two rows of four, Remove ending the first', () => {
+  it('arranges the tools in two rows of four, Remove and Object selection in the last column', () => {
     render(<App />)
-    const names = ['Pencil', 'Fill with color', 'Text', 'Remove', 'Eraser', 'Color picker', 'Zoom']
+    const names = ['Pencil', 'Fill with color', 'Text', 'Remove', 'Eraser', 'Color picker', 'Zoom', 'Object selection']
     const buttons = names.map((name) => screen.getByRole('button', { name }))
     const grid = buttons[0].closest('.tool-grid')
     expect(grid).toBeTruthy()
     expect([...grid!.children]).toEqual(buttons)
     expect(grid!.closest('.ribbon-group')?.querySelector('.ribbon-group-label')?.textContent).toBe('Tools')
+  })
+
+  it('switches to object selection from its tool button, pressed only while it is the selection', () => {
+    render(<App />)
+    const button = screen.getByRole('button', { name: 'Object selection' })
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Pencil' }))
+    expect(button.getAttribute('aria-pressed')).toBe('false')
   })
 
   it('puts the brush kinds behind a single split button in the brushes group', () => {
